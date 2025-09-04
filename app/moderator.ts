@@ -9,7 +9,7 @@ import { Proposal } from './proposal';
  */
 export class Moderator implements IModerator {
   public config: IModeratorConfig;                         // Configuration parameters for the moderator
-  public proposals: [IProposal, ProposalStatus][] = [];   // Array storing all proposals and their statuses
+  public proposals: IProposal[] = [];                     // Array storing all proposals
   private proposalIdCounter: number = 0;                   // Auto-incrementing ID counter for proposals
 
   /**
@@ -43,8 +43,8 @@ export class Moderator implements IModerator {
         this.config.passThresholdBps
       );
       
-      // Store proposal with Pending status at index matching its ID
-      this.proposals[this.proposalIdCounter] = [proposal, ProposalStatus.Pending];
+      // Store proposal at index matching its ID
+      this.proposals[this.proposalIdCounter] = proposal;
       this.proposalIdCounter++;  // Increment counter for next proposal
       
       return proposal;
@@ -57,18 +57,52 @@ export class Moderator implements IModerator {
   /**
    * Finalizes a proposal after the voting period has ended
    * Determines if proposal passed or failed based on votes
-   * TODO: Implement finalization logic
+   * @param id - The ID of the proposal to finalize
+   * @returns The status of the proposal after finalization
+   * @throws Error if proposal with given ID doesn't exist
    */
-  async finalizeProposal(): Promise<void> {
-    throw new Error('Method not implemented.');
+  async finalizeProposal(id: number): Promise<ProposalStatus> {
+    if (id >= this.proposalIdCounter || !this.proposals[id]) {
+      throw new Error(`Proposal with ID ${id} does not exist`);
+    }
+
+    const proposal = this.proposals[id];
+    
+    if (proposal.status === ProposalStatus.Failed || proposal.status === ProposalStatus.Executed) {
+      return proposal.status;
+    }
+    
+    return proposal.finalize();
   }
 
   /**
    * Executes the transaction of a passed proposal
    * Only callable for proposals with Passed status
-   * TODO: Implement execution logic
+   * @param id - The ID of the proposal to execute
+   * @returns true if successfully executed
+   * @throws Error if proposal doesn't exist, is pending, already executed, or failed
    */
-  async executeProposal(): Promise<void> {
-    throw new Error('Method not implemented.');
+  async executeProposal(id: number): Promise<boolean> {
+    if (id >= this.proposalIdCounter || !this.proposals[id]) {
+      throw new Error(`Proposal with ID ${id} does not exist`);
+    }
+
+    const proposal = this.proposals[id];
+    
+    if (proposal.status === ProposalStatus.Pending) {
+      throw new Error('Cannot execute proposal that is still pending');
+    }
+    
+    if (proposal.status === ProposalStatus.Executed) {
+      throw new Error('Proposal has already been executed');
+    }
+    
+    if (proposal.status === ProposalStatus.Failed) {
+      throw new Error('Cannot execute a failed proposal');
+    }
+    
+    await proposal.execute();
+    
+    return true;
   }
 }

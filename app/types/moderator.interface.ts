@@ -5,9 +5,10 @@ import { IProposal } from './proposal.interface';
  * Enum representing the possible states of a proposal
  */
 export enum ProposalStatus {
-  Pending = 'Pending',  // Proposal is active and voting is ongoing
-  Passed = 'Passed',    // Proposal passed the threshold
-  Failed = 'Failed'     // Proposal failed to pass the threshold
+  Pending = 'Pending',   // Proposal is active and voting is ongoing
+  Passed = 'Passed',     // Proposal passed the threshold
+  Failed = 'Failed',     // Proposal failed to pass the threshold
+  Executed = 'Executed'  // Proposal has been executed
 }
 
 /**
@@ -27,7 +28,7 @@ export interface IModeratorConfig {
  */
 export interface IModerator {
   config: IModeratorConfig;                    // Configuration parameters
-  proposals: [IProposal, ProposalStatus][];    // Array of proposals with their current status
+  proposals: IProposal[];                      // Array of proposals
   
   /**
    * Creates a new proposal
@@ -39,11 +40,16 @@ export interface IModerator {
   
   /**
    * Finalizes a proposal after voting period ends
+   * @param id - The ID of the proposal to finalize
+   * @returns The status of the proposal after finalization
    */
-  finalizeProposal(): Promise<void>;
+  finalizeProposal(id: number): Promise<ProposalStatus>;
   
   /**
    * Executes a passed proposal's transaction
+   * @param id - The ID of the proposal to execute
+   * @returns true if successfully executed
+   * @throws Error if proposal cannot be executed
    */
-  executeProposal(): Promise<void>;
+  executeProposal(id: number): Promise<boolean>;
 }
