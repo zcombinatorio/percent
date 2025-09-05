@@ -1,4 +1,4 @@
-import { PublicKey, Keypair, Transaction } from '@solana/web3.js';
+import { PublicKey, Keypair, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { AuthorityType } from '@solana/spl-token';
 
 /**
@@ -20,19 +20,19 @@ export interface ISPLTokenService {
   ): Promise<PublicKey>;
 
   /**
-   * Builds a mint transaction without executing it
+   * Builds a mint instruction
    * @param mint - The token mint to create tokens from
    * @param destination - The token account to receive minted tokens
    * @param amount - Amount to mint in smallest units
    * @param mintAuthority - Public key of mint authority
-   * @returns Transaction ready to be signed and sent
+   * @returns Mint instruction
    */
-  buildMintToTransaction(
+  buildMintToIx(
     mint: PublicKey,
     destination: PublicKey,
     amount: bigint,
     mintAuthority: PublicKey
-  ): Transaction;
+  ): TransactionInstruction;
 
   /**
    * Mints new tokens to a destination account
@@ -50,19 +50,19 @@ export interface ISPLTokenService {
   ): Promise<string>;
 
   /**
-   * Builds a burn transaction without executing it
+   * Builds a burn instruction
    * @param mint - The token mint of tokens being burned
    * @param account - The token account to burn from
    * @param amount - Amount to burn in smallest units
    * @param owner - Public key of account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Burn instruction
    */
-  buildBurnTransaction(
+  buildBurnIx(
     mint: PublicKey,
     account: PublicKey,
     amount: bigint,
     owner: PublicKey
-  ): Transaction;
+  ): TransactionInstruction;
 
   /**
    * Burns tokens from an account
@@ -80,19 +80,19 @@ export interface ISPLTokenService {
   ): Promise<string>;
 
   /**
-   * Builds a transfer transaction without executing it
+   * Builds a transfer instruction
    * @param source - The token account to transfer from
    * @param destination - The token account to transfer to
    * @param amount - Amount to transfer in smallest units
    * @param owner - Public key of source account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Transfer instruction
    */
-  buildTransferTransaction(
+  buildTransferIx(
     source: PublicKey,
     destination: PublicKey,
     amount: bigint,
     owner: PublicKey
-  ): Transaction;
+  ): TransactionInstruction;
 
   /**
    * Transfers tokens between accounts
@@ -110,17 +110,17 @@ export interface ISPLTokenService {
   ): Promise<string>;
 
   /**
-   * Builds a close account transaction without executing it
+   * Builds a close account instruction
    * @param account - The token account to close
    * @param destination - Account to receive remaining SOL
    * @param owner - Public key of account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Close account instruction
    */
-  buildCloseAccountTransaction(
+  buildCloseAccountIx(
     account: PublicKey,
     destination: PublicKey,
     owner: PublicKey
-  ): Transaction;
+  ): TransactionInstruction;
 
   /**
    * Closes a token account and recovers the rent SOL
@@ -170,19 +170,19 @@ export interface ISPLTokenService {
   getTotalSupply(mint: PublicKey): Promise<bigint>;
 
   /**
-   * Builds a set authority transaction without executing it
+   * Builds a set authority instruction
    * @param mint - The token mint to update authority
    * @param newAuthority - The new authority (or null to revoke)
    * @param authorityType - Type of authority to set (MintTokens, FreezeAccount, etc)
    * @param currentAuthority - Current authority public key
-   * @returns Transaction ready to be signed and sent
+   * @returns Set authority instruction
    */
-  buildSetAuthorityTransaction(
+  buildSetAuthorityIx(
     mint: PublicKey,
     newAuthority: PublicKey | null,
     authorityType: AuthorityType,
     currentAuthority: PublicKey
-  ): Transaction;
+  ): TransactionInstruction;
 
   /**
    * Sets or revokes an authority on a mint

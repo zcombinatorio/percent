@@ -12,7 +12,7 @@ export interface IExecutionService {
    * @param proposalId - Optional proposal ID for logging context
    * @returns Execution result with signature and status
    */
-  executeTransaction(
+  executeTx(
     transaction: Transaction,
     signer: Keypair,
     proposalId?: number

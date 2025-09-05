@@ -56,7 +56,7 @@ export class ExecutionService implements IExecutionService {
    * @param proposalId - Optional proposal ID for logging context
    * @returns Execution result with signature and status
    */
-  async executeTransaction(
+  async executeTx(
     transaction: Transaction,
     signer: Keypair,
     proposalId?: number

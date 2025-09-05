@@ -129,7 +129,7 @@ export class Vault implements IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if vault is finalized, amount is invalid, or insufficient balance
    */
-  async buildSplitTransaction(
+  async buildSplitTx(
     user: PublicKey,
     tokenType: TokenType,
     amount: bigint
@@ -156,7 +156,7 @@ export class Vault implements IVault {
       : this.conditionalQuoteMint;
     const escrow = tokenType === TokenType.Base ? this.baseEscrow : this.quoteEscrow;
     
-    const transaction = new Transaction();
+    const tx = new Transaction();
     
     // Get user's token accounts
     const userRegularAccount = await getAssociatedTokenAddress(regularMint, user);
@@ -165,7 +165,7 @@ export class Vault implements IVault {
     // Check if conditional account needs to be created
     const conditionalAccountInfo = await this.tokenService.getTokenAccountInfo(userConditionalAccount);
     if (!conditionalAccountInfo) {
-      transaction.add(
+      tx.add(
         createAssociatedTokenAccountInstruction(
           user, // payer
           userConditionalAccount,
@@ -178,24 +178,24 @@ export class Vault implements IVault {
     }
     
     // Transfer regular tokens from user to escrow (user signs)
-    const transferTx = this.tokenService.buildTransferTransaction(
+    const transferIx = this.tokenService.buildTransferIx(
       userRegularAccount,
       escrow,
       amount,
       user // user must sign
     );
-    transaction.add(...transferTx.instructions);
+    tx.add(transferIx);
     
     // Mint conditional tokens to user (authority signs)
-    const mintTx = this.tokenService.buildMintToTransaction(
+    const mintIx = this.tokenService.buildMintToIx(
       conditionalMint,
       userConditionalAccount,
       amount,
       this.authority.publicKey // authority must sign
     );
-    transaction.add(...mintTx.instructions);
+    tx.add(mintIx);
     
-    return transaction;
+    return tx;
   }
 
   /**
@@ -206,7 +206,7 @@ export class Vault implements IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if insufficient balance or trying to merge from losing vault after finalization
    */
-  async buildMergeTransaction(
+  async buildMergeTx(
     user: PublicKey,
     tokenType: TokenType,
     amount: bigint
@@ -233,56 +233,56 @@ export class Vault implements IVault {
       : this.conditionalQuoteMint;
     const escrow = tokenType === TokenType.Base ? this.baseEscrow : this.quoteEscrow;
     
-    const transaction = new Transaction();
+    const tx = new Transaction();
     
     // Get user's token accounts
     const userRegularAccount = await getAssociatedTokenAddress(regularMint, user);
     const userConditionalAccount = await getAssociatedTokenAddress(conditionalMint, user);
     
     // Burn conditional tokens from user (user signs)
-    const burnTx = this.tokenService.buildBurnTransaction(
+    const burnIx = this.tokenService.buildBurnIx(
       conditionalMint,
       userConditionalAccount,
       amount,
       user // user must sign
     );
-    transaction.add(...burnTx.instructions);
+    tx.add(burnIx);
     
     // Transfer regular tokens from escrow to user (authority signs)
-    const transferTx = this.tokenService.buildTransferTransaction(
+    const transferIx = this.tokenService.buildTransferIx(
       escrow,
       userRegularAccount,
       amount,
       this.authority.publicKey // authority must sign
     );
-    transaction.add(...transferTx.instructions);
+    tx.add(transferIx);
     
     // Optionally close account if balance is 0
     const balance = await this.tokenService.getBalance(userConditionalAccount);
     if (balance === amount) {
-      const closeTx = this.tokenService.buildCloseAccountTransaction(
+      const closeIx = this.tokenService.buildCloseAccountIx(
         userConditionalAccount,
         user, // rent goes back to user
         user // user must sign
       );
-      transaction.add(...closeTx.instructions);
+      tx.add(closeIx);
     }
     
-    return transaction;
+    return tx;
   }
 
   /**
    * Executes a pre-signed split transaction
-   * @param transaction - Transaction already signed by user
+   * @param tx - Transaction already signed by user
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    * 
    * Note: In production, user signs first, then this method adds authority signature
    */
-  async executeSplitTransaction(transaction: Transaction): Promise<string> {
+  async executeSplitTx(tx: Transaction): Promise<string> {
     // Add authority signature to the user-signed transaction
-    const result = await this.executionService.executeTransaction(
-      transaction,
+    const result = await this.executionService.executeTx(
+      tx,
       this.authority,
       this.proposalId
     );
@@ -296,16 +296,16 @@ export class Vault implements IVault {
 
   /**
    * Executes a pre-signed merge transaction
-   * @param transaction - Transaction already signed by user
+   * @param tx - Transaction already signed by user
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    * 
    * Note: In production, user signs first, then this method adds authority signature
    */
-  async executeMergeTransaction(transaction: Transaction): Promise<string> {
+  async executeMergeTx(tx: Transaction): Promise<string> {
     // Add authority signature to the user-signed transaction
-    const result = await this.executionService.executeTransaction(
-      transaction,
+    const result = await this.executionService.executeTx(
+      tx,
       this.authority,
       this.proposalId
     );
@@ -436,7 +436,7 @@ export class Vault implements IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if vault not finalized, not winning vault, or no tokens to redeem
    */
-  async buildRedeemWinningTokensTransaction(user: PublicKey): Promise<Transaction> {
+  async buildRedeemWinningTokensTx(user: PublicKey): Promise<Transaction> {
     if (!this._isFinalized) {
       throw new Error('Cannot redeem before vault finalization');
     }
@@ -453,7 +453,7 @@ export class Vault implements IVault {
       throw new Error('No winning tokens to redeem');
     }
     
-    const transaction = new Transaction();
+    const tx = new Transaction();
     
     // Process base tokens if any
     if (baseBalance > 0n) {
@@ -461,30 +461,30 @@ export class Vault implements IVault {
       const userBaseConditionalAccount = await getAssociatedTokenAddress(this.conditionalBaseMint, user);
       
       // Burn all conditional base tokens
-      const burnBaseTx = this.tokenService.buildBurnTransaction(
+      const burnBaseIx = this.tokenService.buildBurnIx(
         this.conditionalBaseMint,
         userBaseConditionalAccount,
         baseBalance,
         user
       );
-      transaction.add(...burnBaseTx.instructions);
+      tx.add(burnBaseIx);
       
       // Transfer regular base tokens from escrow
-      const transferBaseTx = this.tokenService.buildTransferTransaction(
+      const transferBaseIx = this.tokenService.buildTransferIx(
         this.baseEscrow,
         userBaseRegularAccount,
         baseBalance,
         this.authority.publicKey
       );
-      transaction.add(...transferBaseTx.instructions);
+      tx.add(transferBaseIx);
       
       // Close the empty conditional account
-      const closeBaseTx = this.tokenService.buildCloseAccountTransaction(
+      const closeBaseIx = this.tokenService.buildCloseAccountIx(
         userBaseConditionalAccount,
         user,
         user
       );
-      transaction.add(...closeBaseTx.instructions);
+      tx.add(closeBaseIx);
     }
     
     // Process quote tokens if any
@@ -493,45 +493,45 @@ export class Vault implements IVault {
       const userQuoteConditionalAccount = await getAssociatedTokenAddress(this.conditionalQuoteMint, user);
       
       // Burn all conditional quote tokens
-      const burnQuoteTx = this.tokenService.buildBurnTransaction(
+      const burnQuoteIx = this.tokenService.buildBurnIx(
         this.conditionalQuoteMint,
         userQuoteConditionalAccount,
         quoteBalance,
         user
       );
-      transaction.add(...burnQuoteTx.instructions);
+      tx.add(burnQuoteIx);
       
       // Transfer regular quote tokens from escrow
-      const transferQuoteTx = this.tokenService.buildTransferTransaction(
+      const transferQuoteIx = this.tokenService.buildTransferIx(
         this.quoteEscrow,
         userQuoteRegularAccount,
         quoteBalance,
         this.authority.publicKey
       );
-      transaction.add(...transferQuoteTx.instructions);
+      tx.add(transferQuoteIx);
       
       // Close the empty conditional account
-      const closeQuoteTx = this.tokenService.buildCloseAccountTransaction(
+      const closeQuoteIx = this.tokenService.buildCloseAccountIx(
         userQuoteConditionalAccount,
         user,
         user
       );
-      transaction.add(...closeQuoteTx.instructions);
+      tx.add(closeQuoteIx);
     }
     
-    return transaction;
+    return tx;
   }
 
   /**
    * Executes a pre-signed redeem winning tokens transaction
-   * @param transaction - Transaction already signed by user
+   * @param tx - Transaction already signed by user
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  async executeRedeemWinningTokensTransaction(transaction: Transaction): Promise<string> {
+  async executeRedeemWinningTokensTx(tx: Transaction): Promise<string> {
     // Add authority signature to the user-signed transaction
-    const result = await this.executionService.executeTransaction(
-      transaction,
+    const result = await this.executionService.executeTx(
+      tx,
       this.authority,
       this.proposalId
     );
@@ -550,7 +550,7 @@ export class Vault implements IVault {
    * 
    * Note: Only includes instructions for accounts with zero balance
    */
-  async buildCloseEmptyAccountsTransaction(user: PublicKey): Promise<Transaction> {
+  async buildCloseEmptyAccountsTx(user: PublicKey): Promise<Transaction> {
     const transaction = new Transaction();
     
     // Check conditional token accounts
@@ -559,22 +559,22 @@ export class Vault implements IVault {
     
     const baseBalance = await this.tokenService.getBalance(baseAccount);
     if (baseBalance === 0n) {
-      const closeTx = this.tokenService.buildCloseAccountTransaction(
+      const closeTx = this.tokenService.buildCloseAccountIx(
         baseAccount,
         user,  // rent destination
         user   // owner who must sign
       );
-      transaction.add(...closeTx.instructions);
+      transaction.add(closeTx);
     }
     
     const quoteBalance = await this.tokenService.getBalance(quoteAccount);
     if (quoteBalance === 0n) {
-      const closeTx = this.tokenService.buildCloseAccountTransaction(
+      const closeTx = this.tokenService.buildCloseAccountIx(
         quoteAccount,
         user,  // rent destination  
         user   // owner who must sign
       );
-      transaction.add(...closeTx.instructions);
+      transaction.add(closeTx);
     }
     
     return transaction;
@@ -588,10 +588,10 @@ export class Vault implements IVault {
    * 
    * Note: User must sign the transaction as they own the token accounts
    */
-  async executeCloseEmptyAccountsTransaction(transaction: Transaction): Promise<string> {
+  async executeCloseEmptyAccountsTx(transaction: Transaction): Promise<string> {
     // Transaction should already be signed by user
     // No authority signature needed for closing user's accounts
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       this.authority,  // Just for execution service, not signing
       this.proposalId

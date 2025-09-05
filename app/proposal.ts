@@ -205,7 +205,7 @@ export class Proposal implements IProposal {
     
     // Execute the Solana transaction
     const executionService = new ExecutionService(executionConfig);
-    const result = await executionService.executeTransaction(
+    const result = await executionService.executeTx(
       this.transaction,
       signer,
       this.id

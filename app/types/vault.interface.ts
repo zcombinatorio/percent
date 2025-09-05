@@ -79,7 +79,7 @@ export interface IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if insufficient balance or vault is finalized
    */
-  buildSplitTransaction(
+  buildSplitTx(
     user: PublicKey,
     tokenType: TokenType,
     amount: bigint
@@ -94,7 +94,7 @@ export interface IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if insufficient balance or merging from losing vault after finalization
    */
-  buildMergeTransaction(
+  buildMergeTx(
     user: PublicKey,
     tokenType: TokenType,
     amount: bigint
@@ -105,14 +105,14 @@ export interface IVault {
    * @param transaction - Transaction already signed by user
    * @returns Transaction signature
    */
-  executeSplitTransaction(transaction: Transaction): Promise<string>;
+  executeSplitTx(transaction: Transaction): Promise<string>;
   
   /**
    * Executes a pre-signed merge transaction
    * @param transaction - Transaction already signed by user
    * @returns Transaction signature
    */
-  executeMergeTransaction(transaction: Transaction): Promise<string>;
+  executeMergeTx(transaction: Transaction): Promise<string>;
   
   /**
    * Gets regular token balance for a user
@@ -164,28 +164,28 @@ export interface IVault {
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if vault not finalized, not winning vault, or no tokens to redeem
    */
-  buildRedeemWinningTokensTransaction(user: PublicKey): Promise<Transaction>;
+  buildRedeemWinningTokensTx(user: PublicKey): Promise<Transaction>;
   
   /**
    * Executes a pre-signed redeem winning tokens transaction
    * @param transaction - Transaction already signed by user
    * @returns Transaction signature
    */
-  executeRedeemWinningTokensTransaction(transaction: Transaction): Promise<string>;
+  executeRedeemWinningTokensTx(transaction: Transaction): Promise<string>;
   
   /**
    * Builds transaction to close empty token accounts and recover SOL rent
    * @param user - User's public key
    * @returns Transaction to close empty accounts (requires user signature)
    */
-  buildCloseEmptyAccountsTransaction(user: PublicKey): Promise<Transaction>;
+  buildCloseEmptyAccountsTx(user: PublicKey): Promise<Transaction>;
   
   /**
    * Executes a pre-signed close empty accounts transaction
    * @param transaction - Transaction already signed by user
    * @returns Transaction signature
    */
-  executeCloseEmptyAccountsTransaction(transaction: Transaction): Promise<string>;
+  executeCloseEmptyAccountsTx(transaction: Transaction): Promise<string>;
   
   /**
    * Gets escrow and conditional mint information

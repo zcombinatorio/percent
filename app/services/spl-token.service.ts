@@ -3,6 +3,7 @@ import {
   PublicKey,
   Keypair,
   Transaction,
+  TransactionInstruction,
   SystemProgram
 } from '@solana/web3.js';
 import {
@@ -86,7 +87,7 @@ export class SPLTokenService implements ISPLTokenService {
     // Add mint keypair signature
     transaction.partialSign(mintKeypair);
 
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       payer
     );
@@ -99,28 +100,26 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Builds a mint transaction without executing it
+   * Builds a mint instruction
    * @param mint - The token mint to create tokens from
    * @param destination - The token account to receive minted tokens
    * @param amount - Amount to mint in smallest units
    * @param mintAuthority - Public key of mint authority
-   * @returns Transaction ready to be signed and sent
+   * @returns Mint instruction
    */
-  buildMintToTransaction(
+  buildMintToIx(
     mint: PublicKey,
     destination: PublicKey,
     amount: bigint,
     mintAuthority: PublicKey
-  ): Transaction {
-    return new Transaction().add(
-      createMintToInstruction(
-        mint,
-        destination,
-        mintAuthority,
-        amount,
-        [],
-        TOKEN_PROGRAM_ID
-      )
+  ): TransactionInstruction {
+    return createMintToInstruction(
+      mint,
+      destination,
+      mintAuthority,
+      amount,
+      [],
+      TOKEN_PROGRAM_ID
     );
   }
 
@@ -138,14 +137,15 @@ export class SPLTokenService implements ISPLTokenService {
     amount: bigint,
     mintAuthority: Keypair
   ): Promise<string> {
-    const transaction = this.buildMintToTransaction(
+    const ix = this.buildMintToIx(
       mint,
       destination,
       amount,
       mintAuthority.publicKey
     );
+    const transaction = new Transaction().add(ix);
     
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       mintAuthority
     );
@@ -158,28 +158,26 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Builds a burn transaction without executing it
+   * Builds a burn instruction
    * @param mint - The token mint of tokens being burned
    * @param account - The token account to burn from
    * @param amount - Amount to burn in smallest units
    * @param owner - Public key of account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Burn instruction
    */
-  buildBurnTransaction(
+  buildBurnIx(
     mint: PublicKey,
     account: PublicKey,
     amount: bigint,
     owner: PublicKey
-  ): Transaction {
-    return new Transaction().add(
-      createBurnInstruction(
-        account,
-        mint,
-        owner,
-        amount,
-        [],
-        TOKEN_PROGRAM_ID
-      )
+  ): TransactionInstruction {
+    return createBurnInstruction(
+      account,
+      mint,
+      owner,
+      amount,
+      [],
+      TOKEN_PROGRAM_ID
     );
   }
 
@@ -197,14 +195,15 @@ export class SPLTokenService implements ISPLTokenService {
     amount: bigint,
     owner: Keypair
   ): Promise<string> {
-    const transaction = this.buildBurnTransaction(
+    const ix = this.buildBurnIx(
       mint,
       account,
       amount,
       owner.publicKey
     );
+    const transaction = new Transaction().add(ix);
     
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       owner
     );
@@ -217,28 +216,26 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Builds a transfer transaction without executing it
+   * Builds a transfer instruction
    * @param source - The token account to transfer from
    * @param destination - The token account to transfer to
    * @param amount - Amount to transfer in smallest units
    * @param owner - Public key of source account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Transfer instruction
    */
-  buildTransferTransaction(
+  buildTransferIx(
     source: PublicKey,
     destination: PublicKey,
     amount: bigint,
     owner: PublicKey
-  ): Transaction {
-    return new Transaction().add(
-      createTransferInstruction(
-        source,
-        destination,
-        owner,
-        amount,
-        [],
-        TOKEN_PROGRAM_ID
-      )
+  ): TransactionInstruction {
+    return createTransferInstruction(
+      source,
+      destination,
+      owner,
+      amount,
+      [],
+      TOKEN_PROGRAM_ID
     );
   }
 
@@ -256,14 +253,15 @@ export class SPLTokenService implements ISPLTokenService {
     amount: bigint,
     owner: Keypair
   ): Promise<string> {
-    const transaction = this.buildTransferTransaction(
+    const ix = this.buildTransferIx(
       source,
       destination,
       amount,
       owner.publicKey
     );
+    const transaction = new Transaction().add(ix);
     
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       owner
     );
@@ -276,25 +274,23 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Builds a close account transaction without executing it
+   * Builds a close account instruction
    * @param account - The token account to close
    * @param destination - Account to receive remaining SOL
    * @param owner - Public key of account owner
-   * @returns Transaction ready to be signed and sent
+   * @returns Close account instruction
    */
-  buildCloseAccountTransaction(
+  buildCloseAccountIx(
     account: PublicKey,
     destination: PublicKey,
     owner: PublicKey
-  ): Transaction {
-    return new Transaction().add(
-      createCloseAccountInstruction(
-        account,
-        destination,
-        owner,
-        [],
-        TOKEN_PROGRAM_ID
-      )
+  ): TransactionInstruction {
+    return createCloseAccountInstruction(
+      account,
+      destination,
+      owner,
+      [],
+      TOKEN_PROGRAM_ID
     );
   }
 
@@ -310,13 +306,14 @@ export class SPLTokenService implements ISPLTokenService {
     destination: PublicKey,
     owner: Keypair
   ): Promise<string> {
-    const transaction = this.buildCloseAccountTransaction(
+    const ix = this.buildCloseAccountIx(
       account,
       destination,
       owner.publicKey
     );
+    const transaction = new Transaction().add(ix);
     
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       owner
     );
@@ -364,7 +361,7 @@ export class SPLTokenService implements ISPLTokenService {
         )
       );
 
-      const result = await this.executionService.executeTransaction(
+      const result = await this.executionService.executeTx(
         transaction,
         payer
       );
@@ -422,28 +419,26 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Builds a set authority transaction without executing it
+   * Builds a set authority instruction
    * @param mint - The token mint to update authority
    * @param newAuthority - The new authority (or null to revoke)
    * @param authorityType - Type of authority to set (MintTokens, FreezeAccount, etc)
    * @param currentAuthority - Current authority public key
-   * @returns Transaction ready to be signed and sent
+   * @returns Set authority instruction
    */
-  buildSetAuthorityTransaction(
+  buildSetAuthorityIx(
     mint: PublicKey,
     newAuthority: PublicKey | null,
     authorityType: AuthorityType,
     currentAuthority: PublicKey
-  ): Transaction {
-    return new Transaction().add(
-      createSetAuthorityInstruction(
-        mint,
-        currentAuthority,
-        authorityType,
-        newAuthority,
-        [],
-        TOKEN_PROGRAM_ID
-      )
+  ): TransactionInstruction {
+    return createSetAuthorityInstruction(
+      mint,
+      currentAuthority,
+      authorityType,
+      newAuthority,
+      [],
+      TOKEN_PROGRAM_ID
     );
   }
 
@@ -461,14 +456,15 @@ export class SPLTokenService implements ISPLTokenService {
     authorityType: AuthorityType,
     currentAuthority: Keypair
   ): Promise<string> {
-    const transaction = this.buildSetAuthorityTransaction(
+    const ix = this.buildSetAuthorityIx(
       mint,
       newAuthority,
       authorityType,
       currentAuthority.publicKey
     );
+    const transaction = new Transaction().add(ix);
 
-    const result = await this.executionService.executeTransaction(
+    const result = await this.executionService.executeTx(
       transaction,
       currentAuthority
     );
