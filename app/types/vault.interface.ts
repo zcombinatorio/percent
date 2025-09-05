@@ -72,10 +72,12 @@ export interface IVault {
   
   /**
    * Builds transaction for splitting regular tokens into conditional tokens
+   * Validates user has sufficient regular token balance before building
    * @param user - User's public key who is splitting tokens
    * @param tokenType - Type of token to split (Base or Quote)
    * @param amount - Amount to split in smallest units
    * @returns Unsigned transaction requiring user and authority signatures
+   * @throws Error if insufficient balance or vault is finalized
    */
   buildSplitTransaction(
     user: PublicKey,
@@ -85,10 +87,12 @@ export interface IVault {
   
   /**
    * Builds transaction for merging conditional tokens back to regular tokens
+   * Validates user has sufficient conditional token balance before building
    * @param user - User's public key who is merging tokens
    * @param tokenType - Type of token to merge (Base or Quote)
    * @param amount - Amount to merge in smallest units
    * @returns Unsigned transaction requiring user and authority signatures
+   * @throws Error if insufficient balance or merging from losing vault after finalization
    */
   buildMergeTransaction(
     user: PublicKey,
@@ -154,18 +158,20 @@ export interface IVault {
   finalize(winningVault: boolean): Promise<void>;
   
   /**
-   * Redeems winning conditional tokens for regular tokens
+   * Builds a transaction to redeem ALL winning conditional tokens
+   * Automatically processes both base and quote tokens in a single transaction
    * @param user - User's public key
-   * @param tokenType - Type of token to redeem (Base or Quote)
-   * @param amount - Amount to redeem in smallest units
-   * @returns Transaction signature
-   * @throws Error if vault not finalized or not winning vault
+   * @returns Unsigned transaction requiring user and authority signatures
+   * @throws Error if vault not finalized, not winning vault, or no tokens to redeem
    */
-  redeemWinningTokens(
-    user: PublicKey,
-    tokenType: TokenType,
-    amount: bigint
-  ): Promise<string>;
+  buildRedeemWinningTokensTransaction(user: PublicKey): Promise<Transaction>;
+  
+  /**
+   * Executes a pre-signed redeem winning tokens transaction
+   * @param transaction - Transaction already signed by user
+   * @returns Transaction signature
+   */
+  executeRedeemWinningTokensTransaction(transaction: Transaction): Promise<string>;
   
   /**
    * Builds transaction to close empty token accounts and recover SOL rent

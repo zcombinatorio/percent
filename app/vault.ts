@@ -127,7 +127,7 @@ export class Vault implements IVault {
    * @param tokenType - Type of token to split (Base or Quote)
    * @param amount - Amount to split in smallest units
    * @returns Unsigned transaction requiring user and authority signatures
-   * @throws Error if vault is finalized or amount is invalid
+   * @throws Error if vault is finalized, amount is invalid, or insufficient balance
    */
   async buildSplitTransaction(
     user: PublicKey,
@@ -140,6 +140,14 @@ export class Vault implements IVault {
     
     if (amount <= 0n) {
       throw new Error('Amount must be positive');
+    }
+    
+    // Check user has sufficient regular token balance
+    const userBalance = await this.getBalance(user, tokenType);
+    if (amount > userBalance) {
+      throw new Error(
+        `Insufficient ${tokenType} balance: requested ${amount}, available ${userBalance}`
+      );
     }
     
     const regularMint = tokenType === TokenType.Base ? this.baseMint : this.quoteMint;
@@ -196,7 +204,7 @@ export class Vault implements IVault {
    * @param tokenType - Type of token to merge (Base or Quote)
    * @param amount - Amount to merge in smallest units
    * @returns Unsigned transaction requiring user and authority signatures
-   * @throws Error if trying to merge from losing vault after finalization
+   * @throws Error if insufficient balance or trying to merge from losing vault after finalization
    */
   async buildMergeTransaction(
     user: PublicKey,
@@ -209,6 +217,14 @@ export class Vault implements IVault {
     
     if (amount <= 0n) {
       throw new Error('Amount must be positive');
+    }
+    
+    // Check user has sufficient conditional token balance
+    const userBalance = await this.getConditionalBalance(user, tokenType);
+    if (amount > userBalance) {
+      throw new Error(
+        `Insufficient conditional ${tokenType} balance: requested ${amount}, available ${userBalance}`
+      );
     }
     
     const regularMint = tokenType === TokenType.Base ? this.baseMint : this.quoteMint;
@@ -414,29 +430,117 @@ export class Vault implements IVault {
   }
 
   /**
-   * Redeems winning conditional tokens for regular tokens
+   * Builds a transaction to redeem ALL winning conditional tokens for regular tokens
+   * Automatically processes both base and quote tokens in a single transaction
    * @param user - User's public key
-   * @param tokenType - Type of token to redeem (Base or Quote)
-   * @param amount - Amount to redeem in smallest units
-   * @returns Transaction signature
-   * @throws Error if vault not finalized or not winning vault
+   * @returns Unsigned transaction requiring user and authority signatures
+   * @throws Error if vault not finalized, not winning vault, or no tokens to redeem
    */
-  async redeemWinningTokens(
-    user: PublicKey, 
-    tokenType: TokenType, 
-    amount: bigint
-  ): Promise<string> {
+  async buildRedeemWinningTokensTransaction(user: PublicKey): Promise<Transaction> {
     if (!this._isFinalized) {
-      throw new Error('Vault must be finalized before redemption');
+      throw new Error('Cannot redeem before vault finalization');
     }
     
     if (!this._isWinningVault) {
       throw new Error('Cannot redeem from losing vault');
     }
     
-    // Build and execute the merge transaction for redemption
-    const transaction = await this.buildMergeTransaction(user, tokenType, amount);
-    return this.executeMergeTransaction(transaction);
+    // Get user's conditional token balances
+    const baseBalance = await this.getConditionalBalance(user, TokenType.Base);
+    const quoteBalance = await this.getConditionalBalance(user, TokenType.Quote);
+    
+    if (baseBalance === 0n && quoteBalance === 0n) {
+      throw new Error('No winning tokens to redeem');
+    }
+    
+    const transaction = new Transaction();
+    
+    // Process base tokens if any
+    if (baseBalance > 0n) {
+      const userBaseRegularAccount = await getAssociatedTokenAddress(this.baseMint, user);
+      const userBaseConditionalAccount = await getAssociatedTokenAddress(this.conditionalBaseMint, user);
+      
+      // Burn all conditional base tokens
+      const burnBaseTx = this.tokenService.buildBurnTransaction(
+        this.conditionalBaseMint,
+        userBaseConditionalAccount,
+        baseBalance,
+        user
+      );
+      transaction.add(...burnBaseTx.instructions);
+      
+      // Transfer regular base tokens from escrow
+      const transferBaseTx = this.tokenService.buildTransferTransaction(
+        this.baseEscrow,
+        userBaseRegularAccount,
+        baseBalance,
+        this.authority.publicKey
+      );
+      transaction.add(...transferBaseTx.instructions);
+      
+      // Close the empty conditional account
+      const closeBaseTx = this.tokenService.buildCloseAccountTransaction(
+        userBaseConditionalAccount,
+        user,
+        user
+      );
+      transaction.add(...closeBaseTx.instructions);
+    }
+    
+    // Process quote tokens if any
+    if (quoteBalance > 0n) {
+      const userQuoteRegularAccount = await getAssociatedTokenAddress(this.quoteMint, user);
+      const userQuoteConditionalAccount = await getAssociatedTokenAddress(this.conditionalQuoteMint, user);
+      
+      // Burn all conditional quote tokens
+      const burnQuoteTx = this.tokenService.buildBurnTransaction(
+        this.conditionalQuoteMint,
+        userQuoteConditionalAccount,
+        quoteBalance,
+        user
+      );
+      transaction.add(...burnQuoteTx.instructions);
+      
+      // Transfer regular quote tokens from escrow
+      const transferQuoteTx = this.tokenService.buildTransferTransaction(
+        this.quoteEscrow,
+        userQuoteRegularAccount,
+        quoteBalance,
+        this.authority.publicKey
+      );
+      transaction.add(...transferQuoteTx.instructions);
+      
+      // Close the empty conditional account
+      const closeQuoteTx = this.tokenService.buildCloseAccountTransaction(
+        userQuoteConditionalAccount,
+        user,
+        user
+      );
+      transaction.add(...closeQuoteTx.instructions);
+    }
+    
+    return transaction;
+  }
+
+  /**
+   * Executes a pre-signed redeem winning tokens transaction
+   * @param transaction - Transaction already signed by user
+   * @returns Transaction signature
+   * @throws Error if transaction execution fails
+   */
+  async executeRedeemWinningTokensTransaction(transaction: Transaction): Promise<string> {
+    // Add authority signature to the user-signed transaction
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      this.authority,
+      this.proposalId
+    );
+    
+    if (result.status === 'failed') {
+      throw new Error(`Redeem winning tokens transaction failed: ${result.error}`);
+    }
+    
+    return result.signature;
   }
 
   /**
