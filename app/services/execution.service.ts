@@ -7,6 +7,7 @@ import {
 } from '@solana/web3.js';
 import * as fs from 'fs';
 import { 
+  IExecutionService,
   IExecutionResult, 
   IExecutionConfig, 
   ExecutionStatus,
@@ -17,7 +18,7 @@ import {
  * Service for handling Solana transaction execution
  * Manages keypair loading, transaction signing, and sending
  */
-export class ExecutionService {
+export class ExecutionService implements IExecutionService {
   private connection: Connection;
   private config: IExecutionConfig;
 

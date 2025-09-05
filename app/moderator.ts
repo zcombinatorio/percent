@@ -76,7 +76,7 @@ export class Moderator implements IModerator {
       return proposal.status;
     }
     
-    return proposal.finalize();
+    return await proposal.finalize();
   }
 
   /**

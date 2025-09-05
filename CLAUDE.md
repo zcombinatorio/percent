@@ -39,7 +39,8 @@ Building a governance and prediction market protocol on Solana with TypeScript. 
 
 #### 4. Supporting Classes
 - **AMM** (`app/amm.ts`): Automated market maker for trading
-- **Vault** (`app/vault.ts`): Token management with conditional tokens (implemented)
+- **Vault** (`app/vault.ts`): Full SPL token vault with split/merge operations (✅ FULLY IMPLEMENTED)
+- **SPLTokenService** (`app/services/spl-token.service.ts`): SPL token operations with authority management
 - **ExecutionService** (`app/services/execution.service.ts`): Handles Solana transaction execution
 
 ## Type System & Interfaces
@@ -63,15 +64,17 @@ app/
 ├── proposal.ts            # Proposal implementation
 ├── twap-oracle.ts         # TWAP oracle
 ├── amm.ts                 # AMM implementation
-├── vault.ts               # Vault implementation
+├── vault.ts               # Vault implementation (FULLY IMPLEMENTED)
 ├── services/              # Service layer
-│   └── execution.service.ts  # Transaction execution
+│   ├── execution.service.ts  # Transaction execution
+│   └── spl-token.service.ts  # SPL token operations
 └── types/                 # All interfaces
     ├── moderator.interface.ts
     ├── proposal.interface.ts
     ├── twap-oracle.interface.ts
     ├── amm.interface.ts
     ├── vault.interface.ts
+    ├── spl-token.interface.ts
     └── execution.interface.ts
 tests/
 └── execute-proposal.ts    # Test script for proposal execution
@@ -110,12 +113,12 @@ await proposal.initialize();  // Blockchain setup
 
 ### High Priority
 1. ✅ Execute transaction logic - Send Solana transaction for passed proposals
-2. Implement finalization logic - Determine pass/fail based on TWAP  
+2. ✅ Implement finalization logic - Currently assumes all pass (TWAP TODO)
 3. Implement `Proposal.initialize()` - Deploy AMMs, Vaults to blockchain
 
 ### Medium Priority
 1. Implement AMM methods (fetchPrice, addLiquidity, etc.)
-2. Implement Vault methods (splitTokens, mergeTokens)
+2. ✅ Implement Vault methods - FULLY IMPLEMENTED (split/merge/finalize/redeem)
 3. Implement TWAP Oracle methods (crankTWAP, fetchTWAP)
 
 ### Low Priority
@@ -187,11 +190,35 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 SOLANA_KEYPAIR_PATH=./wallet.json
 ```
 
+## Recent Updates (Vault Implementation)
+
+### Vault System Completed
+1. **Full SPL Token Integration**
+   - Conditional token mints created per proposal
+   - Escrow accounts hold regular tokens during trading
+   - Mint authority revoked on losing vaults after finalization
+
+2. **Transaction Pattern**
+   - Build methods return unsigned transactions
+   - Execute methods handle pre-signed transactions
+   - Proper signature flow (user signs their operations)
+
+3. **API Improvements**
+   - Removed request objects for functions with ≤4 parameters
+   - Consistent build/execute pattern across all operations
+   - Fixed signature issues with closeEmptyAccounts
+
+4. **Finalization Implementation**
+   - Vault finalization determines winning/losing status
+   - Proposal finalization currently assumes pass (TWAP TODO)
+   - Losing vaults have mint authority revoked
+
 ## Notes for Next Session
-- Finalization logic needs to check TWAP oracle for pass/fail determination
+- TWAP oracle integration needs implementation for actual pass/fail determination
 - The `initialize()` method in Proposal needs blockchain implementation
 - All AMM methods need implementation
 - Consider adding a "Cancelled" status for admin intervention
+- Consider implementing redemption deadline for closing escrows
 
 ## Contact & Resources
 - Report issues at: https://github.com/anthropics/claude-code/issues

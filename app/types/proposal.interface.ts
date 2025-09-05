@@ -54,9 +54,10 @@ export interface IProposal {
   
   /**
    * Finalizes the proposal based on voting results
+   * Currently assumes all proposals pass (TWAP logic TODO)
    * @returns The final status after checking time and votes
    */
-  finalize(): ProposalStatus;
+  finalize(): Promise<ProposalStatus>;
   
   /**
    * Executes the proposal's transaction

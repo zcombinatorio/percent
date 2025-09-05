@@ -151,11 +151,12 @@ export class Proposal implements IProposal {
   }
 
   /**
-   * Finalizes the proposal based on time and voting results
-   * Updates status from Pending to Passed/Failed if time has expired
+   * Finalizes the proposal based on time
+   * Currently assumes all proposals pass for simplicity
+   * Also finalizes the vaults accordingly
    * @returns The current or updated proposal status
    */
-  finalize(): ProposalStatus {
+  async finalize(): Promise<ProposalStatus> {
     // Still pending if before finalization time
     if (Date.now() < this.finalizedAt) {
       return ProposalStatus.Pending;
@@ -163,7 +164,16 @@ export class Proposal implements IProposal {
     
     // Update status if still pending after finalization time
     if (this._status === ProposalStatus.Pending) {
-      this._status = ProposalStatus.Passed; // TODO: Implement finalization logic
+      // TODO: Implement TWAP oracle logic to determine pass/fail
+      // For now, assume all proposals pass
+      const passed = true;
+      this._status = passed ? ProposalStatus.Passed : ProposalStatus.Failed;
+      
+      // Finalize vaults - winning vault can still process redemptions
+      if (this.__pVault && this.__fVault) {
+        await this.__pVault.finalize(passed); // pVault wins if passed
+        await this.__fVault.finalize(!passed); // fVault wins if failed
+      }
     }
     
     return this._status;

@@ -1,4 +1,23 @@
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Transaction, Keypair } from '@solana/web3.js';
+
+/**
+ * Interface for Execution Service
+ * Defines methods for handling Solana transaction execution
+ */
+export interface IExecutionService {
+  /**
+   * Executes a transaction on Solana
+   * @param transaction - Transaction to execute
+   * @param signer - Keypair to sign the transaction
+   * @param proposalId - Optional proposal ID for logging context
+   * @returns Execution result with signature and status
+   */
+  executeTransaction(
+    transaction: Transaction,
+    signer: Keypair,
+    proposalId?: number
+  ): Promise<IExecutionResult>;
+}
 
 /**
  * Status of transaction execution

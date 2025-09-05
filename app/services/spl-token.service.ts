@@ -1,0 +1,482 @@
+import {
+  Connection,
+  PublicKey,
+  Keypair,
+  Transaction,
+  SystemProgram
+} from '@solana/web3.js';
+import {
+  createInitializeMintInstruction,
+  createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
+  createBurnInstruction,
+  createTransferInstruction,
+  createCloseAccountInstruction,
+  createSetAuthorityInstruction,
+  getAssociatedTokenAddress,
+  getMint,
+  getAccount,
+  AuthorityType,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  MINT_SIZE,
+  getMinimumBalanceForRentExemptMint
+} from '@solana/spl-token';
+import { ExecutionService } from './execution.service';
+import { IExecutionConfig } from '../types/execution.interface';
+import { ISPLTokenService, ITokenAccountInfo } from '../types/spl-token.interface';
+
+// Re-export AuthorityType for external use
+export { AuthorityType } from '@solana/spl-token';
+
+/**
+ * SPL Token Service
+ * Provides both transaction building and execution methods
+ */
+export class SPLTokenService implements ISPLTokenService {
+  private connection: Connection;
+  private executionService: ExecutionService;
+
+  constructor(connection: Connection, rpcEndpoint?: string) {
+    this.connection = connection;
+    const executionConfig: IExecutionConfig = {
+      rpcEndpoint: rpcEndpoint || connection.rpcEndpoint,
+      commitment: 'confirmed',
+      maxRetries: 3,
+      skipPreflight: false
+    };
+    this.executionService = new ExecutionService(executionConfig);
+  }
+
+  /**
+   * Creates a new SPL token mint
+   * @param decimals - Number of decimals for the token
+   * @param mintAuthority - Authority that can mint new tokens
+   * @param payer - Keypair that pays for the mint creation
+   * @returns PublicKey of the created mint
+   */
+  async createMint(
+    decimals: number,
+    mintAuthority: PublicKey,
+    payer: Keypair
+  ): Promise<PublicKey> {
+    const mintKeypair = Keypair.generate();
+    const lamports = await getMinimumBalanceForRentExemptMint(this.connection);
+    
+    // Log rent cost for transparency
+    console.log(`Creating SPL token mint - Rent cost: ${lamports} lamports (${lamports / 1e9} SOL)`);
+
+    const transaction = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: payer.publicKey,
+        newAccountPubkey: mintKeypair.publicKey,
+        space: MINT_SIZE,
+        lamports,
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      createInitializeMintInstruction(
+        mintKeypair.publicKey,
+        decimals,
+        mintAuthority,
+        null, // Freeze authority always null - we don't freeze accounts in prediction markets
+        TOKEN_PROGRAM_ID
+      )
+    );
+
+    // Add mint keypair signature
+    transaction.partialSign(mintKeypair);
+
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      payer
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Failed to create mint: ${result.error}`);
+    }
+
+    return mintKeypair.publicKey;
+  }
+
+  /**
+   * Builds a mint transaction without executing it
+   * @param mint - The token mint to create tokens from
+   * @param destination - The token account to receive minted tokens
+   * @param amount - Amount to mint in smallest units
+   * @param mintAuthority - Public key of mint authority
+   * @returns Transaction ready to be signed and sent
+   */
+  buildMintToTransaction(
+    mint: PublicKey,
+    destination: PublicKey,
+    amount: bigint,
+    mintAuthority: PublicKey
+  ): Transaction {
+    return new Transaction().add(
+      createMintToInstruction(
+        mint,
+        destination,
+        mintAuthority,
+        amount,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  /**
+   * Mints new tokens to a destination account
+   * @param mint - The token mint to create tokens from
+   * @param destination - The token account to receive minted tokens
+   * @param amount - Amount to mint in smallest units
+   * @param mintAuthority - Keypair with mint authority
+   * @returns Transaction signature
+   */
+  async mintTo(
+    mint: PublicKey,
+    destination: PublicKey,
+    amount: bigint,
+    mintAuthority: Keypair
+  ): Promise<string> {
+    const transaction = this.buildMintToTransaction(
+      mint,
+      destination,
+      amount,
+      mintAuthority.publicKey
+    );
+    
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      mintAuthority
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Mint failed: ${result.error}`);
+    }
+
+    return result.signature;
+  }
+
+  /**
+   * Builds a burn transaction without executing it
+   * @param mint - The token mint of tokens being burned
+   * @param account - The token account to burn from
+   * @param amount - Amount to burn in smallest units
+   * @param owner - Public key of account owner
+   * @returns Transaction ready to be signed and sent
+   */
+  buildBurnTransaction(
+    mint: PublicKey,
+    account: PublicKey,
+    amount: bigint,
+    owner: PublicKey
+  ): Transaction {
+    return new Transaction().add(
+      createBurnInstruction(
+        account,
+        mint,
+        owner,
+        amount,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  /**
+   * Burns tokens from an account, permanently removing them from circulation
+   * @param mint - The token mint of tokens being burned
+   * @param account - The token account to burn from
+   * @param amount - Amount to burn in smallest units
+   * @param owner - Keypair that owns the token account
+   * @returns Transaction signature
+   */
+  async burn(
+    mint: PublicKey,
+    account: PublicKey,
+    amount: bigint,
+    owner: Keypair
+  ): Promise<string> {
+    const transaction = this.buildBurnTransaction(
+      mint,
+      account,
+      amount,
+      owner.publicKey
+    );
+    
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      owner
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Burn failed: ${result.error}`);
+    }
+
+    return result.signature;
+  }
+
+  /**
+   * Builds a transfer transaction without executing it
+   * @param source - The token account to transfer from
+   * @param destination - The token account to transfer to
+   * @param amount - Amount to transfer in smallest units
+   * @param owner - Public key of source account owner
+   * @returns Transaction ready to be signed and sent
+   */
+  buildTransferTransaction(
+    source: PublicKey,
+    destination: PublicKey,
+    amount: bigint,
+    owner: PublicKey
+  ): Transaction {
+    return new Transaction().add(
+      createTransferInstruction(
+        source,
+        destination,
+        owner,
+        amount,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  /**
+   * Transfers tokens between accounts
+   * @param source - The token account to transfer from
+   * @param destination - The token account to transfer to
+   * @param amount - Amount to transfer in smallest units
+   * @param owner - Keypair that owns the source account
+   * @returns Transaction signature
+   */
+  async transfer(
+    source: PublicKey,
+    destination: PublicKey,
+    amount: bigint,
+    owner: Keypair
+  ): Promise<string> {
+    const transaction = this.buildTransferTransaction(
+      source,
+      destination,
+      amount,
+      owner.publicKey
+    );
+    
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      owner
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Transfer failed: ${result.error}`);
+    }
+
+    return result.signature;
+  }
+
+  /**
+   * Builds a close account transaction without executing it
+   * @param account - The token account to close
+   * @param destination - Account to receive remaining SOL
+   * @param owner - Public key of account owner
+   * @returns Transaction ready to be signed and sent
+   */
+  buildCloseAccountTransaction(
+    account: PublicKey,
+    destination: PublicKey,
+    owner: PublicKey
+  ): Transaction {
+    return new Transaction().add(
+      createCloseAccountInstruction(
+        account,
+        destination,
+        owner,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  /**
+   * Closes a token account and recovers the rent SOL
+   * @param account - The token account to close
+   * @param destination - Account to receive remaining SOL
+   * @param owner - Keypair that owns the token account
+   * @returns Transaction signature
+   */
+  async closeAccount(
+    account: PublicKey,
+    destination: PublicKey,
+    owner: Keypair
+  ): Promise<string> {
+    const transaction = this.buildCloseAccountTransaction(
+      account,
+      destination,
+      owner.publicKey
+    );
+    
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      owner
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Close account failed: ${result.error}`);
+    }
+
+    return result.signature;
+  }
+
+  /**
+   * Gets or creates an associated token account
+   * @param mint - The token mint
+   * @param owner - The owner of the token account
+   * @param payer - The account paying for creation if needed
+   * @returns PublicKey of the associated token account
+   */
+  async getOrCreateAssociatedTokenAccount(
+    mint: PublicKey,
+    owner: PublicKey,
+    payer: Keypair
+  ): Promise<PublicKey> {
+    const associatedToken = await getAssociatedTokenAddress(
+      mint,
+      owner,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+
+    try {
+      await getAccount(this.connection, associatedToken);
+      return associatedToken;
+    } catch {
+      // Account doesn't exist, create it
+      const transaction = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          payer.publicKey,
+          associatedToken,
+          owner,
+          mint,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+
+      const result = await this.executionService.executeTransaction(
+        transaction,
+        payer
+      );
+
+      if (result.status === 'failed') {
+        throw new Error(`Failed to create associated token account: ${result.error}`);
+      }
+
+      return associatedToken;
+    }
+  }
+
+  /**
+   * Gets detailed information about a token account
+   * @param address - The token account address
+   * @returns Token account info or null if account doesn't exist
+   */
+  async getTokenAccountInfo(address: PublicKey): Promise<ITokenAccountInfo | null> {
+    try {
+      const account = await getAccount(this.connection, address);
+      return {
+        address,
+        mint: account.mint,
+        owner: account.owner,
+        amount: BigInt(account.amount.toString()),
+        isInitialized: account.isInitialized
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Gets the token balance of an account
+   * @param account - The token account address
+   * @returns Balance in smallest units (based on token decimals)
+   */
+  async getBalance(account: PublicKey): Promise<bigint> {
+    const info = await this.getTokenAccountInfo(account);
+    return info ? info.amount : 0n;
+  }
+
+  /**
+   * Gets the total supply of tokens for a mint
+   * @param mint - The token mint address
+   * @returns Total supply in smallest units (based on token decimals)
+   */
+  async getTotalSupply(mint: PublicKey): Promise<bigint> {
+    try {
+      const mintInfo = await getMint(this.connection, mint);
+      return BigInt(mintInfo.supply.toString());
+    } catch {
+      return 0n;
+    }
+  }
+
+  /**
+   * Builds a set authority transaction without executing it
+   * @param mint - The token mint to update authority
+   * @param newAuthority - The new authority (or null to revoke)
+   * @param authorityType - Type of authority to set (MintTokens, FreezeAccount, etc)
+   * @param currentAuthority - Current authority public key
+   * @returns Transaction ready to be signed and sent
+   */
+  buildSetAuthorityTransaction(
+    mint: PublicKey,
+    newAuthority: PublicKey | null,
+    authorityType: AuthorityType,
+    currentAuthority: PublicKey
+  ): Transaction {
+    return new Transaction().add(
+      createSetAuthorityInstruction(
+        mint,
+        currentAuthority,
+        authorityType,
+        newAuthority,
+        [],
+        TOKEN_PROGRAM_ID
+      )
+    );
+  }
+
+  /**
+   * Sets or revokes an authority on a mint
+   * @param mint - The token mint to update authority
+   * @param newAuthority - The new authority (or null to revoke)
+   * @param authorityType - Type of authority to set
+   * @param currentAuthority - Current authority keypair
+   * @returns Transaction signature
+   */
+  async setAuthority(
+    mint: PublicKey,
+    newAuthority: PublicKey | null,
+    authorityType: AuthorityType,
+    currentAuthority: Keypair
+  ): Promise<string> {
+    const transaction = this.buildSetAuthorityTransaction(
+      mint,
+      newAuthority,
+      authorityType,
+      currentAuthority.publicKey
+    );
+
+    const result = await this.executionService.executeTransaction(
+      transaction,
+      currentAuthority
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Failed to set authority: ${result.error}`);
+    }
+
+    return result.signature;
+  }
+}
