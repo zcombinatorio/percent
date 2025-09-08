@@ -1,4 +1,4 @@
-import { PublicKey, Keypair, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { PublicKey, Keypair, TransactionInstruction } from '@solana/web3.js';
 import { AuthorityType } from '@solana/spl-token';
 
 /**

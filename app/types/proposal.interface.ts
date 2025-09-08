@@ -6,6 +6,26 @@ import { ProposalStatus } from './moderator.interface';
 import { IExecutionResult, IExecutionConfig } from './execution.interface';
 
 /**
+ * Configuration for creating a new proposal
+ */
+export interface IProposalConfig {
+  id: number;                                   // Unique proposal identifier
+  description: string;                          // Human-readable description
+  transaction: Transaction;                     // Solana transaction to execute if passed
+  createdAt: number;                           // Creation timestamp in milliseconds
+  proposalLength: number;                      // Duration of voting period in seconds
+  baseMint: PublicKey;                         // Public key of base token mint
+  quoteMint: PublicKey;                        // Public key of quote token mint
+  baseDecimals: number;                        // Number of decimals for base token conditional mints
+  quoteDecimals: number;                       // Number of decimals for quote token conditional mints
+  authority: Keypair;                          // Authority keypair for managing vaults and mints
+  connection: Connection;                      // Solana connection for blockchain interactions
+  twapMaxObservationChangePerUpdate: bigint;   // Max TWAP change per update
+  twapStartDelay: number;                      // Delay before TWAP starts in seconds
+  passThresholdBps: number;                    // Basis points threshold for passing
+}
+
+/**
  * Interface for governance proposals in the protocol
  * Manages AMMs, vaults, and TWAP oracle for price discovery
  */
@@ -27,10 +47,9 @@ export interface IProposal {
   /**
    * Initializes the proposal's blockchain components
    * Sets up AMMs, vaults, and begins TWAP recording
-   * @param connection - Solana connection for blockchain interactions
-   * @param authority - Keypair with authority to create mints and manage vaults
+   * Uses connection, authority, and decimals from constructor config
    */
-  initialize(connection: Connection, authority: Keypair): Promise<void>;
+  initialize(): Promise<void>;
   
   /**
    * Returns the time-to-live in seconds until proposal finalizes

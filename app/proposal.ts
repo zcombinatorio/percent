@@ -1,5 +1,5 @@
 import { Transaction, PublicKey, Keypair, Connection } from '@solana/web3.js';
-import { IProposal } from './types/proposal.interface';
+import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { IAMM } from './types/amm.interface';
 import { IVault, VaultType } from './types/vault.interface';
 import { ITWAPOracle } from './types/twap-oracle.interface';
@@ -27,7 +27,9 @@ export class Proposal implements IProposal {
   public readonly finalizedAt: number;
   public readonly baseMint: PublicKey;
   public readonly quoteMint: PublicKey;
+
   private _status: ProposalStatus = ProposalStatus.Pending;
+  private readonly config: IProposalConfig;
 
   /**
    * Getter for proposal status (read-only access)
@@ -38,43 +40,24 @@ export class Proposal implements IProposal {
 
   /**
    * Creates a new Proposal instance
-   * @param id - Unique proposal identifier
-   * @param description - Human-readable description
-   * @param transaction - Solana transaction to execute if passed
-   * @param createdAt - Creation timestamp in milliseconds
-   * @param proposalLength - Duration of voting period in seconds
-   * @param baseMint - Public key of base token mint
-   * @param quoteMint - Public key of quote token mint
-   * @param twapMaxObservationChangePerUpdate - Max TWAP change per update
-   * @param twapStartDelay - Delay before TWAP starts in seconds
-   * @param passThresholdBps - Basis points threshold for passing
+   * @param config - Configuration object containing all proposal parameters
    */
-  constructor(
-    id: number,
-    description: string,
-    transaction: Transaction,
-    createdAt: number,
-    proposalLength: number,
-    baseMint: PublicKey,
-    quoteMint: PublicKey,
-    twapMaxObservationChangePerUpdate: bigint,
-    twapStartDelay: number,
-    passThresholdBps: number
-  ) {
-    this.id = id;
-    this.description = description;
-    this.transaction = transaction;
-    this.createdAt = createdAt;
-    this.finalizedAt = createdAt + (proposalLength * 1000);
-    this.baseMint = baseMint;
-    this.quoteMint = quoteMint;
+  constructor(config: IProposalConfig) {
+    this.config = config;
+    this.id = config.id;
+    this.description = config.description;
+    this.transaction = config.transaction;
+    this.createdAt = config.createdAt;
+    this.finalizedAt = config.createdAt + (config.proposalLength * 1000);
+    this.baseMint = config.baseMint;
+    this.quoteMint = config.quoteMint;
     
     this.twapOracle = new TWAPOracle(
-      id,
-      twapMaxObservationChangePerUpdate,
-      twapStartDelay,
-      passThresholdBps,
-      createdAt,
+      config.id,
+      config.twapMaxObservationChangePerUpdate,
+      config.twapStartDelay,
+      config.passThresholdBps,
+      config.createdAt,
       this.finalizedAt
     );
   }
@@ -82,25 +65,26 @@ export class Proposal implements IProposal {
   /**
    * Initializes the proposal's blockchain components
    * Deploys AMMs, vaults, and starts TWAP oracle recording
-   * @param connection - Solana connection for blockchain interactions
-   * @param authority - Keypair with authority to create mints and manage vaults
+   * Uses connection, authority, and decimals from constructor config
    */
-  async initialize(connection: Connection, authority: Keypair): Promise<void> {
+  async initialize(): Promise<void> {
     // Initialize vaults for base and quote tokens
     this.__baseVault = new Vault({
       proposalId: this.id,
       vaultType: VaultType.Base,
       regularMint: this.baseMint,
-      connection,
-      authority
+      decimals: this.config.baseDecimals,
+      connection: this.config.connection,
+      authority: this.config.authority
     });
     
     this.__quoteVault = new Vault({
       proposalId: this.id,
       vaultType: VaultType.Quote,
       regularMint: this.quoteMint,
-      connection,
-      authority
+      decimals: this.config.quoteDecimals,
+      connection: this.config.connection,
+      authority: this.config.authority
     });
     
     // Initialize vaults (creates conditional token mints and escrow accounts)

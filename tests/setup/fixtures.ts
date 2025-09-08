@@ -58,6 +58,8 @@ export function createTestModeratorConfig(
   return {
     baseMint,
     quoteMint,
+    baseDecimals: 6,  // Standard for base tokens (memecoins/USDC)
+    quoteDecimals: 9, // Standard for quote tokens (SOL)
     proposalLength: TEST_PERIODS.VOTING_PERIOD,
     twapMaxObservationChangePerUpdate: BigInt(100),
     twapStartDelay: 0,

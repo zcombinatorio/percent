@@ -19,6 +19,8 @@ export interface IModeratorConfig {
   proposalLength: number;                       // Duration of voting period in seconds
   baseMint: PublicKey;                         // Public key of the base token mint
   quoteMint: PublicKey;                        // Public key of the quote token mint
+  baseDecimals: number;                        // Number of decimals for base token conditional mints
+  quoteDecimals: number;                       // Number of decimals for quote token conditional mints
   twapMaxObservationChangePerUpdate: bigint;   // Maximum TWAP observation change allowed per update
   twapStartDelay: number;                      // Delay before TWAP starts recording in seconds
   passThresholdBps: number;                    // Basis points threshold for proposal to pass (e.g., 5000 = 50%)

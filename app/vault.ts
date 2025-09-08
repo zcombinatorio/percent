@@ -36,6 +36,7 @@ export class Vault implements IVault {
   public readonly proposalId: number;
   public readonly vaultType: VaultType;
   public readonly regularMint: PublicKey;
+  public readonly decimals: number;
   private _passConditionalMint!: PublicKey;
   private _failConditionalMint!: PublicKey;
   private _escrow!: PublicKey;
@@ -58,6 +59,7 @@ export class Vault implements IVault {
     this.proposalId = config.proposalId;
     this.vaultType = config.vaultType;
     this.regularMint = config.regularMint;
+    this.decimals = config.decimals;
     this.connection = config.connection;
     this.authority = config.authority;
     
@@ -80,22 +82,18 @@ export class Vault implements IVault {
   /**
    * Initializes the vault by creating both pass and fail conditional token mints and escrow account
    * Must be called before any split/merge operations
-   * Creates two conditional mints (pass/fail) with matching decimals to original
+   * Creates two conditional mints (pass/fail) with decimals specified in constructor
    */
   async initialize(): Promise<void> {
-    // Get decimals from original mint
-    const mintInfo = await this.connection.getParsedAccountInfo(this.regularMint);
-    const decimals = (mintInfo.value?.data as any)?.parsed?.info?.decimals || 6;
-
-    // Create both pass and fail conditional token mints
+    // Create both pass and fail conditional token mints with specified decimals
     this._passConditionalMint = await this.tokenService.createMint(
-      decimals,
+      this.decimals,
       this.authority.publicKey,
       this.authority
     );
     
     this._failConditionalMint = await this.tokenService.createMint(
-      decimals,
+      this.decimals,
       this.authority.publicKey,
       this.authority
     );

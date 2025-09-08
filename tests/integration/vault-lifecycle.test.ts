@@ -92,6 +92,7 @@ describe('Vault Lifecycle', () => {
         proposalId: 0,
         vaultType: VaultType.Base,
         regularMint: baseMint,
+        decimals: 6,
         connection,
         authority: authorityWallet
       });
@@ -140,6 +141,7 @@ describe('Vault Lifecycle', () => {
         proposalId: 1,
         vaultType: VaultType.Base,
         regularMint: baseMint,
+        decimals: 6,
         connection,
         authority: authorityWallet
       });
@@ -289,6 +291,7 @@ describe('Vault Lifecycle', () => {
         proposalId: 2,
         vaultType: VaultType.Base,
         regularMint: baseMint,
+        decimals: 6,
         connection,
         authority: authorityWallet
       });
@@ -380,6 +383,7 @@ describe('Vault Lifecycle', () => {
         proposalId: 3,
         vaultType: VaultType.Base,
         regularMint: baseMint,
+        decimals: 6,
         connection,
         authority: authorityWallet
       });
@@ -538,6 +542,7 @@ describe('Vault Lifecycle', () => {
         proposalId: 4,
         vaultType: VaultType.Base,
         regularMint: baseMint,
+        decimals: 6,
         connection,
         authority: authorityWallet
       });

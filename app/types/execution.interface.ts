@@ -1,4 +1,4 @@
-import { PublicKey, Transaction, Keypair, Connection } from '@solana/web3.js';
+import { Transaction, Keypair, Connection } from '@solana/web3.js';
 
 /**
  * Interface for Execution Service

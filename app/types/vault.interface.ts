@@ -33,6 +33,7 @@ export interface IVaultConfig {
   proposalId: number;        // Associated proposal ID
   vaultType: VaultType;      // Base or Quote vault
   regularMint: PublicKey;    // SPL token mint for regular token (base or quote)
+  decimals: number;          // Number of decimals for conditional tokens
   connection: Connection;    // Solana RPC connection
   authority: Keypair;        // Vault authority keypair for signing
 }
