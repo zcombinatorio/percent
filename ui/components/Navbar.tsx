@@ -1,0 +1,21 @@
+'use client';
+
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { TrendingUp } from 'lucide-react';
+
+export default function Navbar() {
+  return (
+    <nav className="bg-gray-900 border-b border-gray-800">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          <div className="flex items-center space-x-2">
+            <TrendingUp className="h-8 w-8 text-blue-500" />
+            <span className="text-white text-xl font-bold">Prediction Market</span>
+          </div>
+          
+          <WalletMultiButton className="!bg-blue-600 hover:!bg-blue-700" />
+        </div>
+      </div>
+    </nav>
+  );
+}
