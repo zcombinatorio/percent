@@ -1,11 +1,12 @@
 import { PublicKey, Connection, Keypair, Transaction } from '@solana/web3.js';
+import { ProposalStatus } from './moderator.interface';
 
 /**
- * Vault type indicating whether this vault represents pass or fail outcome
+ * Vault type indicating whether this vault manages base or quote tokens
  */
 export enum VaultType {
-  Pass = 'pass',
-  Fail = 'fail'
+  Base = 'base',
+  Quote = 'quote'
 }
 
 /**
@@ -20,10 +21,9 @@ export enum TokenType {
  * Complete token balance snapshot for a user
  */
 export interface ITokenBalance {
-  base: bigint;              // Regular base token balance
-  quote: bigint;             // Regular quote token balance
-  conditionalBase: bigint;   // Conditional base token balance (pToken or fToken)
-  conditionalQuote: bigint;  // Conditional quote token balance (pToken or fToken)
+  regular: bigint;        // Regular token balance (base or quote)
+  passConditional: bigint;   // Pass conditional token balance
+  failConditional: bigint;   // Fail conditional token balance
 }
 
 /**
@@ -31,9 +31,8 @@ export interface ITokenBalance {
  */
 export interface IVaultConfig {
   proposalId: number;        // Associated proposal ID
-  vaultType: VaultType;      // Pass or Fail vault
-  baseMint: PublicKey;       // SPL token mint for base token
-  quoteMint: PublicKey;      // SPL token mint for quote token
+  vaultType: VaultType;      // Base or Quote vault
+  regularMint: PublicKey;    // SPL token mint for regular token (base or quote)
   connection: Connection;    // Solana RPC connection
   authority: Keypair;        // Vault authority keypair for signing
 }
@@ -42,27 +41,25 @@ export interface IVaultConfig {
  * Information about vault's escrow accounts and conditional mints
  */
 export interface IEscrowInfo {
-  baseEscrow: PublicKey;           // Escrow account holding base tokens
-  quoteEscrow: PublicKey;          // Escrow account holding quote tokens
-  conditionalBaseMint: PublicKey;  // Mint for conditional base tokens
-  conditionalQuoteMint: PublicKey; // Mint for conditional quote tokens
+  escrow: PublicKey;              // Escrow account holding regular tokens
+  passConditionalMint: PublicKey; // Mint for pass conditional tokens
+  failConditionalMint: PublicKey; // Mint for fail conditional tokens
 }
 
 /**
  * Interface for vault managing 1:1 token exchange in prediction markets
- * Handles splitting regular tokens into conditional tokens and merging back
+ * Each vault manages both pass and fail conditional tokens for a single regular token type
  */
 export interface IVault {
   // Immutable properties
   readonly proposalId: number;              // Associated proposal ID
-  readonly vaultType: VaultType;            // Pass or Fail vault type
-  readonly baseMint: PublicKey;             // Original base token mint
-  readonly quoteMint: PublicKey;            // Original quote token mint
-  readonly conditionalBaseMint: PublicKey;  // Conditional base token mint (created on init)
-  readonly conditionalQuoteMint: PublicKey; // Conditional quote token mint (created on init)
-  readonly baseEscrow: PublicKey;           // Escrow holding base tokens
-  readonly quoteEscrow: PublicKey;          // Escrow holding quote tokens
+  readonly vaultType: VaultType;            // Base or Quote vault type
+  readonly regularMint: PublicKey;          // Regular token mint (base or quote)
+  readonly passConditionalMint: PublicKey;  // Pass conditional token mint (created on init)
+  readonly failConditionalMint: PublicKey;  // Fail conditional token mint (created on init)
+  readonly escrow: PublicKey;               // Escrow holding regular tokens
   readonly isFinalized: boolean;            // Whether vault has been finalized
+  readonly proposalStatus: ProposalStatus;  // Status of the proposal (determines winning tokens)
   
   /**
    * Initializes vault by creating conditional token mints and escrow accounts
@@ -71,32 +68,28 @@ export interface IVault {
   initialize(): Promise<void>;
   
   /**
-   * Builds transaction for splitting regular tokens into conditional tokens
-   * Validates user has sufficient regular token balance before building
+   * Builds transaction for splitting regular tokens into BOTH pass and fail conditional tokens
+   * User receives equal amounts of both conditional tokens for each regular token
    * @param user - User's public key who is splitting tokens
-   * @param tokenType - Type of token to split (Base or Quote)
    * @param amount - Amount to split in smallest units
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if insufficient balance or vault is finalized
    */
   buildSplitTx(
     user: PublicKey,
-    tokenType: TokenType,
     amount: bigint
   ): Promise<Transaction>;
   
   /**
-   * Builds transaction for merging conditional tokens back to regular tokens
-   * Validates user has sufficient conditional token balance before building
+   * Builds transaction for merging BOTH pass and fail conditional tokens back to regular tokens
+   * Requires equal amounts of both conditional tokens to receive regular tokens
    * @param user - User's public key who is merging tokens
-   * @param tokenType - Type of token to merge (Base or Quote)
-   * @param amount - Amount to merge in smallest units
+   * @param amount - Amount to merge in smallest units (of each conditional token)
    * @returns Unsigned transaction requiring user and authority signatures
-   * @throws Error if insufficient balance or merging from losing vault after finalization
+   * @throws Error if insufficient balance of either conditional token or vault is finalized
    */
   buildMergeTx(
     user: PublicKey,
-    tokenType: TokenType,
     amount: bigint
   ): Promise<Transaction>;
   
@@ -117,18 +110,23 @@ export interface IVault {
   /**
    * Gets regular token balance for a user
    * @param user - User's public key
-   * @param tokenType - Type of token (Base or Quote)
    * @returns Balance in smallest units
    */
-  getBalance(user: PublicKey, tokenType: TokenType): Promise<bigint>;
+  getBalance(user: PublicKey): Promise<bigint>;
   
   /**
-   * Gets conditional token balance for a user
+   * Gets pass conditional token balance for a user
    * @param user - User's public key
-   * @param tokenType - Type of conditional token (Base or Quote)
    * @returns Balance in smallest units
    */
-  getConditionalBalance(user: PublicKey, tokenType: TokenType): Promise<bigint>;
+  getPassConditionalBalance(user: PublicKey): Promise<bigint>;
+  
+  /**
+   * Gets fail conditional token balance for a user
+   * @param user - User's public key
+   * @returns Balance in smallest units
+   */
+  getFailConditionalBalance(user: PublicKey): Promise<bigint>;
   
   /**
    * Gets all token balances for a user
@@ -139,30 +137,35 @@ export interface IVault {
   
   /**
    * Gets total supply of regular tokens held in escrow
-   * @param tokenType - Type of token (Base or Quote)
    * @returns Total supply in smallest units
    */
-  getTotalSupply(tokenType: TokenType): Promise<bigint>;
+  getTotalSupply(): Promise<bigint>;
   
   /**
-   * Gets total supply of conditional tokens issued
-   * @param tokenType - Type of conditional token (Base or Quote)
+   * Gets total supply of pass conditional tokens issued
    * @returns Total supply in smallest units
    */
-  getConditionalTotalSupply(tokenType: TokenType): Promise<bigint>;
+  getPassConditionalTotalSupply(): Promise<bigint>;
   
   /**
-   * Finalizes vault when proposal ends, determining winner/loser status
-   * @param winningVault - Whether this vault represents winning outcome
+   * Gets total supply of fail conditional tokens issued
+   * @returns Total supply in smallest units
    */
-  finalize(winningVault: boolean): Promise<void>;
+  getFailConditionalTotalSupply(): Promise<bigint>;
   
   /**
-   * Builds a transaction to redeem ALL winning conditional tokens
-   * Automatically processes both base and quote tokens in a single transaction
+   * Finalizes vault when proposal ends, storing the proposal status
+   * After finalization, split/merge are blocked and only redemption is allowed
+   * @param proposalStatus - The final status of the proposal (Passed or Failed)
+   */
+  finalize(proposalStatus: ProposalStatus): Promise<void>;
+  
+  /**
+   * Builds a transaction to redeem winning conditional tokens for regular tokens
+   * Only the winning conditional tokens (pass if passed, fail if failed) can be redeemed
    * @param user - User's public key
    * @returns Unsigned transaction requiring user and authority signatures
-   * @throws Error if vault not finalized, not winning vault, or no tokens to redeem
+   * @throws Error if vault not finalized or no winning tokens to redeem
    */
   buildRedeemWinningTokensTx(user: PublicKey): Promise<Transaction>;
   

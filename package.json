@@ -5,12 +5,12 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:vault": "vitest run tests/integration/vault-lifecycle.test.ts",
-    "test:proposal": "vitest run tests/integration/proposal-flow.test.ts"
+    "test": "NODE_ENV=test vitest",
+    "test:ui": "NODE_ENV=test vitest --ui",
+    "test:run": "NODE_ENV=test vitest run",
+    "test:coverage": "NODE_ENV=test vitest run --coverage",
+    "test:vault": "NODE_ENV=test vitest run tests/integration/vault-lifecycle.test.ts",
+    "test:proposal": "NODE_ENV=test vitest run tests/integration/proposal-flow.test.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

@@ -20,8 +20,8 @@ export class Proposal implements IProposal {
   public transaction: Transaction;
   public __pAMM: IAMM | null = null;
   public __fAMM: IAMM | null = null;
-  public __pVault: IVault | null = null;
-  public __fVault: IVault | null = null;
+  public __baseVault: IVault | null = null;
+  public __quoteVault: IVault | null = null;
   public readonly twapOracle: ITWAPOracle;
   public readonly createdAt: number;
   public readonly finalizedAt: number;
@@ -86,33 +86,31 @@ export class Proposal implements IProposal {
    * @param authority - Keypair with authority to create mints and manage vaults
    */
   async initialize(connection: Connection, authority: Keypair): Promise<void> {
-    // Initialize vaults for pass and fail markets
-    this.__pVault = new Vault({
+    // Initialize vaults for base and quote tokens
+    this.__baseVault = new Vault({
       proposalId: this.id,
-      vaultType: VaultType.Pass,
-      baseMint: this.baseMint,
-      quoteMint: this.quoteMint,
+      vaultType: VaultType.Base,
+      regularMint: this.baseMint,
       connection,
       authority
     });
     
-    this.__fVault = new Vault({
+    this.__quoteVault = new Vault({
       proposalId: this.id,
-      vaultType: VaultType.Fail,
-      baseMint: this.baseMint,
-      quoteMint: this.quoteMint,
+      vaultType: VaultType.Quote,
+      regularMint: this.quoteMint,
       connection,
       authority
     });
     
     // Initialize vaults (creates conditional token mints and escrow accounts)
-    await this.__pVault.initialize();
-    await this.__fVault.initialize();
+    await this.__baseVault.initialize();
+    await this.__quoteVault.initialize();
     
     // TODO: Initialize AMMs using conditional token mints from vaults
     // The AMMs will use:
-    // - pAMM: this.__pVault.conditionalBaseMint / this.__pVault.conditionalQuoteMint
-    // - fAMM: this.__fVault.conditionalBaseMint / this.__fVault.conditionalQuoteMint
+    // - pAMM: trades pBase/pQuote tokens (this.__baseVault.passConditionalMint / this.__quoteVault.passConditionalMint)
+    // - fAMM: trades fBase/fQuote tokens (this.__baseVault.failConditionalMint / this.__quoteVault.failConditionalMint)
     // TODO: Start TWAP oracle recording
   }
 
@@ -140,14 +138,14 @@ export class Proposal implements IProposal {
 
   /**
    * Returns both vaults for the proposal
-   * @returns Tuple of [pVault, fVault]  
+   * @returns Tuple of [baseVault, quoteVault]  
    * @throws Error if vaults are not initialized
    */
   getVaults(): [IVault, IVault] {
-    if (!this.__pVault || !this.__fVault) {
+    if (!this.__baseVault || !this.__quoteVault) {
       throw new Error(`Proposal #${this.id}: Vaults are uninitialized`);
     }
-    return [this.__pVault, this.__fVault];
+    return [this.__baseVault, this.__quoteVault];
   }
 
   /**
@@ -169,10 +167,10 @@ export class Proposal implements IProposal {
       const passed = true;
       this._status = passed ? ProposalStatus.Passed : ProposalStatus.Failed;
       
-      // Finalize vaults - winning vault can still process redemptions
-      if (this.__pVault && this.__fVault) {
-        await this.__pVault.finalize(passed); // pVault wins if passed
-        await this.__fVault.finalize(!passed); // fVault wins if failed
+      // Finalize both vaults with the proposal status
+      if (this.__baseVault && this.__quoteVault) {
+        await this.__baseVault.finalize(this._status);
+        await this.__quoteVault.finalize(this._status);
       }
     }
     

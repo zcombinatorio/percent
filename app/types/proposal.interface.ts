@@ -15,8 +15,8 @@ export interface IProposal {
   transaction: Transaction;            // Solana transaction to execute if passed
   __pAMM: IAMM | null;                // Pass AMM (initialized during proposal setup)
   __fAMM: IAMM | null;                // Fail AMM (initialized during proposal setup)
-  __pVault: IVault | null;            // Pass vault for token management
-  __fVault: IVault | null;            // Fail vault for token management
+  __baseVault: IVault | null;         // Base vault managing both pBase and fBase tokens
+  __quoteVault: IVault | null;        // Quote vault managing both pQuote and fQuote tokens
   readonly twapOracle: ITWAPOracle;   // Time-weighted average price oracle (immutable)
   readonly createdAt: number;         // Timestamp when proposal was created (ms, immutable)
   readonly finalizedAt: number;       // Timestamp when voting ends (ms, immutable)
@@ -47,7 +47,7 @@ export interface IProposal {
   
   /**
    * Gets both vaults for the proposal
-   * @returns Tuple of [pVault, fVault]
+   * @returns Tuple of [baseVault, quoteVault]
    * @throws Error if vaults are uninitialized
    */
   getVaults(): [IVault, IVault];

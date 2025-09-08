@@ -1,10 +1,12 @@
-import { PublicKey, Transaction, Keypair } from '@solana/web3.js';
+import { PublicKey, Transaction, Keypair, Connection } from '@solana/web3.js';
 
 /**
  * Interface for Execution Service
  * Defines methods for handling Solana transaction execution
  */
 export interface IExecutionService {
+  readonly connection: Connection; // Connection to the Solana cluster
+
   /**
    * Executes a transaction on Solana
    * @param transaction - Transaction to execute

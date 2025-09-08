@@ -19,7 +19,7 @@ import {
  * Manages keypair loading, transaction signing, and sending
  */
 export class ExecutionService implements IExecutionService {
-  private connection: Connection;
+  readonly connection: Connection;
   private config: IExecutionConfig;
 
   constructor(config: IExecutionConfig) {
@@ -76,18 +76,23 @@ export class ExecutionService implements IExecutionService {
         transaction.feePayer = signer.publicKey;
       }
 
-      // Send and confirm transaction with all signers
-      const allSigners = [signer, ...additionalSigners];
-      const signature = await sendAndConfirmTransaction(
-        this.connection,
-        transaction,
-        allSigners,
+      // Use partialSign to preserve any existing signatures
+      transaction.partialSign(signer);
+      for (const additionalSigner of additionalSigners) {
+        transaction.partialSign(additionalSigner);
+      }
+
+      // Send the fully signed transaction
+      const signature = await this.connection.sendRawTransaction(
+        transaction.serialize(),
         {
-          commitment: this.config.commitment as Commitment,
           skipPreflight: this.config.skipPreflight,
           maxRetries: this.config.maxRetries
         }
       );
+
+      // Wait for confirmation
+      await this.connection.confirmTransaction(signature, this.config.commitment as Commitment);
 
       const result: IExecutionResult = {
         signature,
