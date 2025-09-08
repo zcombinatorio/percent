@@ -7,10 +7,13 @@ import { Clock, TrendingUp, TrendingDown, Activity, Users, DollarSign } from 'lu
 import { mockProposals } from '@/lib/mock-data';
 
 export default function HomePage() {
-  const [selectedProposalId, setSelectedProposalId] = useState(1);
+  // Sort proposals by most recent first and select the first one
+  const sortedProposals = [...mockProposals].sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+  
+  const [selectedProposalId, setSelectedProposalId] = useState(sortedProposals[0].id);
   const [selectedMarket, setSelectedMarket] = useState<'pass' | 'fail'>('pass');
   
-  const proposal = mockProposals.find(p => p.id === selectedProposalId) || mockProposals[0];
+  const proposal = mockProposals.find(p => p.id === selectedProposalId) || sortedProposals[0];
 
   return (
     <div className="flex h-screen bg-[#181818]">
