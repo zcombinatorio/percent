@@ -5,8 +5,8 @@ import { IAMM } from './amm.interface';
  * Enum representing the TWAP oracle status
  */
 export enum TWAPStatus {
-  Passing = 'passing',   // Pass TWAP exceeds fail TWAP by threshold
-  Failing = 'failing'     // Pass TWAP does not exceed threshold
+  Passing = 'Passing',   // Pass TWAP exceeds fail TWAP by threshold
+  Failing = 'Failing'     // Pass TWAP does not exceed threshold
 }
 
 /**
