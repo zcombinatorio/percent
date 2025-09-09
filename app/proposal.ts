@@ -205,7 +205,10 @@ export class Proposal implements IProposal {
     
     // Update status if still pending after finalization time
     if (this._status === ProposalStatus.Pending) {
-      // Use TWAP oracle to determine pass/fail
+      // Perform final TWAP crank to ensure we have the most up-to-date data
+      await this.twapOracle.crankTWAP();
+      
+      // Use TWAP oracle to determine pass/fail with fresh data
       const twapStatus = await this.twapOracle.fetchStatus();
       const passed = twapStatus === TWAPStatus.Passing;
       this._status = passed ? ProposalStatus.Passed : ProposalStatus.Failed;

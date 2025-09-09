@@ -1,8 +1,9 @@
-import { Transaction, PublicKey, Keypair } from '@solana/web3.js';
+import { Keypair } from '@solana/web3.js';
 import { IModerator, IModeratorConfig, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
 import { IExecutionConfig, IExecutionResult } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { Proposal } from './proposal';
+import { SchedulerService } from './services/scheduler.service';
 
 /**
  * Moderator class that manages governance proposals for the protocol
@@ -12,6 +13,7 @@ export class Moderator implements IModerator {
   public config: IModeratorConfig;                         // Configuration parameters for the moderator
   public proposals: IProposal[] = [];                     // Array storing all proposals
   private proposalIdCounter: number = 0;                   // Auto-incrementing ID counter for proposals
+  private scheduler: SchedulerService;                     // Scheduler for automatic tasks
 
   /**
    * Creates a new Moderator instance
@@ -19,6 +21,8 @@ export class Moderator implements IModerator {
    */
   constructor(config: IModeratorConfig) {
     this.config = config;
+    this.scheduler = SchedulerService.getInstance();
+    this.scheduler.setModerator(this);
   }
 
   /**
@@ -55,6 +59,13 @@ export class Moderator implements IModerator {
       // Store proposal at index matching its ID
       this.proposals[this.proposalIdCounter] = proposal;
       this.proposalIdCounter++;  // Increment counter for next proposal
+      
+      // Schedule automatic TWAP cranking (every minute)
+      this.scheduler.scheduleTWAPCranking(proposal.id, 60000);
+      
+      // Schedule automatic finalization 1 second after the proposal's end time
+      // This buffer ensures all TWAP data is collected and avoids race conditions
+      this.scheduler.scheduleProposalFinalization(proposal.id, proposal.finalizedAt + 1000);
       
       return proposal;
     } catch (error) {
