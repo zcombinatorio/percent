@@ -12,7 +12,8 @@
     "test:coverage": "NODE_ENV=test vitest run --coverage",
     "create-proposal": "tsx scripts/create-proposal.ts",
     "execute-proposal": "tsx scripts/execute-proposal.ts",
-    "get-analytics": "tsx scripts/get-analytics.ts"
+    "get-analytics": "tsx scripts/get-analytics.ts",
+    "test-swap": "tsx scripts/test-swap.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

@@ -53,17 +53,15 @@ export class ExecutionService implements IExecutionService {
   /**
    * Execute a transaction on Solana
    * @param transaction - Transaction to execute
-   * @param signer - Primary keypair to sign the transaction (fee payer)
+   * @param signer - Optional keypair to sign the transaction (if not already signed)
    * @param additionalSigners - Additional keypairs that need to sign the transaction
    * @returns Execution result with signature and status
    */
   async executeTx(
     transaction: Transaction,
-    signer: Keypair,
+    signer?: Keypair,
     additionalSigners: Keypair[] = []
   ): Promise<IExecutionResult> {
-    const startTime = Date.now();
-    
     try {
       // Only set blockhash if not already set (for pre-signed transactions)
       if (!transaction.recentBlockhash) {
@@ -72,13 +70,17 @@ export class ExecutionService implements IExecutionService {
         transaction.recentBlockhash = blockhash;
       }
       
-      // Only set fee payer if not already set
-      if (!transaction.feePayer) {
+      // Only set fee payer if not already set and signer is provided
+      if (!transaction.feePayer && signer) {
         transaction.feePayer = signer.publicKey;
       }
 
-      // Use partialSign to preserve any existing signatures
-      transaction.partialSign(signer);
+      // Only sign if signer is provided
+      if (signer) {
+        transaction.partialSign(signer);
+      }
+      
+      // Sign with additional signers if provided
       for (const additionalSigner of additionalSigners) {
         transaction.partialSign(additionalSigner);
       }

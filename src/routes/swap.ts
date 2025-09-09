@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
 import { getModerator } from '../services/moderator.service';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import { IAMM } from '../../app/types/amm.interface';
 
@@ -35,28 +35,28 @@ function getAMM(proposalId: number, market: string): IAMM {
 }
 
 /**
- * Execute a swap on the specified AMM
- * POST /:id/:market/swap
+ * Build a swap transaction for the specified AMM
+ * POST /:id/:market/buildSwapTx
  * 
  * Body:
+ * - user: string - User's public key who is swapping tokens
  * - isBaseToQuote: boolean - Direction of swap (true: base->quote, false: quote->base)
  * - amountIn: string - Amount of input tokens to swap (as string to preserve precision)
  * - slippageBps?: number - Optional slippage tolerance in basis points (default: 50 = 0.5%)
- * - payer?: string - Optional payer public key for transaction fees
  */
-router.post('/:id/:market/swap', requireApiKey, async (req, res, next) => {
+router.post('/:id/:market/buildSwapTx', requireApiKey, async (req, res, next) => {
   try {
     const proposalId = parseInt(req.params.id);
     const market = req.params.market;
     
     // Validate request body
-    const { isBaseToQuote, amountIn, slippageBps, payer } = req.body;
+    const { user, isBaseToQuote, amountIn, slippageBps } = req.body;
     
-    if (isBaseToQuote === undefined || amountIn === undefined) {
+    if (!user || isBaseToQuote === undefined || amountIn === undefined) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: ['isBaseToQuote', 'amountIn'],
-        optional: ['slippageBps', 'payer']
+        required: ['user', 'isBaseToQuote', 'amountIn'],
+        optional: ['slippageBps']
       });
     }
     
@@ -77,35 +77,66 @@ router.post('/:id/:market/swap', requireApiKey, async (req, res, next) => {
     // Get the appropriate AMM
     const amm = getAMM(proposalId, market);
     
-    // Convert amount to BN
+    // Convert values
+    const userPubkey = new PublicKey(user);
     const amountInBN = new BN(amountIn);
     
-    // Convert payer to PublicKey if provided
-    const payerPubkey = payer ? new PublicKey(payer) : undefined;
-    
-    // Execute the swap
-    await amm.swap(
+    // Build the swap transaction
+    const transaction = await amm.buildSwapTx(
+      userPubkey,
       isBaseToQuote,
       amountInBN,
-      slippageBps,
-      payerPubkey
+      slippageBps
     );
     
     res.json({
-      status: 'success',
-      message: `Swap executed successfully on ${market} market`,
-      details: {
-        proposalId,
-        market,
-        direction: isBaseToQuote ? 'base->quote' : 'quote->base',
-        amountIn: amountIn.toString(),
-        slippageBps: slippageBps || 50
-      }
+      transaction: transaction.serialize({ requireAllSignatures: false }).toString('base64'),
+      message: 'Swap transaction built successfully. User must sign before execution.'
     });
   } catch (error) {
     next(error);
   }
 });
+
+/**
+ * Execute a pre-signed swap transaction
+ * POST /:id/:market/executeSwapTx
+ * 
+ * Body:
+ * - transaction: string - Base64 encoded signed transaction
+ */
+router.post('/:id/:market/executeSwapTx', requireApiKey, async (req, res, next) => {
+  try {
+    const proposalId = parseInt(req.params.id);
+    const market = req.params.market;
+    
+    // Validate request body
+    const { transaction } = req.body;
+    if (!transaction) {
+      return res.status(400).json({ 
+        error: 'Missing required field: transaction'
+      });
+    }
+    
+    // Get the appropriate AMM
+    const amm = getAMM(proposalId, market);
+    
+    // Deserialize the transaction
+    const tx = Transaction.from(Buffer.from(transaction, 'base64'));
+    
+    // Execute the swap
+    const signature = await amm.executeSwapTx(tx);
+    
+    res.json({
+      signature,
+      status: 'success',
+      message: `Swap executed successfully on ${market} market`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 /**
  * Get current price from the specified AMM

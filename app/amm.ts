@@ -1,4 +1,4 @@
-import { Keypair, PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { IAMM, AMMState } from './types/amm.interface';
 import { ExecutionService } from './services/execution.service';
 import { 
@@ -246,18 +246,20 @@ export class AMM implements IAMM {
   }
 
   /**
-   * Executes a token swap on the AMM pool
-   * @param isBaseToQuote - true to swap base->quote, false for quote->base
-   * @param amountIn - Amount of input token to swap
-   * @param slippageBps - Slippage tolerance in basis points (e.g., 50 = 0.5%)
-   * @param payer - Optional payer for the transaction (defaults to authority)
+   * Builds a transaction for swapping tokens on the AMM
+   * @param user - User's public key who is swapping tokens
+   * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)
+   * @param amountIn - Amount of input tokens to swap
+   * @param slippageBps - Slippage tolerance in basis points (default: 50 = 0.5%)
+   * @returns Transaction with blockhash and fee payer set, ready for user signature
+   * @throws Error if pool is finalized or uninitialized
    */
-  async swap(
+  async buildSwapTx(
+    user: PublicKey,
     isBaseToQuote: boolean,
     amountIn: BN,
-    slippageBps: number = 50, // Default 0.5% slippage
-    payer?: PublicKey
-  ): Promise<void> {
+    slippageBps: number = 50
+  ): Promise<Transaction> {
     if (this._state === AMMState.Uninitialized) {
       throw new Error('AMM not initialized');
     }
@@ -298,9 +300,9 @@ export class AMM implements IAMM {
       tokenBDecimal: this.quoteDecimals,
     });
 
-    // Prepare swap parameters
+    // Prepare swap parameters with user as payer
     const swapParams: SwapParams = {
-      payer: payer || this.authority.publicKey,
+      payer: user,
       pool: this.pool,
       inputTokenMint: inputTokenMint,
       outputTokenMint: outputTokenMint,
@@ -318,14 +320,37 @@ export class AMM implements IAMM {
     // Build swap transaction
     const swapTx = await this.cpAmm.swap(swapParams);
     
-    // Execute the swap transaction
-    const result = await this.executionService.executeTx(
-      swapTx,
-      this.authority
-    );
-
-    if (result.status === 'failed') {
-      throw new Error(`Failed to execute swap: ${result.error}`);
-    }
+    // Add blockhash and fee payer so transaction can be signed
+    const { blockhash } = await this.executionService.connection.getLatestBlockhash();
+    swapTx.recentBlockhash = blockhash;
+    swapTx.feePayer = user;
+    
+    return swapTx;
   }
+
+  /**
+   * Executes a pre-signed swap transaction
+   * @param tx - Transaction already signed by user
+   * @returns Transaction signature
+   * @throws Error if transaction execution fails
+   */
+  async executeSwapTx(tx: Transaction): Promise<string> {
+    if (this._state === AMMState.Uninitialized) {
+      throw new Error('AMM not initialized - cannot execute swap');
+    }
+    
+    if (this._state === AMMState.Finalized) {
+      throw new Error('AMM is finalized - cannot execute swaps');
+    }
+    
+    // Execute without adding authority signature (swaps only need user signature)
+    const result = await this.executionService.executeTx(tx);
+    
+    if (result.status === 'failed') {
+      throw new Error(`Swap transaction failed: ${result.error}`);
+    }
+    
+    return result.signature;
+  }
+
 }

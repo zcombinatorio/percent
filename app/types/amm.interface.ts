@@ -1,5 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { Decimal } from "decimal.js";
 
 /**
@@ -52,17 +52,26 @@ export interface IAMM {
   removeLiquidity(): Promise<void>;
   
   /**
-   * Executes a token swap on the AMM
+   * Builds a transaction for swapping tokens on the AMM
+   * @param user - User's public key who is swapping tokens
    * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)
    * @param amountIn - Amount of input tokens to swap
    * @param slippageBps - Slippage tolerance in basis points (default: 50 = 0.5%)
-   * @param payer - Optional payer for transaction fees
+   * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if pool is finalized or uninitialized
    */
-  swap(
+  buildSwapTx(
+    user: PublicKey,
     isBaseToQuote: boolean,
     amountIn: BN,
-    slippageBps?: number,
-    payer?: PublicKey
-  ): Promise<void>;
+    slippageBps?: number
+  ): Promise<Transaction>;
+  
+  /**
+   * Executes a pre-signed swap transaction
+   * @param tx - Transaction already signed by user
+   * @returns Transaction signature
+   * @throws Error if transaction execution fails
+   */
+  executeSwapTx(tx: Transaction): Promise<string>;
 }
