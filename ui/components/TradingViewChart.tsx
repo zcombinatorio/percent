@@ -56,7 +56,7 @@ export default function TradingViewChart({ symbol = "PASS", proposalId }: Tradin
         interval: 'D',
         timezone: 'Etc/UTC',
         theme: 'dark',
-        style: '1',
+        style: '2',
         locale: 'en',
         toolbar_bg: '#181818',
         enable_publishing: false,
@@ -95,7 +95,10 @@ export default function TradingViewChart({ symbol = "PASS", proposalId }: Tradin
           "context_menus",
           "control_bar",
           "timeframes_toolbar",
-          "volume_force_overlay"
+          "volume_force_overlay",
+          "header_compare",
+          "header_symbol_search",
+          "header_indicators"
         ],
         enabled_features: []
       });
