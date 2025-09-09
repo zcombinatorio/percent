@@ -46,7 +46,8 @@ export class SPLTokenService implements ISPLTokenService {
       maxRetries: 3,
       skipPreflight: false
     };
-    this.executionService = new ExecutionService(executionConfig);
+    // Pass the same connection to ExecutionService to ensure consistency
+    this.executionService = new ExecutionService(executionConfig, connection);
   }
 
   /**

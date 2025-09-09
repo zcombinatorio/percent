@@ -22,14 +22,15 @@ export class ExecutionService implements IExecutionService {
   readonly connection: Connection;
   private config: IExecutionConfig;
 
-  constructor(config: IExecutionConfig) {
+  constructor(config: IExecutionConfig, connection?: Connection) {
     this.config = {
       ...config,
       commitment: config.commitment || 'confirmed',
       maxRetries: config.maxRetries ?? 1,
       skipPreflight: config.skipPreflight ?? false
     };
-    this.connection = new Connection(
+    // Use provided connection or create a new one
+    this.connection = connection || new Connection(
       this.config.rpcEndpoint, 
       this.config.commitment
     );

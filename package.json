@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:test": "tsx watch src/test/server.test.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "NODE_ENV=test vitest",

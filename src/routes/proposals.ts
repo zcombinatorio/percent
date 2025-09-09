@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
-import ModeratorService from '../services/moderator.service';
+import { getModerator } from '../services/moderator-provider';
 import { CreateProposalRequest, CreateProposalResponse } from '../types/api';
 import { Transaction, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
@@ -9,7 +9,7 @@ import { ExecutionStatus } from '../../app/types/execution.interface';
 const router = Router();
 
 router.get('/', (_req, res) => {
-  const moderator = ModeratorService.getInstance();
+  const moderator = getModerator();
   const proposals = moderator.proposals;
   
   const publicProposals = proposals.map((p, index) => ({
@@ -26,7 +26,7 @@ router.get('/', (_req, res) => {
 });
 
 router.get('/:id', (req, res) => {
-  const moderator = ModeratorService.getInstance();
+  const moderator = getModerator();
   const id = parseInt(req.params.id);
   
   if (isNaN(id) || id < 0 || id >= moderator.proposals.length) {
@@ -51,7 +51,7 @@ router.get('/:id', (req, res) => {
 
 router.post('/', requireApiKey, async (req, res, next) => {
   try {
-    const moderator = ModeratorService.getInstance();
+    const moderator = getModerator();
     const body = req.body as CreateProposalRequest;
     
     // Validate required fields
@@ -110,7 +110,7 @@ router.post('/', requireApiKey, async (req, res, next) => {
 
 router.post('/:id/execute', requireApiKey, async (req, res, next) => {
   try {
-    const moderator = ModeratorService.getInstance();
+    const moderator = getModerator();
     const id = parseInt(req.params.id);
     
     if (isNaN(id) || id < 0 || id >= moderator.proposals.length) {
