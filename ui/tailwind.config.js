@@ -9,6 +9,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        'ibm-plex-mono': ['var(--font-ibm-plex-mono)', 'monospace'],
       },
       colors: {
         orange: {

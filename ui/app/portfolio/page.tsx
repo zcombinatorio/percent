@@ -67,7 +67,7 @@ export default function PortfolioPage() {
               <tr className="border-t border-gray-800">
                 <td className="py-4">Treasury Diversification</td>
                 <td className="py-4">
-                  <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded text-xs">PASS</span>
+                  <span className="px-2 py-1 bg-green-500/20 text-green-500 rounded text-xs">PASS</span>
                 </td>
                 <td className="py-4">100 tokens</td>
                 <td className="py-4">$234.50</td>
@@ -76,7 +76,7 @@ export default function PortfolioPage() {
               <tr className="border-t border-gray-800">
                 <td className="py-4">Protocol Fee Update</td>
                 <td className="py-4">
-                  <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded text-xs">FAIL</span>
+                  <span className="px-2 py-1 bg-red-500/20 text-red-500 rounded text-xs">FAIL</span>
                 </td>
                 <td className="py-4">50 tokens</td>
                 <td className="py-4">$112.00</td>

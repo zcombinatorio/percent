@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import TradingInterface from '@/components/TradingInterface';
 import TradingViewChart from '@/components/TradingViewChart';
 import { mockProposals } from '@/lib/mock-data';
+import { IoMdStopwatch } from 'react-icons/io';
 
 export default function HomePage() {
   // Sort proposals by most recent first and select the first one
@@ -119,8 +120,70 @@ export default function HomePage() {
               <p className="text-gray-400 text-sm leading-relaxed">{proposal.description}</p>
             </div>
 
+            {/* Progress Bar Component */}
+            <div className="mb-4">
+              <div className="bg-[#0F0F0F] border border-[#3D3D3D] px-4 py-4">
+                <div className="flex items-center gap-6">
+                  {/* Progress Bar */}
+                  <div className="relative flex-1">
+                    <div className="relative h-10 bg-[#2A2A2A] rounded-full overflow-hidden border border-[#3D3D3D] flex items-center">
+                      {/* Progress Fill */}
+                      <div 
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-3 ${
+                          proposal.status === 'Passed' 
+                            ? 'bg-gradient-to-r from-green-500 to-green-400'
+                            : proposal.status === 'Failed'
+                            ? 'bg-gradient-to-r from-red-500 to-red-400'
+                            : 'bg-gradient-to-r from-orange-500 to-orange-400'
+                        }`}
+                        style={{ width: `${proposal.status === 'Passed' ? 100 : Math.max(proposal.passPrice * 100, 8)}%` }}
+                      >
+                        {/* Percentage Text inside progress - hidden for Passed status */}
+                        {proposal.status !== 'Passed' && (
+                          <span className="text-base font-bold text-white" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
+                            {(proposal.passPrice * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                      {/* Pass/Failed/Passed text at the end */}
+                      <span 
+                        className={`absolute right-4 text-sm font-medium ${
+                          proposal.status === 'Failed' 
+                            ? 'text-red-500'
+                            : proposal.status === 'Passed'
+                            ? 'text-white'
+                            : 'text-gray-500'
+                        }`}
+                        style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+                      >
+                        {proposal.status === 'Failed' ? 'Failed' : proposal.status === 'Passed' ? 'Passed' : 'In Progress'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Countdown Timer */}
+                  <div className="flex items-center justify-center gap-2 w-36">
+                    {/* Stopwatch Icon */}
+                    <IoMdStopwatch className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                    <div className="text-2xl font-mono text-white">
+                      {(() => {
+                        const now = new Date();
+                        const diff = proposal.endsAt.getTime() - now.getTime();
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                        
+                        if (diff <= 0) return "00:00:00";
+                        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* TradingView Chart */}
-            <div className="mb-8">
+            <div className="mb-4">
               <TradingViewChart 
                 symbol={selectedMarket.toUpperCase()} 
                 proposalId={proposal.id} 
@@ -143,12 +206,12 @@ export default function HomePage() {
               </div>
               
               {/* Table Body - Scrollable */}
-              <div className="max-h-[360px] overflow-y-auto scrollbar-hide">
-                {/* Sample trade rows - replace with actual data */}
+              <div className="max-h-[440px] overflow-y-auto scrollbar-hide">
+                {/* Sample trade rows - 10 entries */}
                 <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
                   <div className="text-white">0xAb5...3d8</div>
                   <div className="text-white">2.5%</div>
-                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-green-500">buy</div>
                   <div className="text-white">Pass</div>
                   <div className="text-white">100</div>
                   <div className="flex justify-between">
@@ -159,7 +222,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
                   <div className="text-white">0x7F2...9e4</div>
                   <div className="text-white">0.0%</div>
-                  <div className="text-[#EF5060]">sell</div>
+                  <div className="text-red-500">sell</div>
                   <div className="text-white">Fail</div>
                   <div className="text-white">50</div>
                   <div className="flex justify-between">
@@ -170,7 +233,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
                   <div className="text-white">0x3C9...1a7</div>
                   <div className="text-white">5.2%</div>
-                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-green-500">buy</div>
                   <div className="text-white">Pass</div>
                   <div className="text-white">250</div>
                   <div className="flex justify-between">
@@ -181,7 +244,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
                   <div className="text-white">0x9D1...8f2</div>
                   <div className="text-white">1.8%</div>
-                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-green-500">buy</div>
                   <div className="text-white">Fail</div>
                   <div className="text-white">75</div>
                   <div className="flex justify-between">
@@ -192,12 +255,90 @@ export default function HomePage() {
                 <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
                   <div className="text-white">0x2E4...5c9</div>
                   <div className="text-white">3.1%</div>
-                  <div className="text-[#EF5060]">sell</div>
+                  <div className="text-red-500">sell</div>
                   <div className="text-white">Pass</div>
                   <div className="text-white">150</div>
                   <div className="flex justify-between">
                     <span className="text-white">$0.695</span>
                     <span className="text-[#9C9D9E]">25m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x8F3...2b1</div>
+                  <div className="text-white">4.0%</div>
+                  <div className="text-green-500">buy</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">180</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.703</span>
+                    <span className="text-[#9C9D9E]">28m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x5A2...7c6</div>
+                  <div className="text-white">1.2%</div>
+                  <div className="text-red-500">sell</div>
+                  <div className="text-white">Fail</div>
+                  <div className="text-white">90</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.297</span>
+                    <span className="text-[#9C9D9E]">32m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x1B7...4d3</div>
+                  <div className="text-white">6.5%</div>
+                  <div className="text-green-500">buy</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">320</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.705</span>
+                    <span className="text-[#9C9D9E]">35m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x7C8...9e2</div>
+                  <div className="text-white">2.3%</div>
+                  <div className="text-green-500">buy</div>
+                  <div className="text-white">Fail</div>
+                  <div className="text-white">110</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.302</span>
+                    <span className="text-[#9C9D9E]">40m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x4D9...1f5</div>
+                  <div className="text-white">3.7%</div>
+                  <div className="text-red-500">sell</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">200</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.694</span>
+                    <span className="text-[#9C9D9E]">45m</span>
+                  </div>
+                </div>
+                {/* Additional trades would continue here for scrolling */}
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x6E2...8a9</div>
+                  <div className="text-white">5.1%</div>
+                  <div className="text-green-500">buy</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">275</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.706</span>
+                    <span className="text-[#9C9D9E]">48m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x9A3...7b4</div>
+                  <div className="text-white">1.5%</div>
+                  <div className="text-red-500">sell</div>
+                  <div className="text-white">Fail</div>
+                  <div className="text-white">65</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.296</span>
+                    <span className="text-[#9C9D9E]">52m</span>
                   </div>
                 </div>
               </div>
@@ -208,7 +349,7 @@ export default function HomePage() {
           </div>
 
           {/* Trading Panel - Sticky Position */}
-          <div className="w-96 p-8">
+          <div className="w-96 pl-0 pr-8 py-8">
             <div className="bg-[#272727] rounded-3xl p-6 sticky top-8">
               <TradingInterface 
                 proposalId={proposal.id}

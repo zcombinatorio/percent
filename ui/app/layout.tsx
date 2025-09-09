@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import WalletContextProvider from "@/providers/WalletProvider";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-ibm-plex-mono",
 });
 
 export const metadata: Metadata = {
@@ -24,7 +30,7 @@ export default function RootLayout({
         <script src="https://s3.tradingview.com/tv.js"></script>
       </head>
       <body
-        className={`${inter.variable} font-sans antialiased bg-gray-950 text-white`}
+        className={`${inter.variable} ${ibmPlexMono.variable} font-sans antialiased bg-gray-950 text-white`}
       >
         <WalletContextProvider>
           {children}

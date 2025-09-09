@@ -27,7 +27,7 @@ export default function ProposalCard({ proposal }: ProposalCardProps) {
           <h3 className="text-lg font-semibold line-clamp-2">{proposal.title}</h3>
           <span className={`px-2 py-1 rounded text-xs font-medium ${
             isActive 
-              ? 'bg-green-900/30 text-green-400' 
+              ? 'bg-green-500/20 text-green-500' 
               : 'bg-gray-800 text-gray-400'
           }`}>
             {proposal.status}
