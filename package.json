@@ -8,7 +8,9 @@
     "test": "NODE_ENV=test vitest",
     "test:ui": "NODE_ENV=test vitest --ui",
     "test:run": "NODE_ENV=test vitest run",
-    "test:coverage": "NODE_ENV=test vitest run --coverage"
+    "test:coverage": "NODE_ENV=test vitest run --coverage",
+    "create-proposal": "tsx scripts/create-proposal.ts",
+    "execute-proposal": "tsx scripts/execute-proposal.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
@@ -16,6 +18,8 @@
     "@solana/spl-memo": "^0.2.5",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
+    "@types/bn.js": "^5.2.0",
+    "bn.js": "^5.2.2",
     "cors": "^2.8.5",
     "decimal.js": "^10.6.0",
     "dotenv": "^16.3.1",

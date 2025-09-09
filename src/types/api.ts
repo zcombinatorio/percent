@@ -91,3 +91,28 @@ export interface ActiveTasksResponse {
   }>;
   count: number;
 }
+
+export interface CreateProposalRequest {
+  description: string;
+  proposalLength: number;
+  transaction?: string; // Base64-encoded serialized transaction
+  twap: {
+    initialTwapValue: number;
+    twapMaxObservationChangePerUpdate: number;
+    twapStartDelay: number;
+    passThresholdBps: number;
+  };
+  amm: {
+    initialBaseAmount: string;
+    initialQuoteAmount: string;
+  };
+}
+
+export interface CreateProposalResponse {
+  id: number;
+  description: string;
+  status: ProposalStatus;
+  createdAt: number;
+  finalizedAt: number;
+  transactionHash?: string;
+}

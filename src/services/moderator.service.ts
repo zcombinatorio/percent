@@ -23,9 +23,9 @@ class ModeratorService {
       
       const config: IModeratorConfig = {
         baseMint: new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), // USDC
-        quoteMint: new PublicKey('So11111111111111111111111111111111111112'), // Wrapped SOL
-        baseDecimals: 9,
-        quoteDecimals: 6,
+        quoteMint: new PublicKey('So11111111111111111111111111111111111111112'), // Wrapped SOL
+        baseDecimals: 6,
+        quoteDecimals: 9,
         authority,
         connection: new Connection(rpcUrl, 'confirmed'),
       };
