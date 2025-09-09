@@ -73,10 +73,50 @@ export default function HomePage() {
         
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto flex">
-          <div className="flex-1 max-w-4xl p-8">
+          <div className="flex-1 max-w-4xl p-8 pb-16">
             <div className="mb-8">
-              <h1 className="text-3xl font-semibold mb-4">{proposal.title}</h1>
-              <p className="text-gray-400 text-lg leading-relaxed">{proposal.description}</p>
+              <div className="flex items-center gap-3 mb-2">
+                <span className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${
+                  proposal.status === 'Pending'
+                    ? 'bg-orange-500/20 text-orange-500 animate-pulse'
+                    : proposal.status === 'Passed'
+                    ? 'bg-green-500/20 text-green-500'
+                    : 'bg-red-500/20 text-red-500'
+                }`}>
+                  {proposal.status === 'Pending' ? 'Live' : proposal.status}
+                  {proposal.status === 'Pending' && (
+                    <span className="relative w-3 h-3 flex items-center justify-center">
+                      <span className="absolute w-3 h-3 bg-orange-500 rounded-full animate-ping opacity-75"></span>
+                      <span className="relative w-2 h-2 bg-orange-500 rounded-full"></span>
+                    </span>
+                  )}
+                  {proposal.status === 'Passed' && (
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {proposal.status === 'Failed' && (
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </span>
+                <span className="w-px h-4 bg-gray-600"></span>
+                <span className="text-xs text-gray-500">
+                  {proposal.endsAt.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    day: 'numeric', 
+                    year: 'numeric'
+                  })} at {proposal.endsAt.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+              <h1 className="text-3xl font-semibold mb-4">
+                {proposal.title}
+              </h1>
+              <p className="text-gray-400 text-sm leading-relaxed">{proposal.description}</p>
             </div>
 
             {/* TradingView Chart */}
@@ -88,50 +128,83 @@ export default function HomePage() {
             </div>
 
             {/* Trading History Table */}
-            <div className="bg-[#272727]/30 rounded-xl mb-6">
-              <div className="p-4">
-                <h2 className="text-lg font-semibold mb-4 text-gray-200">Recent Trades</h2>
-                
-                {/* Table Header */}
-                <div className="grid grid-cols-6 gap-4 px-4 py-3 bg-[#1F1F1F]/50 rounded-lg text-xs text-gray-400 font-medium">
-                  <div>Trader</div>
-                  <div>Type</div>
-                  <div>Pass/Fail</div>
-                  <div>Amount</div>
-                  <div>Price</div>
-                  <div>Time</div>
+            <div className="bg-[#0F0F0F] border border-[#3D3D3D]">
+              {/* Table Header */}
+              <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs text-[#9C9D9E] font-medium border-b border-[#3D3D3D]">
+                <div>Trader</div>
+                <div>Position</div>
+                <div>Type</div>
+                <div>Market</div>
+                <div>Amount</div>
+                <div className="flex justify-between">
+                  <span>Price</span>
+                  <span>Age</span>
                 </div>
-                
-                {/* Table Body */}
-                <div className="mt-2 space-y-1 max-h-[400px] overflow-y-auto">
-                  {/* Sample trade rows - replace with actual data */}
-                  <div className="grid grid-cols-6 gap-4 px-4 py-3 hover:bg-[#2A2A2A]/30 rounded-lg transition-colors">
-                    <div className="text-sm text-gray-300">0xAb5...3d8</div>
-                    <div className="text-sm text-green-400">Buy</div>
-                    <div className="text-sm text-gray-300">Pass</div>
-                    <div className="text-sm text-gray-300">100</div>
-                    <div className="text-sm text-gray-300">$0.701</div>
-                    <div className="text-sm text-gray-500">2m ago</div>
+              </div>
+              
+              {/* Table Body - Scrollable */}
+              <div className="max-h-[360px] overflow-y-auto scrollbar-hide">
+                {/* Sample trade rows - replace with actual data */}
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0xAb5...3d8</div>
+                  <div className="text-white">2.5%</div>
+                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">100</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.701</span>
+                    <span className="text-[#9C9D9E]">2m</span>
                   </div>
-                  <div className="grid grid-cols-6 gap-4 px-4 py-3 hover:bg-[#2A2A2A]/30 rounded-lg transition-colors">
-                    <div className="text-sm text-gray-300">0x7F2...9e4</div>
-                    <div className="text-sm text-red-400">Sell</div>
-                    <div className="text-sm text-gray-300">Fail</div>
-                    <div className="text-sm text-gray-300">50</div>
-                    <div className="text-sm text-gray-300">$0.299</div>
-                    <div className="text-sm text-gray-500">5m ago</div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x7F2...9e4</div>
+                  <div className="text-white">0.0%</div>
+                  <div className="text-[#EF5060]">sell</div>
+                  <div className="text-white">Fail</div>
+                  <div className="text-white">50</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.299</span>
+                    <span className="text-[#9C9D9E]">5m</span>
                   </div>
-                  <div className="grid grid-cols-6 gap-4 px-4 py-3 hover:bg-[#2A2A2A]/30 rounded-lg transition-colors">
-                    <div className="text-sm text-gray-300">0x3C9...1a7</div>
-                    <div className="text-sm text-green-400">Buy</div>
-                    <div className="text-sm text-gray-300">Pass</div>
-                    <div className="text-sm text-gray-300">250</div>
-                    <div className="text-sm text-gray-300">$0.698</div>
-                    <div className="text-sm text-gray-500">12m ago</div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x3C9...1a7</div>
+                  <div className="text-white">5.2%</div>
+                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">250</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.698</span>
+                    <span className="text-[#9C9D9E]">12m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x9D1...8f2</div>
+                  <div className="text-white">1.8%</div>
+                  <div className="text-[#50D260]">buy</div>
+                  <div className="text-white">Fail</div>
+                  <div className="text-white">75</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.301</span>
+                    <span className="text-[#9C9D9E]">18m</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors">
+                  <div className="text-white">0x2E4...5c9</div>
+                  <div className="text-white">3.1%</div>
+                  <div className="text-[#EF5060]">sell</div>
+                  <div className="text-white">Pass</div>
+                  <div className="text-white">150</div>
+                  <div className="flex justify-between">
+                    <span className="text-white">$0.695</span>
+                    <span className="text-[#9C9D9E]">25m</span>
                   </div>
                 </div>
               </div>
             </div>
+            
+            {/* Bottom Spacer */}
+            <div className="h-8"></div>
           </div>
 
           {/* Trading Panel - Sticky Position */}

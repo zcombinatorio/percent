@@ -1,7 +1,7 @@
 export const mockProposals = [
   {
     id: 1,
-    title: "Treasury Diversification Proposal",
+    title: "Should percent diversify the treasury?",
     description: "Diversify treasury holdings by allocating 20% to stable assets to reduce volatility and ensure long-term sustainability of the protocol.",
     status: "Pending",
     passPrice: 0.652,
@@ -11,7 +11,7 @@ export const mockProposals = [
   },
   {
     id: 2,
-    title: "Protocol Fee Adjustment",
+    title: "Should percent reduce protocol fees?",
     description: "Reduce protocol fees from 0.3% to 0.25% to increase competitiveness and attract more trading volume.",
     status: "Pending",
     passPrice: 0.423,
@@ -21,7 +21,7 @@ export const mockProposals = [
   },
   {
     id: 3,
-    title: "Governance Token Buyback Program",
+    title: "Should percent implement a token buyback program?",
     description: "Implement a quarterly buyback program using 50% of protocol revenues to support token value.",
     status: "Passed",
     passPrice: 0.812,
@@ -31,7 +31,7 @@ export const mockProposals = [
   },
   {
     id: 4,
-    title: "Cross-Chain Bridge Integration",
+    title: "Should percent integrate cross-chain bridges?",
     description: "Deploy bridges to Ethereum and Polygon to expand protocol reach and increase liquidity.",
     status: "Pending",
     passPrice: 0.701,
@@ -41,7 +41,7 @@ export const mockProposals = [
   },
   {
     id: 5,
-    title: "Community Grants Program",
+    title: "Should percent create a community grants program?",
     description: "Allocate 1M tokens for developer grants to accelerate ecosystem growth and innovation.",
     status: "Failed",
     passPrice: 0.389,
@@ -51,7 +51,7 @@ export const mockProposals = [
   },
   {
     id: 6,
-    title: "Staking Rewards Increase",
+    title: "Should percent increase staking rewards?",
     description: "Increase staking APY from 8% to 12% to incentivize long-term token holding.",
     status: "Pending",
     passPrice: 0.567,
