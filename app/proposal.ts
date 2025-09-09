@@ -73,7 +73,6 @@ export class Proposal implements IProposal {
    */
   async initialize(): Promise<void> {
     // Initialize vaults for base and quote tokens
-    // Each vault generates its own escrow keypair internally
     this.__baseVault = new Vault({
       proposalId: this.id,
       vaultType: VaultType.Base,
