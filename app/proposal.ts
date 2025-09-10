@@ -19,7 +19,7 @@ import { AMM } from './amm';
 export class Proposal implements IProposal {
   public readonly id: number;
   public description: string;
-  public transaction: Transaction | undefined;
+  public transaction: Transaction;
   public __pAMM: IAMM | null = null;
   public __fAMM: IAMM | null = null;
   public __baseVault: IVault | null = null;
@@ -288,10 +288,6 @@ export class Proposal implements IProposal {
       case ProposalStatus.Passed:
         // Execute the Solana transaction
         const executionService = new ExecutionService(executionConfig);
-        
-        if (!this.transaction) {
-          throw new Error('No transaction to execute');
-        }
         
         console.log('Executing transaction to execute proposal');
         const result = await executionService.executeTx(

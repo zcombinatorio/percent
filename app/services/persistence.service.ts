@@ -321,21 +321,14 @@ export class PersistenceService implements IPersistenceService {
       const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
       const connection = new Connection(rpcUrl, 'confirmed');
       
-      // Reconstruct transaction if exists
-      let transaction: Transaction | undefined;
-      if (row.transaction_data) {
-        try {
-          transaction = Transaction.from(Buffer.from(row.transaction_data, 'base64'));
-        } catch (e) {
-          console.warn('Failed to deserialize transaction for proposal', row.id);
-        }
-      }
+      // Reconstruct transaction from database
+      const transaction = Transaction.from(Buffer.from(row.transaction_data, 'base64'));
       
       // Reconstruct proposal config
       const config: IProposalConfig = {
         id: row.id,
         description: row.description,
-        transaction: transaction || undefined,
+        transaction: transaction,
         createdAt: new Date(row.created_at).getTime(),
         proposalLength: parseInt(row.proposal_length),
         baseMint: new PublicKey(row.base_mint),
@@ -349,11 +342,13 @@ export class PersistenceService implements IPersistenceService {
           twapMaxObservationChangePerUpdate: row.twap_oracle_state.twapMaxObservationChangePerUpdate,
           twapStartDelay: row.twap_oracle_state.twapStartDelay,
           passThresholdBps: row.twap_oracle_state.passThresholdBps,
+          minUpdateInterval: 60000, // 1 minute default
         } : {
           initialTwapValue: 0.5,
           twapMaxObservationChangePerUpdate: 0.1,
           twapStartDelay: 60000,
           passThresholdBps: 5000,
+          minUpdateInterval: 60000, // 1 minute default
         },
         ammConfig: row.amm_config ? {
           initialBaseAmount: new BN(row.amm_config.initialBaseAmount),

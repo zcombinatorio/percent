@@ -12,7 +12,7 @@ import { IExecutionResult, IExecutionConfig } from './execution.interface';
 export interface IProposalConfig {
   id: number;                                   // Unique proposal identifier
   description: string;                          // Human-readable description
-  transaction?: Transaction;                    // Solana transaction to execute if passed
+  transaction: Transaction;                     // Solana transaction to execute if passed
   createdAt: number;                           // Creation timestamp in milliseconds
   proposalLength: number;                      // Duration of voting period in seconds
   baseMint: PublicKey;                         // Public key of base token mint
@@ -35,7 +35,7 @@ export interface IProposalConfig {
 export interface IProposal {
   readonly id: number;                 // Unique proposal identifier (immutable)
   description: string;                 // Human-readable description of the proposal
-  transaction: Transaction | undefined;// Solana transaction to execute if passed
+  transaction: Transaction;            // Solana transaction to execute if passed
   __pAMM: IAMM | null;                // Pass AMM (initialized during proposal setup)
   __fAMM: IAMM | null;                // Fail AMM (initialized during proposal setup)
   __baseVault: IVault | null;         // Base vault managing both pBase and fBase tokens

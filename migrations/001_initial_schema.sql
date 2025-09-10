@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS proposals (
   created_at TIMESTAMPTZ NOT NULL,
   finalized_at TIMESTAMPTZ NOT NULL,
   proposal_length BIGINT NOT NULL,
-  transaction_data JSONB,
+  transaction_data JSONB NOT NULL,
   
   -- Token configuration
   base_mint VARCHAR(64) NOT NULL,
