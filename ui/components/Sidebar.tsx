@@ -56,6 +56,10 @@ const Sidebar = memo(({ selectedProposal, onSelectProposal }: SidebarProps) => {
       {/* Proposals List - Only show when not collapsed */}
       {!isCollapsed && (
         <div className="flex-1 overflow-y-auto p-2">
+          {/* Header */}
+          <div className="px-2 pb-2 text-sm text-gray-400">
+            $oogway Proposals
+          </div>
           <div className="space-y-1">
             {sortedProposals.map((proposal) => (
               <button
