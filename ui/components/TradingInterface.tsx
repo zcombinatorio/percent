@@ -289,23 +289,23 @@ const TradingInterface = memo(({
       </button>
 
       {/* Portfolio Stats */}
-      <div className="grid grid-cols-4 gap-3 text-center">
-        <div>
+      <div className="grid grid-cols-4 gap-2">
+        <div className="border border-[#2A2A2A] rounded-lg p-3 text-center">
           <div className="text-xs text-gray-500 mb-1">Bought</div>
           <div className="text-sm font-medium text-white">${portfolio.bought}</div>
         </div>
-        <div>
+        <div className="border border-[#2A2A2A] rounded-lg p-3 text-center">
           <div className="text-xs text-gray-500 mb-1">Sold</div>
           <div className="text-sm font-medium text-white">${portfolio.sold}</div>
         </div>
-        <div>
+        <div className="border border-[#2A2A2A] rounded-lg p-3 text-center">
           <div className="text-xs text-gray-500 mb-1">Holding</div>
           <div className="text-sm font-medium text-white">${portfolio.holding}</div>
         </div>
-        <div>
+        <div className="border border-[#2A2A2A] rounded-lg p-3 text-center">
           <div className="text-xs text-gray-500 mb-1">PnL</div>
           <div className={`text-sm font-medium ${portfolio.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {portfolio.pnl >= 0 ? '+' : ''}{portfolio.pnl} ({portfolio.pnlPercent >= 0 ? '+' : ''}{portfolio.pnlPercent}%)
+            {portfolio.pnl >= 0 ? '+' : ''}{portfolio.pnl}
           </div>
         </div>
       </div>
