@@ -175,15 +175,24 @@ export class HistoryService implements IHistoryService {
       
       const result = await pool.query(query, params);
       
-      return result.rows.map(row => ({
-        id: row.id,
-        timestamp: row.timestamp,
-        proposalId: row.proposal_id,
-        market: row.market,
-        price: new Decimal(row.price),
-        baseLiquidity: row.base_liquidity ? new Decimal(row.base_liquidity) : undefined,
-        quoteLiquidity: row.quote_liquidity ? new Decimal(row.quote_liquidity) : undefined,
-      }));
+      return result.rows.map(row => {
+        const priceHistory: IPriceHistory = {
+          id: row.id,
+          timestamp: row.timestamp,
+          proposalId: row.proposal_id,
+          market: row.market,
+          price: new Decimal(row.price),
+        };
+        
+        if (row.base_liquidity) {
+          priceHistory.baseLiquidity = new Decimal(row.base_liquidity);
+        }
+        if (row.quote_liquidity) {
+          priceHistory.quoteLiquidity = new Decimal(row.quote_liquidity);
+        }
+        
+        return priceHistory;
+      });
     } catch (error) {
       console.error('Failed to get price history:', error);
       throw error;
