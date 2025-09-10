@@ -55,6 +55,7 @@ export class Vault implements IVault {
 
   private connection: Connection;
   private authority: Keypair;
+  private escrowKeypair: Keypair;
   private tokenService: ISPLTokenService;
   private executionService: IExecutionService;
 
@@ -65,6 +66,9 @@ export class Vault implements IVault {
     this.decimals = config.decimals;
     this.connection = config.connection;
     this.authority = config.authority;
+    
+    // Always generate a new escrow keypair for security
+    this.escrowKeypair = Keypair.generate();
     
     // Initialize services with ExecutionService
     this.tokenService = new SPLTokenService(
@@ -93,23 +97,25 @@ export class Vault implements IVault {
     }
     
     // Create both pass and fail conditional token mints with specified decimals
+    // Authority has mint authority but does NOT own the escrow
     this._passConditionalMint = await this.tokenService.createMint(
       this.decimals,
       this.authority.publicKey,
-      this.authority
+      this.authority  // Authority pays for mint creation
     );
     
     this._failConditionalMint = await this.tokenService.createMint(
       this.decimals,
       this.authority.publicKey,
-      this.authority
+      this.authority  // Authority pays for mint creation
     );
     
-    // Create escrow account for regular tokens
+    // Create escrow account for regular tokens owned by escrow keypair
+    // Authority pays for the account creation
     this._escrow = await this.tokenService.getOrCreateAssociatedTokenAccount(
       this.regularMint,
-      this.authority.publicKey,
-      this.authority
+      this.escrowKeypair.publicKey,  // Escrow owns the token account
+      this.authority  // Authority pays for account creation
     );
     
     // Update state to Active
@@ -285,12 +291,12 @@ export class Vault implements IVault {
     );
     tx.add(burnFailIx);
     
-    // Transfer regular tokens from escrow to user (authority signs)
+    // Transfer regular tokens from escrow to user (escrow signs)
     const transferIx = this.tokenService.buildTransferIx(
       this.escrow,
       userRegularAccount,
       amount,
-      this.authority.publicKey // authority must sign
+      this.escrowKeypair.publicKey // escrow must sign
     );
     tx.add(transferIx);
     
@@ -327,7 +333,7 @@ export class Vault implements IVault {
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    * 
-   * Note: In production, user signs first, then this method adds authority signature
+   * Note: In production, user signs first, then this method adds authority signature for minting
    */
   async executeSplitTx(tx: Transaction): Promise<string> {
     if (this._state === VaultState.Uninitialized) {
@@ -338,10 +344,12 @@ export class Vault implements IVault {
       throw new Error('Vault is finalized - no splits allowed');
     }
     
-    // Add authority signature to the user-signed transaction
+    // Add authority signature for minting operations
+    // User already signed for their transfer to escrow
+    console.log('Executing transaction to split tokens');
     const result = await this.executionService.executeTx(
       tx,
-      this.authority
+      this.authority  // Authority signs for minting conditional tokens
     );
     
     if (result.status === 'failed') {
@@ -357,7 +365,7 @@ export class Vault implements IVault {
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    * 
-   * Note: In production, user signs first, then this method adds authority signature
+   * Note: In production, user signs first, then this method adds escrow signature for transfer
    */
   async executeMergeTx(tx: Transaction): Promise<string> {
     if (this._state === VaultState.Uninitialized) {
@@ -368,10 +376,12 @@ export class Vault implements IVault {
       throw new Error('Vault is finalized - no merges allowed, use redemption instead');
     }
     
-    // Add authority signature to the user-signed transaction
+    // Add escrow signature for transferring regular tokens back to user
+    // User already signed for burning their conditional tokens
+    console.log('Executing transaction to merge tokens');
     const result = await this.executionService.executeTx(
       tx,
-      this.authority
+      this.escrowKeypair  // Escrow signs for transferring regular tokens
     );
     
     if (result.status === 'failed') {
@@ -530,7 +540,7 @@ export class Vault implements IVault {
       this.escrow,
       userRegularAccount,
       winningBalance,
-      this.authority.publicKey
+      this.escrowKeypair.publicKey // escrow must sign
     );
     tx.add(transferIx);
     
@@ -557,10 +567,12 @@ export class Vault implements IVault {
    * @throws Error if transaction execution fails
    */
   async executeRedeemWinningTokensTx(tx: Transaction): Promise<string> {
-    // Add authority signature to the user-signed transaction
+    // Add escrow signature for transferring regular tokens to winner
+    // User already signed for burning their winning conditional tokens
+    console.log('Executing transaction to redeem winning tokens');
     const result = await this.executionService.executeTx(
       tx,
-      this.authority
+      this.escrowKeypair  // Escrow signs for transferring regular tokens
     );
     
     if (result.status === 'failed') {
@@ -630,7 +642,12 @@ export class Vault implements IVault {
       );
       
       // Wait for confirmation
-      await this.connection.confirmTransaction(signature, 'confirmed');
+      const latestBlockhash = await this.connection.getLatestBlockhash();
+      await this.connection.confirmTransaction({
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, 'confirmed');
       
       return signature;
     } catch (error) {

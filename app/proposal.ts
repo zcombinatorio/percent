@@ -293,6 +293,7 @@ export class Proposal implements IProposal {
           throw new Error('No transaction to execute');
         }
         
+        console.log('Executing transaction to execute proposal');
         const result = await executionService.executeTx(
           this.transaction,
           signer

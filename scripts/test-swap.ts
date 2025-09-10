@@ -41,7 +41,7 @@ async function testSwap() {
     console.log('\n1. Splitting quote tokens...');
     const splitRequest = {
       user: alicePublicKey,
-      amount: '2000000' // 2 USDC worth (6 decimals)
+      amount: '500000000000' // 1000 quote tokens (9 decimals) - 100% of pool liquidity
     };
     
     const splitResponse = await fetch(`${API_URL}/api/vaults/${proposalId}/quote/buildSplitTx`, {
@@ -93,8 +93,8 @@ async function testSwap() {
       user: alicePublicKey,
       market: 'pass',        // Market to swap in
       isBaseToQuote: false,  // quote -> base (buying pass tokens)
-      amountIn: '1000000',   // 1 USDC worth (6 decimals)
-      slippageBps: 100       // 1% slippage
+      amountIn: '500000000000', // 500 quote tokens (9 decimals) - 50% of pool liquidity
+      slippageBps: 2000       // 20% slippage (needed for large swap)
     };
     
     const buildSwapResponse = await fetch(`${API_URL}/api/swap/${proposalId}/buildSwapTx`, {

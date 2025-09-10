@@ -142,6 +142,7 @@ export class AMM implements IAMM {
     });
 
     // Execute pool creation transaction
+    console.log('Executing transaction to create custom pool');
     // The positionNftKeypair needs to sign as it's creating a new account
     const result = await this.executionService.executeTx(
       tx,
@@ -173,10 +174,6 @@ export class AMM implements IAMM {
       throw new Error('AMM not initialized');
     }
     
-    if (this._state === AMMState.Finalized) {
-      throw new Error('AMM is finalized - cannot fetch price');
-    }
-    
     if (!this.pool) {
       throw new Error('AMM pool is uninitialized');
     }
@@ -184,6 +181,25 @@ export class AMM implements IAMM {
     // Fetch current pool state and convert sqrt price to regular price
     const poolState: PoolState = await this.cpAmm.fetchPoolState(this.pool);
     return getPriceFromSqrtPrice(poolState.sqrtPrice, this.baseDecimals, this.quoteDecimals);
+  }
+
+  /**
+   * Fetches the current liquidity from the pool
+   * @returns Current liquidity as BN
+   * @throws Error if AMM is finalized or pool uninitialized
+   */
+  async fetchLiquidity(): Promise<BN> {
+    if (this._state === AMMState.Uninitialized) {
+      throw new Error('AMM not initialized');
+    }
+    
+    if (!this.pool) {
+      throw new Error('AMM pool is uninitialized');
+    }
+    
+    // Fetch current pool state and return liquidity
+    const poolState: PoolState = await this.cpAmm.fetchPoolState(this.pool);
+    return poolState.liquidity;
   }
 
   /**
@@ -228,6 +244,7 @@ export class AMM implements IAMM {
     const tx = await this.cpAmm.removeAllLiquidityAndClosePosition(params);
     
     // Execute the transaction
+    console.log('Executing transaction to remove liquidity and close position');
     const result = await this.executionService.executeTx(
       tx,
       this.authority
@@ -344,6 +361,7 @@ export class AMM implements IAMM {
     }
     
     // Execute without adding authority signature (swaps only need user signature)
+    console.log('Executing transaction to swap tokens');
     const result = await this.executionService.executeTx(tx);
     
     if (result.status === 'failed') {

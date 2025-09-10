@@ -19,7 +19,7 @@ export interface IProposalConfig {
   quoteMint: PublicKey;                        // Public key of quote token mint
   baseDecimals: number;                        // Number of decimals for base token conditional mints
   quoteDecimals: number;                       // Number of decimals for quote token conditional mints
-  authority: Keypair;                          // Authority keypair for managing vaults and mints
+  authority: Keypair;                          // Authority keypair (payer and mint authority)
   connection: Connection;                      // Solana connection for blockchain interactions
   twap: ITWAPConfig;                           // TWAP oracle configuration
   ammConfig: {

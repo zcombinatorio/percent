@@ -44,7 +44,7 @@ export interface IVaultConfig {
   regularMint: PublicKey;    // SPL token mint for regular token (base or quote)
   decimals: number;          // Number of decimals for conditional tokens
   connection: Connection;    // Solana RPC connection
-  authority: Keypair;        // Vault authority keypair for signing
+  authority: Keypair;        // Vault authority keypair (payer and mint authority)
 }
 
 /**
