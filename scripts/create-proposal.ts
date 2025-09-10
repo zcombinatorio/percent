@@ -14,18 +14,33 @@ async function createProposal() {
     process.exit(1);
   }
   
+  // Token decimals (from moderator.service.ts)
+  const baseDecimals = 6;
+  const quoteDecimals = 9;
+  
+  // Raw token amounts (smallest units)
+  const initialBaseAmount = '10000000000';  // 10 billion raw units = 10,000 tokens (6 decimals)
+  const initialQuoteAmount = '1000000000000'; // 1 trillion raw units = 1,000 tokens (9 decimals)
+  
+  // Calculate decimal-adjusted price (same as AMM will return)
+  // Convert to actual token amounts: raw / 10^decimals
+  const baseTokens = parseInt(initialBaseAmount) / Math.pow(10, baseDecimals); // 10,000 tokens
+  const quoteTokens = parseInt(initialQuoteAmount) / Math.pow(10, quoteDecimals); // 1,000 tokens
+  const ammPrice = quoteTokens / baseTokens; // 1,000 / 10,000 = 0.1
+  
   const request: CreateProposalRequest = {
     description: 'Test Proposal',
     proposalLength: 300,
     twap: {
-      initialTwapValue: 5000,
-      twapMaxObservationChangePerUpdate: 100,
-      twapStartDelay: 5000,
-      passThresholdBps: 300
+      initialTwapValue: ammPrice, // Decimal-adjusted price (0.1)
+      twapMaxObservationChangePerUpdate: null,
+      twapStartDelay: 0, // Changed from 5000
+      passThresholdBps: 300,
+      minUpdateInterval: 60000 // 1 minute in milliseconds
     },
     amm: {
-      initialBaseAmount: '1000000000',
-      initialQuoteAmount: '100000000'
+      initialBaseAmount,
+      initialQuoteAmount
     }
   };
   

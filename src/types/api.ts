@@ -63,7 +63,7 @@ interface TWAPData {
   initialTwapValue: number;
   twapStartDelay: number;
   passThresholdBps: number;
-  twapMaxObservationChangePerUpdate: number;
+  twapMaxObservationChangePerUpdate: number | null;
 }
 
 export interface TWAPResponse {
@@ -98,9 +98,10 @@ export interface CreateProposalRequest {
   transaction?: string; // Base64-encoded serialized transaction
   twap: {
     initialTwapValue: number;
-    twapMaxObservationChangePerUpdate: number;
+    twapMaxObservationChangePerUpdate: number | null;
     twapStartDelay: number;
     passThresholdBps: number;
+    minUpdateInterval: number;
   };
   amm: {
     initialBaseAmount: string;

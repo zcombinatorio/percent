@@ -2,7 +2,6 @@ import { ITWAPOracle, ITWAPConfig, TWAPStatus } from './types/twap-oracle.interf
 import { IAMM } from './types/amm.interface';
 import { Decimal } from 'decimal.js';
 
-const MIN_UPDATE_INTERVAL = 60 * 1000;
 
 /**
  * TWAP Oracle implementation for tracking time-weighted average prices
@@ -11,9 +10,10 @@ const MIN_UPDATE_INTERVAL = 60 * 1000;
 export class TWAPOracle implements ITWAPOracle {
   public readonly proposalId: number;
   public readonly initialTwapValue: number;
-  public readonly twapMaxObservationChangePerUpdate: number;
+  public readonly twapMaxObservationChangePerUpdate: number | null;
   public readonly twapStartDelay: number;
   public readonly passThresholdBps: number;
+  public readonly minUpdateInterval: number;
   public readonly createdAt: number;
   public readonly finalizedAt: number;
 
@@ -43,6 +43,7 @@ export class TWAPOracle implements ITWAPOracle {
     this.twapMaxObservationChangePerUpdate = config.twapMaxObservationChangePerUpdate;
     this.twapStartDelay = config.twapStartDelay;
     this.passThresholdBps = config.passThresholdBps;
+    this.minUpdateInterval = config.minUpdateInterval;
     this.createdAt = createdAt;
     this.finalizedAt = finalizedAt;
 
@@ -84,8 +85,8 @@ export class TWAPOracle implements ITWAPOracle {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
-    // Minimum time between updates (1 minute in milliseconds)
-    if (currentTime < this._lastUpdateTime + MIN_UPDATE_INTERVAL) {
+    // Minimum time between updates
+    if (currentTime < this._lastUpdateTime + this.minUpdateInterval) {
       return; // Not enough time has passed since last update
     }
 
@@ -93,27 +94,34 @@ export class TWAPOracle implements ITWAPOracle {
     const passPrice = await this._pAMM.fetchPrice();
     const failPrice = await this._fAMM.fetchPrice();
 
-    // Update observations with clamping to max change
+    // Update observations with optional clamping to max change
     const maxChange = this.twapMaxObservationChangePerUpdate;
     
-    // Update pass observation
     const passPriceNum = passPrice.toNumber();
-    if (passPriceNum > this._passObservation) {
-      const maxObservation = this._passObservation + maxChange;
-      this._passObservation = Math.min(passPriceNum, maxObservation);
-    } else {
-      const minObservation = Math.max(0, this._passObservation - maxChange);
-      this._passObservation = Math.max(passPriceNum, minObservation);
-    }
-
-    // Update fail observation
     const failPriceNum = failPrice.toNumber();
-    if (failPriceNum > this._failObservation) {
-      const maxObservation = this._failObservation + maxChange;
-      this._failObservation = Math.min(failPriceNum, maxObservation);
+    
+    if (maxChange === null) {
+      // No max change - set observations directly to prices
+      this._passObservation = passPriceNum;
+      this._failObservation = failPriceNum;
     } else {
-      const minObservation = Math.max(0, this._failObservation - maxChange);
-      this._failObservation = Math.max(failPriceNum, minObservation);
+      // Update pass observation with clamping
+      if (passPriceNum > this._passObservation) {
+        const maxObservation = this._passObservation + maxChange;
+        this._passObservation = Math.min(passPriceNum, maxObservation);
+      } else {
+        const minObservation = Math.max(0, this._passObservation - maxChange);
+        this._passObservation = Math.max(passPriceNum, minObservation);
+      }
+
+      // Update fail observation with clamping
+      if (failPriceNum > this._failObservation) {
+        const maxObservation = this._failObservation + maxChange;
+        this._failObservation = Math.min(failPriceNum, maxObservation);
+      } else {
+        const minObservation = Math.max(0, this._failObservation - maxChange);
+        this._failObservation = Math.max(failPriceNum, minObservation);
+      }
     }
 
     // Update aggregations if we're past the start delay

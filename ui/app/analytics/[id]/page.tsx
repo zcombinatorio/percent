@@ -46,6 +46,7 @@ interface AnalyticsData {
       quoteMint: string;
       pool?: string;
       price?: number;
+      liquidity?: string;
     };
     fail?: {
       state: string;
@@ -53,6 +54,7 @@ interface AnalyticsData {
       quoteMint: string;
       pool?: string;
       price?: number;
+      liquidity?: string;
     };
   };
   twap: {
@@ -144,12 +146,15 @@ export default function AnalyticsDashboard() {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
-  const formatSupply = (supply: string) => {
-    const num = parseFloat(supply);
+  const formatSupply = (supply: string, decimals: number = 6) => {
+    // Convert from smallest unit to actual tokens
+    const num = parseFloat(supply) / Math.pow(10, decimals);
     if (num === 0) return '0';
+    if (num < 1) return num.toFixed(4);
     if (num < 1000) return num.toFixed(2);
     if (num < 1000000) return `${(num / 1000).toFixed(2)}K`;
-    return `${(num / 1000000).toFixed(2)}M`;
+    if (num < 1000000000) return `${(num / 1000000).toFixed(2)}M`;
+    return `${(num / 1000000000).toFixed(2)}B`;
   };
 
   if (loading) {
@@ -237,64 +242,114 @@ export default function AnalyticsDashboard() {
       </div>
 
       {/* TWAP Oracle - Second Most Important */}
-      <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-6 mb-6 relative">
-        {data.twap.status && (
-          <span className={`absolute top-4 right-4 px-2 py-1 rounded text-sm ${
-            data.twap.status === 'Passing' 
-              ? 'bg-green-900/30 text-green-400'
-              : data.twap.status === 'Failing'
-              ? 'bg-red-900/30 text-red-400'
-              : 'bg-gray-800 text-gray-400'
-          }`}>
-            {data.twap.status}
-          </span>
-        )}
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 tracking-wide">
-          <Activity className="h-6 w-6" />
-          TWAP Oracle
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left py-2 px-3 text-gray-400">Pass TWAP</th>
-                <th className="text-left py-2 px-3 text-gray-400">Fail TWAP</th>
-                <th className="text-left py-2 px-3 text-gray-400">Difference</th>
-                <th className="text-left py-2 px-3 text-gray-400">Pass Threshold</th>
-                <th className="text-left py-2 px-3 text-gray-400">Initial Value</th>
-                <th className="text-left py-2 px-3 text-gray-400">Start Delay</th>
-                <th className="text-left py-2 px-3 text-gray-400">Max Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="py-2 px-3 text-lg text-green-400">
-                  {data.twap.values?.passTwap.toFixed(4) || 'N/A'}
-                </td>
-                <td className="py-2 px-3 text-lg text-red-400">
-                  {data.twap.values?.failTwap.toFixed(4) || 'N/A'}
-                </td>
-                <td className="py-2 px-3 text-lg">
-                  {data.twap.values ? 
-                    `${((data.twap.values.passTwap - data.twap.values.failTwap) * 100).toFixed(2)}%` 
-                    : 'N/A'
-                  }
-                </td>
-                <td className="py-2 px-3 text-lg">
-                  {(data.twap.passThresholdBps / 100).toFixed(1)}%
-                </td>
-                <td className="py-2 px-3 text-lg">
-                  {data.twap.initialTwapValue}
-                </td>
-                <td className="py-2 px-3 text-lg">
-                  {data.twap.twapStartDelay}ms
-                </td>
-                <td className="py-2 px-3 text-lg">
-                  {data.twap.twapMaxObservationChangePerUpdate}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* TWAP Oracle Box */}
+        <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Activity className="h-6 w-6" />
+              <h3 className="text-lg font-semibold tracking-wide">TWAP Oracle</h3>
+            </div>
+              {data.twap.status && (
+                <span className={`px-2 py-1 rounded text-sm ${
+                  data.twap.status === 'Passing' 
+                    ? 'bg-green-900/30 text-green-400'
+                    : data.twap.status === 'Failing'
+                    ? 'bg-red-900/30 text-red-400'
+                    : 'bg-gray-800 text-gray-400'
+                }`}>
+                  {data.twap.status}
+                </span>
+              )}
+            </div>
+            {data.twap.values && (
+              <div className="mb-4">
+                <table className="w-full">
+                  <tbody>
+                    <tr className="border-b border-gray-700">
+                      <td className="py-3 px-3 text-gray-400">Difference</td>
+                      <td className="py-3 px-3 text-lg text-right font-semibold">
+                        {((data.twap.values.passTwap - data.twap.values.failTwap) * 100).toFixed(2)}%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full border border-gray-700/50">
+                <thead>
+                  <tr className="border-b border-gray-700/50 bg-gray-900/30">
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium border-r border-gray-700/50"></th>
+                    <th className="text-center py-3 px-4 text-green-400 font-semibold border-r border-gray-700/50">Pass</th>
+                    <th className="text-center py-3 px-4 text-red-400 font-semibold">Fail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-700/50">
+                    <td className="py-3 px-4 text-gray-400 font-medium border-r border-gray-700/50 bg-gray-900/20">TWAP</td>
+                    <td className="py-3 px-4 text-lg text-center font-semibold border-r border-gray-700/50">
+                      {data.twap.values?.passTwap.toFixed(4) || 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-lg text-center font-semibold">
+                      {data.twap.values?.failTwap.toFixed(4) || 'N/A'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 text-gray-400 font-medium border-r border-gray-700/50 bg-gray-900/20">Aggregator</td>
+                    <td className="py-3 px-4 text-lg text-center border-r border-gray-700/50">
+                      {data.twap.values?.passAggregation ? 
+                        (data.twap.values.passAggregation > 999999 ? 
+                          `${(data.twap.values.passAggregation / 1000000).toFixed(1)}M` : 
+                          data.twap.values.passAggregation.toLocaleString()) 
+                        : 'N/A'}
+                    </td>
+                    <td className="py-3 px-4 text-lg text-center">
+                      {data.twap.values?.failAggregation ? 
+                        (data.twap.values.failAggregation > 999999 ? 
+                          `${(data.twap.values.failAggregation / 1000000).toFixed(1)}M` : 
+                          data.twap.values.failAggregation.toLocaleString()) 
+                        : 'N/A'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        
+        {/* TWAP Configuration Box */}
+        <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-6">
+          <h3 className="text-lg font-semibold mb-4 tracking-wide">TWAP Configuration</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <tbody>
+                  <tr className="border-b border-gray-700">
+                    <td className="py-3 px-3 text-gray-400">Pass Threshold</td>
+                    <td className="py-3 px-3 text-lg text-right">
+                      {(data.twap.passThresholdBps / 100).toFixed(1)}%
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="py-3 px-3 text-gray-400">Initial Value</td>
+                    <td className="py-3 px-3 text-lg text-right">
+                      {data.twap.initialTwapValue}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="py-3 px-3 text-gray-400">Max Change</td>
+                    <td className="py-3 px-3 text-lg text-right">
+                      {data.twap.twapMaxObservationChangePerUpdate || 'None'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-3 text-gray-400">Start Delay</td>
+                    <td className="py-3 px-3 text-lg text-right">
+                      {data.twap.twapStartDelay}ms
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+          </div>
         </div>
       </div>
 
@@ -328,6 +383,14 @@ export default function AnalyticsDashboard() {
                   </span>
                 ) : (
                   <span className="text-2xl text-gray-600">—</span>
+                )}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-left py-2 px-3 text-gray-400 font-semibold">Liquidity</span>
+                {data.amms.pass.liquidity ? (
+                  <span className="text-lg">{formatSupply(data.amms.pass.liquidity, 0)}</span>
+                ) : (
+                  <span className="text-lg text-gray-600">—</span>
                 )}
               </div>
               <div className="flex justify-between">
@@ -371,6 +434,14 @@ export default function AnalyticsDashboard() {
                 )}
               </div>
               <div className="flex justify-between">
+                <span className="text-left py-2 px-3 text-gray-400 font-semibold">Liquidity</span>
+                {data.amms.fail.liquidity ? (
+                  <span className="text-lg">{formatSupply(data.amms.fail.liquidity, 0)}</span>
+                ) : (
+                  <span className="text-lg text-gray-600">—</span>
+                )}
+              </div>
+              <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Pool</span>
                 <span className="text-base">{truncateAddress(data.amms.fail.pool || '')}</span>
               </div>
@@ -406,19 +477,19 @@ export default function AnalyticsDashboard() {
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Pass Supply</span>
                 <span className="text-lg text-green-400">
-                  {formatSupply(data.vaults.base.passConditionalSupply)}
+                  {formatSupply(data.vaults.base.passConditionalSupply, 6)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Fail Supply</span>
                 <span className="text-lg text-red-400">
-                  {formatSupply(data.vaults.base.failConditionalSupply)}
+                  {formatSupply(data.vaults.base.failConditionalSupply, 6)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Escrow Supply</span>
                 <span className="text-lg">
-                  {formatSupply(data.vaults.base.escrowSupply)}
+                  {formatSupply(data.vaults.base.escrowSupply, 6)}
                 </span>
               </div>
             </div>
@@ -450,19 +521,19 @@ export default function AnalyticsDashboard() {
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Pass Supply</span>
                 <span className="text-lg text-green-400">
-                  {formatSupply(data.vaults.quote.passConditionalSupply)}
+                  {formatSupply(data.vaults.quote.passConditionalSupply, 9)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Fail Supply</span>
                 <span className="text-lg text-red-400">
-                  {formatSupply(data.vaults.quote.failConditionalSupply)}
+                  {formatSupply(data.vaults.quote.failConditionalSupply, 9)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-left py-2 px-3 text-gray-400 font-semibold">Escrow Supply</span>
                 <span className="text-lg">
-                  {formatSupply(data.vaults.quote.escrowSupply)}
+                  {formatSupply(data.vaults.quote.escrowSupply, 9)}
                 </span>
               </div>
             </div>
@@ -492,11 +563,11 @@ export default function AnalyticsDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
               <p className="text-left py-2 px-3 text-gray-400 font-semibold">Initial Base Amount</p>
-              <p className="py-2 px-3 text-lg">{formatSupply(data.ammConfig.initialBaseAmount)}</p>
+              <p className="py-2 px-3 text-lg">{formatSupply(data.ammConfig.initialBaseAmount, 6)}</p>
             </div>
             <div>
               <p className="text-left py-2 px-3 text-gray-400 font-semibold">Initial Quote Amount</p>
-              <p className="py-2 px-3 text-lg">{formatSupply(data.ammConfig.initialQuoteAmount)}</p>
+              <p className="py-2 px-3 text-lg">{formatSupply(data.ammConfig.initialQuoteAmount, 9)}</p>
             </div>
           </div>
         )}

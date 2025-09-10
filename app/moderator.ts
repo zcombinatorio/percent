@@ -73,7 +73,7 @@ export class Moderator implements IModerator {
       }
       
       // Schedule automatic TWAP cranking (every minute)
-      this.scheduler.scheduleTWAPCranking(proposal.id, 60000);
+      this.scheduler.scheduleTWAPCranking(proposal.id, params.twap.minUpdateInterval);
       
       // Schedule automatic finalization 1 second after the proposal's end time
       // This buffer ensures all TWAP data is collected and avoids race conditions

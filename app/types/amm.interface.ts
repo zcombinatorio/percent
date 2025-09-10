@@ -45,6 +45,13 @@ export interface IAMM {
   fetchPrice(): Promise<Decimal>;
   
   /**
+   * Fetches the current liquidity from the pool
+   * @returns Current liquidity as BN
+   * @throws Error if pool is uninitialized or finalized
+   */
+  fetchLiquidity(): Promise<BN>;
+  
+  /**
    * Removes all liquidity and closes the position
    * Sets AMM state to finalized, preventing further operations
    * @throws Error if already finalized or pool uninitialized

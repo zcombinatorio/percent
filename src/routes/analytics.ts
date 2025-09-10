@@ -62,25 +62,43 @@ router.get('/:id', requireApiKey, async (req, res, next) => {
       }
     }
     
-    // Get AMM prices if available
+    // Get AMM prices and liquidity if available
     let passPrice: number | null = null;
     let failPrice: number | null = null;
+    let passLiquidity: string | null = null;
+    let failLiquidity: string | null = null;
     
-    if (pAMM && pAMM.state === AMMState.Trading) {
+    if (pAMM && pAMM.state !== AMMState.Uninitialized) {
       try {
-        const price = await pAMM.fetchPrice();
+        const [price, liquidity] = await Promise.all([
+          pAMM.fetchPrice(),
+          pAMM.fetchLiquidity()
+        ]);
         passPrice = price.toNumber();
+        // Convert Q64 liquidity to decimal
+        // Q64 means divide by 2^64
+        const q64Divisor = BigInt(2) ** BigInt(64);
+        const liquidityBigInt = BigInt(liquidity.toString());
+        passLiquidity = (liquidityBigInt / q64Divisor).toString();
       } catch (e) {
-        console.error(`Failed to fetch pass AMM price for proposal #${id}:`, e);
+        console.error(`Failed to fetch pass AMM data for proposal #${id}:`, e);
       }
     }
     
-    if (fAMM && fAMM.state === AMMState.Trading) {
+    if (fAMM && fAMM.state !== AMMState.Uninitialized) {
       try {
-        const price = await fAMM.fetchPrice();
+        const [price, liquidity] = await Promise.all([
+          fAMM.fetchPrice(),
+          fAMM.fetchLiquidity()
+        ]);
         failPrice = price.toNumber();
+        // Convert Q64 liquidity to decimal
+        // Q64 means divide by 2^64
+        const q64Divisor = BigInt(2) ** BigInt(64);
+        const liquidityBigInt = BigInt(liquidity.toString());
+        failLiquidity = (liquidityBigInt / q64Divisor).toString();
       } catch (e) {
-        console.error(`Failed to fetch fail AMM price for proposal #${id}:`, e);
+        console.error(`Failed to fetch fail AMM data for proposal #${id}:`, e);
       }
     }
     
@@ -150,6 +168,7 @@ router.get('/:id', requireApiKey, async (req, res, next) => {
           quoteMint: pAMM.quoteMint.toBase58(),
           pool: pAMM.pool?.toBase58() || null,
           price: passPrice,
+          liquidity: passLiquidity,
         } : null,
         fail: fAMM ? {
           state: fAMM.state,
@@ -157,6 +176,7 @@ router.get('/:id', requireApiKey, async (req, res, next) => {
           quoteMint: fAMM.quoteMint.toBase58(),
           pool: fAMM.pool?.toBase58() || null,
           price: failPrice,
+          liquidity: failLiquidity,
         } : null,
       },
       
