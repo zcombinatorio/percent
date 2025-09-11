@@ -1,14 +1,15 @@
+// IMPORTANT: Load test environment variables BEFORE any other imports
+// that might call dotenv.config() themselves
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.test', override: true });
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import routes from '../routes';
 import { errorHandler } from '../middleware/errorHandler';
 import TestModeratorService from './test-moderator.service';
 import { getTestModeConfig, logTestModeInfo } from './config';
 import { TestTokenSetupService } from './test-tokens.service';
-
-// Load test environment variables
-dotenv.config({ path: '.env.test' });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
