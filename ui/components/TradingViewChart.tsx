@@ -98,7 +98,20 @@ export default function TradingViewChart({ proposalId }: TradingViewChartProps) 
         hide_side_toolbar: true,
         allow_symbol_change: false,
         container_id: `tradingview_${proposalId}`,
-        studies: [],
+        studies: [
+          {
+            id: "Compare@tv-basicstudies",
+            inputs: {
+              symbol: "NASDAQ:MSFT"
+            }
+          },
+          {
+            id: "Compare@tv-basicstudies", 
+            inputs: {
+              symbol: "NASDAQ:GOOGL"
+            }
+          }
+        ],
         hide_volume: true,
         overrides: {
           "paneProperties.background": "#181818",
@@ -135,25 +148,6 @@ export default function TradingViewChart({ proposalId }: TradingViewChartProps) 
           "compare.source": "close"
         }
       });
-      
-      // Add comparison lines after widget is ready
-      if (widget && widget.onChartReady) {
-        widget.onChartReady(() => {
-          try {
-            const chart = widget.chart();
-            // Add Microsoft comparison
-            chart.createStudy('Compare', false, false, {
-              symbol: 'NASDAQ:MSFT'
-            });
-            // Add Google comparison
-            chart.createStudy('Compare', false, false, {
-              symbol: 'NASDAQ:GOOGL'
-            });
-          } catch (e) {
-            console.log('Could not add comparison studies:', e);
-          }
-        });
-      }
     } else {
       // If TradingView is not loaded, show a placeholder
       if (containerRef.current) {
