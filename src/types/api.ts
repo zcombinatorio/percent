@@ -1,17 +1,43 @@
 import { ProposalStatus } from '../../app/types/moderator.interface';
 import { TWAPStatus } from '../../app/types/twap-oracle.interface';
 
-export interface ProposalResponse {
+// GET /api/proposals response - simplified list view
+export interface ProposalListItem {
+  id: number;
+  description: string;
+  status: ProposalStatus;
+  createdAt: number; // Unix timestamp in milliseconds
+  finalizedAt: number; // Unix timestamp in milliseconds
+}
+
+export interface ProposalListResponse {
+  proposals: ProposalListItem[];
+}
+
+// GET /api/proposals/:id response - detailed view
+export interface ProposalDetailResponse {
   id: number;
   description: string;
   status: ProposalStatus;
   createdAt: number;
-  finalizedAt: number | null;
+  finalizedAt: number;
   proposalStatus: ProposalStatus;
   proposalLength: number;
+  baseMint: string;
+  quoteMint: string;
+  authority: string;
+  ammConfig: {
+    initialBaseAmount: string;
+    initialQuoteAmount: string;
+  } | null;
+  passAmmState: any | null;
+  failAmmState: any | null;
+  baseVaultState: any | null;
+  quoteVaultState: any | null;
+  twapOracleState: any | null;
 }
 
-export interface ProposalAnalyticsResponse extends ProposalResponse {
+export interface ProposalAnalyticsResponse extends ProposalDetailResponse {
   baseMint: string;
   quoteMint: string;
   authority: string;
