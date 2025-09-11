@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
 import { getModerator } from '../services/moderator.service';
 import { PublicKey, Transaction } from '@solana/web3.js';
-import { VaultType } from '../../app/types/vault.interface';
 
 const router = Router();
 

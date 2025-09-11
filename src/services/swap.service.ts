@@ -21,14 +21,14 @@ export class SwapService {
   /**
    * Check if AMMs for a proposal are finalized
    */
-  private checkAMMsFinalized(proposalId: number): void {
-    const moderator = getModerator();
+  private async checkAMMsFinalized(proposalId: number): Promise<void> {
+    const moderator = await getModerator();
     
-    if (proposalId < 0 || proposalId >= moderator.proposals.length) {
+    const proposal = await moderator.getProposal(proposalId);
+    if (!proposal) {
       throw new Error('Proposal not found');
     }
     
-    const proposal = moderator.proposals[proposalId];
     const [pAMM, fAMM] = proposal.getAMMs();
     
     if (pAMM.isFinalized || fAMM.isFinalized) {
@@ -48,7 +48,7 @@ export class SwapService {
     slippageBps: number = 50
   ): Promise<Transaction> {
     // Check AMMs are not finalized
-    this.checkAMMsFinalized(proposalId);
+    await this.checkAMMsFinalized(proposalId);
     
     return this.buildJupiterSwapTx(user, inputMint, outputMint, amount, slippageBps);
   }

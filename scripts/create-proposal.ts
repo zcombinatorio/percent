@@ -30,7 +30,7 @@ async function createProposal() {
   
   const request: CreateProposalRequest = {
     description: 'Test Proposal',
-    proposalLength: 600, // 10 minutes to allow thorough battle testing
+    proposalLength: 300, // 5 minutes
     twap: {
       initialTwapValue: ammPrice, // Decimal-adjusted price (0.1)
       twapMaxObservationChangePerUpdate: null,

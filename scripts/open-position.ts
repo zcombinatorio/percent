@@ -63,7 +63,12 @@ async function openPosition() {
       throw new Error('Failed to get proposal info');
     }
     
-    const proposal = await proposalResponse.json();
+    const proposal = await proposalResponse.json() as {
+      baseMint: string;
+      quoteMint: string;
+      baseDecimals: number;
+      quoteDecimals: number;
+    };
     const baseMint = new PublicKey(proposal.baseMint);
     const quoteMint = new PublicKey(proposal.quoteMint);
     
