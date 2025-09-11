@@ -241,20 +241,18 @@ export default function HomePage() {
                 <span className={`text-xs px-2 py-1 rounded-full inline-flex items-center gap-1 ${
                   proposal.status === 'Pending'
                     ? 'bg-orange-400/20 text-orange-400 animate-pulse'
-                    : proposal.status === 'Passed'
+                    : proposal.status === 'Passed' || proposal.status === 'Executed'
                     ? 'bg-emerald-400/20 text-emerald-400'
-                    : proposal.status === 'Failed'
-                    ? 'bg-rose-400/20 text-rose-400'
-                    : 'bg-gray-400/20 text-gray-400'
+                    : 'bg-rose-400/20 text-rose-400'
                 }`}>
-                  {proposal.status === 'Pending' ? 'Live' : proposal.status}
+                  {proposal.status === 'Pending' ? 'Live' : proposal.status === 'Executed' ? 'Passed' : proposal.status}
                   {proposal.status === 'Pending' && (
                     <span className="relative w-3 h-3 flex items-center justify-center">
                       <span className="absolute w-3 h-3 bg-orange-400 rounded-full animate-ping opacity-75"></span>
                       <span className="relative w-2 h-2 bg-orange-400 rounded-full"></span>
                     </span>
                   )}
-                  {proposal.status === 'Passed' && (
+                  {(proposal.status === 'Passed' || proposal.status === 'Executed') && (
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
@@ -295,13 +293,13 @@ export default function HomePage() {
                       {/* Progress Fill */}
                       <div 
                         className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-3 ${
-                          proposal.status === 'Passed' 
+                          proposal.status === 'Passed' || proposal.status === 'Executed'
                             ? 'bg-emerald-500'
                             : proposal.status === 'Failed'
                             ? 'bg-rose-500'
                             : 'bg-emerald-500'
                         }`}
-                        style={{ width: `${proposal.status === 'Passed' ? 100 : proposal.status === 'Failed' ? 0 : 50}%` }}
+                        style={{ width: `${(proposal.status === 'Passed' || proposal.status === 'Executed') ? 100 : proposal.status === 'Failed' ? 0 : 50}%` }}
                       >
                         {/* Percentage Text inside progress - hidden for Passed/Failed status */}
                         {proposal.status === 'Pending' && (
@@ -315,12 +313,12 @@ export default function HomePage() {
                         className={`absolute right-4 text-sm font-medium ${
                           proposal.status === 'Failed' 
                             ? 'text-rose-400'
-                            : proposal.status === 'Passed'
+                            : proposal.status === 'Passed' || proposal.status === 'Executed'
                             ? 'text-white'
                             : 'text-gray-500'
                         }`}
                       >
-                        {proposal.status === 'Failed' ? 'Failed' : proposal.status === 'Passed' ? 'Passed' : 'In Progress'}
+                        {proposal.status === 'Failed' ? 'Failed' : (proposal.status === 'Passed' || proposal.status === 'Executed') ? 'Passed' : 'In Progress'}
                       </span>
                     </div>
                   </div>
