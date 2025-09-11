@@ -8,6 +8,7 @@ import TradingInterface from '@/components/TradingInterface';
 import SettingsModal from '@/components/SettingsModal';
 import { useProposals } from '@/hooks/useProposals';
 import { IoMdStopwatch } from 'react-icons/io';
+import { formatNumber, formatCurrency } from '@/lib/formatters';
 
 const TradingViewChart = dynamic(() => import('@/components/TradingViewChart'), {
   ssr: false,
@@ -369,9 +370,9 @@ export default function HomePage() {
                   <div className="text-white">2.5%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">100</div>
+                  <div className="text-white">{formatNumber(100, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.701</span>
+                    <span className="text-white">{formatCurrency(0.701, 3)}</span>
                     <span className="text-[#9C9D9E]">2m</span>
                   </div>
                 </div>
@@ -380,9 +381,9 @@ export default function HomePage() {
                   <div className="text-white">0.0%</div>
                   <div className="text-rose-400">sell</div>
                   <div className="text-white">Fail</div>
-                  <div className="text-white">50</div>
+                  <div className="text-white">{formatNumber(50, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.299</span>
+                    <span className="text-white">{formatCurrency(0.299, 3)}</span>
                     <span className="text-[#9C9D9E]">5m</span>
                   </div>
                 </div>
@@ -391,9 +392,9 @@ export default function HomePage() {
                   <div className="text-white">5.2%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">250</div>
+                  <div className="text-white">{formatNumber(250, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.698</span>
+                    <span className="text-white">{formatCurrency(0.698, 3)}</span>
                     <span className="text-[#9C9D9E]">12m</span>
                   </div>
                 </div>
@@ -402,9 +403,9 @@ export default function HomePage() {
                   <div className="text-white">1.8%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Fail</div>
-                  <div className="text-white">75</div>
+                  <div className="text-white">{formatNumber(75, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.301</span>
+                    <span className="text-white">{formatCurrency(0.301, 3)}</span>
                     <span className="text-[#9C9D9E]">18m</span>
                   </div>
                 </div>
@@ -413,9 +414,9 @@ export default function HomePage() {
                   <div className="text-white">3.1%</div>
                   <div className="text-rose-400">sell</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">150</div>
+                  <div className="text-white">{formatNumber(150, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.695</span>
+                    <span className="text-white">{formatCurrency(0.695, 3)}</span>
                     <span className="text-[#9C9D9E]">25m</span>
                   </div>
                 </div>
@@ -424,9 +425,9 @@ export default function HomePage() {
                   <div className="text-white">4.0%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">180</div>
+                  <div className="text-white">{formatNumber(180, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.703</span>
+                    <span className="text-white">{formatCurrency(0.703, 3)}</span>
                     <span className="text-[#9C9D9E]">28m</span>
                   </div>
                 </div>
@@ -435,9 +436,9 @@ export default function HomePage() {
                   <div className="text-white">1.2%</div>
                   <div className="text-rose-400">sell</div>
                   <div className="text-white">Fail</div>
-                  <div className="text-white">90</div>
+                  <div className="text-white">{formatNumber(90, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.297</span>
+                    <span className="text-white">{formatCurrency(0.297, 3)}</span>
                     <span className="text-[#9C9D9E]">32m</span>
                   </div>
                 </div>
@@ -446,9 +447,9 @@ export default function HomePage() {
                   <div className="text-white">6.5%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">320</div>
+                  <div className="text-white">{formatNumber(320, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.705</span>
+                    <span className="text-white">{formatCurrency(0.705, 3)}</span>
                     <span className="text-[#9C9D9E]">35m</span>
                   </div>
                 </div>
@@ -457,9 +458,9 @@ export default function HomePage() {
                   <div className="text-white">2.3%</div>
                   <div className="text-emerald-400">buy</div>
                   <div className="text-white">Fail</div>
-                  <div className="text-white">110</div>
+                  <div className="text-white">{formatNumber(110, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.302</span>
+                    <span className="text-white">{formatCurrency(0.302, 3)}</span>
                     <span className="text-[#9C9D9E]">40m</span>
                   </div>
                 </div>
@@ -468,9 +469,9 @@ export default function HomePage() {
                   <div className="text-white">3.7%</div>
                   <div className="text-rose-400">sell</div>
                   <div className="text-white">Pass</div>
-                  <div className="text-white">200</div>
+                  <div className="text-white">{formatNumber(200, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.694</span>
+                    <span className="text-white">{formatCurrency(0.694, 3)}</span>
                     <span className="text-[#9C9D9E]">45m</span>
                   </div>
                 </div>
@@ -480,9 +481,9 @@ export default function HomePage() {
                   <div className="text-white">1.5%</div>
                   <div className="text-rose-400">sell</div>
                   <div className="text-white">Fail</div>
-                  <div className="text-white">65</div>
+                  <div className="text-white">{formatNumber(65, 0)}</div>
                   <div className="flex justify-between">
-                    <span className="text-white">$0.296</span>
+                    <span className="text-white">{formatCurrency(0.296, 3)}</span>
                     <span className="text-[#9C9D9E]">52m</span>
                   </div>
                 </div>

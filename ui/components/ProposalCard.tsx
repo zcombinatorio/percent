@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatCurrency, formatCompact } from '@/lib/formatters';
 
 interface ProposalCardProps {
   proposal: {
@@ -44,14 +45,14 @@ export default function ProposalCard({ proposal }: ProposalCardProps) {
               <span className="text-xs text-gray-500">PASS</span>
               <TrendingUp className="h-3 w-3 text-emerald-400" />
             </div>
-            <p className="text-lg font-bold text-emerald-400">${proposal.passPrice.toFixed(3)}</p>
+            <p className="text-lg font-bold text-emerald-400">{formatCurrency(proposal.passPrice, 3)}</p>
           </div>
           <div className="bg-gray-800/50 rounded p-3">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-gray-500">FAIL</span>
               <TrendingDown className="h-3 w-3 text-rose-400" />
             </div>
-            <p className="text-lg font-bold text-rose-400">${proposal.failPrice.toFixed(3)}</p>
+            <p className="text-lg font-bold text-rose-400">{formatCurrency(proposal.failPrice, 3)}</p>
           </div>
         </div>
 
@@ -64,7 +65,7 @@ export default function ProposalCard({ proposal }: ProposalCardProps) {
               <span>Ended</span>
             )}
           </div>
-          <span>Vol: ${(proposal.volume24h / 1000).toFixed(1)}k</span>
+          <span>Vol: {formatCompact(proposal.volume24h)}</span>
         </div>
       </div>
     </Link>
