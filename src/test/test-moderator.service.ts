@@ -3,6 +3,7 @@ import { IModeratorConfig } from '../../app/types/moderator.interface';
 import { TestModeConfig } from './config';
 import { TestTokenMints } from './test-tokens.service';
 import { PersistenceService } from '../../app/services/persistence.service';
+import { ModeratorService } from '../services/moderator.service';
 
 /**
  * Test implementation of ModeratorService for devnet testing
@@ -49,6 +50,9 @@ class TestModeratorService {
       if (savedState) {
         TestModeratorService.instance.proposalIdCounter = savedState.proposalCounter;
       }
+      
+      // Recover any pending proposals after initialization
+      await ModeratorService.recoverPendingProposals(TestModeratorService.instance);
     }
 
     return TestModeratorService.instance;
@@ -83,6 +87,7 @@ class TestModeratorService {
       rpcUrl: TestModeratorService.testConfig.rpcUrl
     };
   }
+
 }
 
 export default TestModeratorService;
