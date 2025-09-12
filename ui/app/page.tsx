@@ -10,6 +10,7 @@ import Header from '@/components/Header';
 import { useProposals } from '@/hooks/useProposals';
 import { IoMdStopwatch } from 'react-icons/io';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
+import { api } from '@/lib/api';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
   ssr: false,
@@ -67,6 +68,7 @@ export default function HomePage() {
   const { ready, authenticated, user, walletAddress } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals();
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
+  const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   
   // Fetch wallet balances
   const { sol: solBalance, oogway: oogwayBalance } = useWalletBalances(walletAddress);
@@ -111,13 +113,37 @@ export default function HomePage() {
     setLivePrices(prices);
   }, []);
 
-  // Calculate PFG percentage from live prices
-  const pfgPercentage = useMemo(() => {
-    if (livePrices.pass !== null && livePrices.fail !== null && livePrices.fail > 0) {
-      return ((livePrices.pass - livePrices.fail) / livePrices.fail) * 100;
+  // Fetch TWAP data when proposal changes
+  useEffect(() => {
+    if (proposal?.id) {
+      api.getTWAP(proposal.id).then(data => {
+        if (data) {
+          setTwapData({ passTwap: data.passTwap, failTwap: data.failTwap });
+        }
+      });
+      
+      // Poll for TWAP updates every 30 seconds
+      const interval = setInterval(() => {
+        api.getTWAP(proposal.id).then(data => {
+          if (data) {
+            setTwapData({ passTwap: data.passTwap, failTwap: data.failTwap });
+          }
+        });
+      }, 30000);
+      
+      return () => clearInterval(interval);
     }
+  }, [proposal?.id]);
+
+  // Calculate PFG percentage from TWAP data ONLY - no spot price fallback for governance
+  const pfgPercentage = useMemo(() => {
+    // ONLY use TWAP for governance decisions
+    if (twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0) {
+      return ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100;
+    }
+    // No fallback - return null if TWAP unavailable
     return null;
-  }, [livePrices.pass, livePrices.fail]);
+  }, [twapData.passTwap, twapData.failTwap]);
 
   if (loading) {
     return (
@@ -278,12 +304,14 @@ export default function HomePage() {
                           }%` 
                         }}
                       >
-                        {/* Percentage Text inside progress - show actual PFG for Pending status */}
-                        {proposal.status === 'Pending' && pfgPercentage !== null && (
+                        {/* Percentage Text inside progress - show TWAP-based PFG for Pending status */}
+                        {proposal.status === 'Pending' && (
                           <span className="text-base font-bold text-white">
-                            {pfgPercentage >= (proposal.passThresholdBps / 100) 
-                              ? `${pfgPercentage.toFixed(1)}% (Target: ${(proposal.passThresholdBps / 100).toFixed(1)}%)`
-                              : `${pfgPercentage.toFixed(1)}%`
+                            {pfgPercentage !== null 
+                              ? pfgPercentage >= (proposal.passThresholdBps / 100) 
+                                ? `${pfgPercentage.toFixed(1)}% (Target: ${(proposal.passThresholdBps / 100).toFixed(1)}%)`
+                                : `${pfgPercentage.toFixed(1)}%`
+                              : 'Loading TWAP...'
                             }
                           </span>
                         )}

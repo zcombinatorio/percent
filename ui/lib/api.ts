@@ -44,6 +44,29 @@ class GovernanceAPI {
       return null;
     }
   }
+
+  async getTWAP(proposalId: number): Promise<{ passTwap: number; failTwap: number } | null> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/${proposalId}/twap`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch TWAP');
+      }
+      const data = await response.json();
+      
+      // Get the most recent TWAP data
+      if (data.data && data.data.length > 0) {
+        const latest = data.data[data.data.length - 1];
+        return {
+          passTwap: parseFloat(latest.passTwap),
+          failTwap: parseFloat(latest.failTwap)
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching TWAP:', error);
+      return null;
+    }
+  }
 }
 
 export const api = new GovernanceAPI();

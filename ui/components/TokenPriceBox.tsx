@@ -128,7 +128,13 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
         ) : (
           <>
             <div className="text-2xl font-bold text-gray-100">
-              {price !== null ? formatPrice(price) : '--'}
+              {price !== null ? (
+                formatPrice(price)
+              ) : tokenType === 'gap' ? (
+                <span className="text-lg text-[#6b7280]">No TWAP Data</span>
+              ) : (
+                '--'
+              )}
             </div>
             {priceChange24h !== undefined && (
               <div className="text-sm mt-1">

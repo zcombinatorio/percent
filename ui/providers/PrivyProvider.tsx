@@ -28,7 +28,6 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
         embeddedWallets: {
           createOnLogin: 'off', // Turn off automatic EVM wallet creation
           requireUserPasswordOnCreate: false,
-          noPromptOnSignature: false,
           // Solana-specific configuration
           solana: {
             createOnLogin: 'all-users', // Always create embedded Solana wallets

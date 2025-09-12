@@ -16,6 +16,11 @@ interface TokenPrices {
   fail: number | null;
 }
 
+interface TwapData {
+  passTwap: number | null;
+  failTwap: number | null;
+}
+
 // OOGWAY token configuration
 const OOGWAY_CONFIG = {
   address: 'C7MGcMnN8cXUkj8JQuMhkJZh6WqY2r8QnT3AUfKTkrix',
@@ -29,6 +34,11 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     oogway: null,
     pass: null,
     fail: null
+  });
+  
+  const [twapData, setTwapData] = useState<TwapData>({
+    passTwap: null,
+    failTwap: null
   });
   
   const [tokenAddresses, setTokenAddresses] = useState<{
@@ -46,7 +56,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch proposal details to get token addresses
+  // Fetch proposal details and TWAP data
   useEffect(() => {
     const fetchProposalDetails = async () => {
       try {
@@ -56,22 +66,12 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
         }
 
         // Extract pass and fail token addresses from vaults
-        // Log the proposal structure to debug
-        console.log('Proposal structure:', proposal);
-        
-        const passAddress = proposal.baseVaultState?.passConditionalMint || 
-                           proposal.vaults?.base?.passConditionalMint || null;
-        const failAddress = proposal.baseVaultState?.failConditionalMint || 
-                           proposal.vaults?.base?.failConditionalMint || null;
+        const passAddress = proposal.baseVaultState?.passConditionalMint || null;
+        const failAddress = proposal.baseVaultState?.failConditionalMint || null;
         
         // Extract pool addresses from AMM states
         const passPoolAddress = proposal.passAmmState?.pool || null;
         const failPoolAddress = proposal.failAmmState?.pool || null;
-
-        console.log('Found pool addresses:', {
-          passPool: passPoolAddress,
-          failPool: failPoolAddress
-        });
 
         setTokenAddresses({
           pass: passAddress,
@@ -80,15 +80,6 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
           failPool: failPoolAddress
         });
 
-        if (!passAddress || !failAddress) {
-          console.warn('Token addresses not found in proposal', {
-            passAddress,
-            failAddress,
-            passPoolAddress,
-            failPoolAddress,
-            proposal
-          });
-        }
       } catch (error) {
         console.error('Error fetching proposal details:', error);
         setError('Failed to fetch proposal details');
@@ -98,9 +89,35 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     };
 
     fetchProposalDetails();
+    
+    // Fetch TWAP data for governance decision
+    const fetchTwap = async () => {
+      try {
+        const response = await fetch(`http://localhost:3001/api/history/${proposalId}/twap`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.length > 0) {
+            const latest = data.data[data.data.length - 1];
+            setTwapData({
+              passTwap: parseFloat(latest.passTwap),
+              failTwap: parseFloat(latest.failTwap)
+            });
+          }
+        }
+      } catch (error) {
+        // Silently fail - TWAP data not available yet
+      }
+    };
+    
+    fetchTwap();
+    
+    // Poll for TWAP updates every 30 seconds
+    const interval = setInterval(fetchTwap, 30000);
+    
+    return () => clearInterval(interval);
   }, [proposalId]);
 
-  // Handle price updates from WebSocket
+  // Handle price updates from WebSocket - stable reference
   const handlePriceUpdate = useCallback((tokenType: 'oogway' | 'pass' | 'fail') => {
     return (update: PriceUpdate) => {
       setPrices(prev => ({
@@ -108,7 +125,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
         [tokenType]: update.price
       }));
     };
-  }, []);
+  }, []); // Empty dependency array for stable reference
 
   // Set up OOGWAY subscription immediately
   useEffect(() => {
@@ -120,7 +137,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     return () => {
       priceService.unsubscribeFromToken(OOGWAY_CONFIG.address, oogwayCallback);
     };
-  }, [handlePriceUpdate]);
+  }, []); // Removed handlePriceUpdate - it's stable now
 
   // Set up pass/fail subscriptions when BOTH addresses AND pools are available
   useEffect(() => {
@@ -139,20 +156,24 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
       
       // Subscribe with pool addresses (required for devnet tokens)
       await Promise.all([
-        priceService.subscribeToToken(tokenAddresses.pass, passCallback, tokenAddresses.passPool),
-        priceService.subscribeToToken(tokenAddresses.fail, failCallback, tokenAddresses.failPool)
+        priceService.subscribeToToken(tokenAddresses.pass!, passCallback, tokenAddresses.passPool || undefined),
+        priceService.subscribeToToken(tokenAddresses.fail!, failCallback, tokenAddresses.failPool || undefined)
       ]);
     };
 
-    setupSubscriptions().catch(console.error);
+    setupSubscriptions().catch(() => {});
 
     // Cleanup on unmount
     return () => {
       mounted = false;
-      priceService.unsubscribeFromToken(tokenAddresses.pass, passCallback);
-      priceService.unsubscribeFromToken(tokenAddresses.fail, failCallback);
+      if (tokenAddresses.pass) {
+        priceService.unsubscribeFromToken(tokenAddresses.pass, passCallback);
+      }
+      if (tokenAddresses.fail) {
+        priceService.unsubscribeFromToken(tokenAddresses.fail, failCallback);
+      }
     };
-  }, [tokenAddresses.pass, tokenAddresses.fail, tokenAddresses.passPool, tokenAddresses.failPool, handlePriceUpdate]);
+  }, [tokenAddresses.pass, tokenAddresses.fail, tokenAddresses.passPool, tokenAddresses.failPool]); // Removed handlePriceUpdate
 
   // Call the callback when prices update
   useEffect(() => {
@@ -201,11 +222,14 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
       
       <TokenPriceBox
         tokenName="Pass-Fail Gap (PFG)"
-        tokenSymbol=""
-        price={prices.pass !== null && prices.fail !== null && prices.fail > 0 
-          ? ((prices.pass - prices.fail) / prices.fail) * 100 
-          : null}
-        isLoading={prices.pass === null || prices.fail === null}
+        tokenSymbol="TWAP"
+        price={
+          // ONLY use TWAP for governance - no spot price fallback
+          twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0 
+            ? ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100 
+            : null
+        }
+        isLoading={false}
         tokenType="gap"
       />
     </div>

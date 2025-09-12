@@ -135,7 +135,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div className="flex items-center gap-2">
                         <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
                           <span className="text-sm font-bold text-orange-500">
-                            {walletAddress.slice(0, 2).toUpperCase()}
+                            {walletAddress?.slice(0, 2).toUpperCase() || 'NA'}
                           </span>
                         </div>
                         <div>
