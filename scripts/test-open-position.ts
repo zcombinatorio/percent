@@ -5,6 +5,7 @@
 import dotenv from 'dotenv';
 import { Keypair } from '@solana/web3.js';
 import { executePositionOpening } from './utils/open-position-utils';
+import bs58 from 'bs58';
 
 dotenv.config();
 
@@ -38,7 +39,9 @@ async function testOpenPosition() {
   }
   
   // Get test wallet based on position type
-  const testWallet = loadTestWallet(positionType);
+  const privateKeyBytes = bs58.decode(process.env.TEST_WALLET_PRIVATE_KEY!);
+  const testWallet = Keypair.fromSecretKey(privateKeyBytes);
+  //const testWallet = loadTestWallet(positionType);
   const walletPublicKey = testWallet.publicKey.toBase58();
   
   console.log(`Testing open ${positionType} position for proposal ${proposalId} with wallet: ${walletPublicKey}`);

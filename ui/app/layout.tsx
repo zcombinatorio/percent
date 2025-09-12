@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
-import WalletContextProvider from "@/providers/WalletProvider";
 import PrivyProviderWrapper from "@/providers/PrivyProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -36,9 +35,7 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <PrivyProviderWrapper>
-            <WalletContextProvider>
-              {children}
-            </WalletContextProvider>
+            {children}
           </PrivyProviderWrapper>
         </ErrorBoundary>
       </body>

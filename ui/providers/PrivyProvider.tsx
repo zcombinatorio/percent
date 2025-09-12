@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { PrivyProvider } from '@privy-io/react-auth';
-import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'YOUR-PRIVY-APP-ID';
 
@@ -11,11 +10,6 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
     console.error('Privy App ID is not configured. Please set NEXT_PUBLIC_PRIVY_APP_ID in your .env.local file');
   }
 
-  // Configure Solana wallet connectors
-  const solanaConnectors = toSolanaWalletConnectors({
-    // Autoconnect to the user's Solana wallet on login
-    shouldAutoConnect: true,
-  });
 
   return (
     <PrivyProvider
@@ -37,13 +31,7 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
           noPromptOnSignature: false,
           // Solana-specific configuration
           solana: {
-            createOnLogin: 'users-without-wallets', // Create Solana wallets for new users
-          },
-        },
-        // External wallet configuration for Solana
-        externalWallets: {
-          solana: {
-            connectors: solanaConnectors,
+            createOnLogin: 'all-users', // Always create embedded Solana wallets
           },
         },
       }}

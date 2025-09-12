@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useCallback, useMemo, memo, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useTokenPrices } from '@/hooks/useTokenPrices';
+import { useUserBalances } from '@/hooks/useUserBalances';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
 
 interface TradingInterfaceProps {
@@ -23,23 +23,16 @@ const TradingInterface = memo(({
   failPrice,
   proposalStatus = 'Pending'
 }: TradingInterfaceProps) => {
-  const { connected } = useWallet();
-  const { authenticated, login } = usePrivy();
-  const isConnected = authenticated || connected;
+  const { authenticated, walletAddress, login } = usePrivyWallet();
+  const isConnected = authenticated;
   const { sol: solPrice, oogway: oogwayPrice } = useTokenPrices();
+  const { data: userBalances, loading: balancesLoading } = useUserBalances(proposalId, walletAddress);
   const [tradeType] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
   const [inputMode, setInputMode] = useState<'sol' | 'percent'>('sol');
   const [isEditingQuickAmounts, setIsEditingQuickAmounts] = useState(false);
   const [hoveredPayout, setHoveredPayout] = useState<'pass' | 'fail' | null>(null);
   const [reducePercent, setReducePercent] = useState('');
-  
-  // Initialize reducePercent to 100 for closed proposals
-  useEffect(() => {
-    if (proposalStatus !== 'Pending' && reducePercent === '') {
-      setReducePercent('100');
-    }
-  }, [proposalStatus, reducePercent]);
   
   // Load saved values from localStorage or use defaults
   const [solQuickAmounts, setSolQuickAmounts] = useState(() => {
@@ -75,6 +68,58 @@ const TradingInterface = memo(({
     }
     return val * currentPrice;
   }, [amount, currentPrice, inputMode]);
+
+  // Calculate user's position from balances
+  const userPosition = useMemo(() => {
+    if (!userBalances) return null;
+    
+    const basePassConditional = parseFloat(userBalances.base.passConditional || '0');
+    const baseFailConditional = parseFloat(userBalances.base.failConditional || '0');
+    const quotePassConditional = parseFloat(userBalances.quote.passConditional || '0');
+    const quoteFailConditional = parseFloat(userBalances.quote.failConditional || '0');
+    
+    // For a PASS position: user gets base (oogway) if pass, quote (SOL) if fail
+    // For a FAIL position: user gets quote (SOL) if pass, base (oogway) if fail
+    
+    // Check if user has a pass position (base pass conditional + quote fail conditional)
+    const hasPassPosition = basePassConditional > 0 && quoteFailConditional > 0;
+    // Check if user has a fail position (quote pass conditional + base fail conditional)
+    const hasFailPosition = quotePassConditional > 0 && baseFailConditional > 0;
+    
+    if (hasPassPosition || hasFailPosition) {
+      // Determine position type
+      const positionType = hasPassPosition ? 'pass' : 'fail';
+      
+      // Set the payout amounts based on position type
+      let passPayoutAmount, failPayoutAmount;
+      
+      if (hasPassPosition) {
+        // Pass position: gets oogway if pass, SOL if fail
+        passPayoutAmount = basePassConditional;  // in oogway raw units
+        failPayoutAmount = quoteFailConditional; // in SOL raw units
+      } else {
+        // Fail position: gets SOL if pass, oogway if fail
+        passPayoutAmount = quotePassConditional; // in SOL raw units
+        failPayoutAmount = baseFailConditional;  // in oogway raw units
+      }
+      
+      console.log({
+        type: positionType,
+        passPayoutAmount,
+        failPayoutAmount,
+        hasPassPosition,
+        hasFailPosition
+      })
+      
+      return {
+        type: positionType,
+        passAmount: passPayoutAmount,
+        failAmount: failPayoutAmount
+      };
+    }
+    
+    return null;
+  }, [userBalances]);
 
   const handleTrade = useCallback(() => {
     if (!isConnected) {
@@ -136,146 +181,205 @@ const TradingInterface = memo(({
       {/* Payouts Section */}
       <div className="mb-8">
         <div className="text-xs text-gray-400 mb-2">
-          {proposalStatus === 'Pending' ? 'Expected Payouts' : 'Payout'}
+          {proposalStatus === 'Pending' ? (userPosition ? 'Your Position' : 'Expected Payouts') : 'Payout'}
         </div>
         <div className="space-y-2">
-          {/* Show both for pending, only one for closed */}
-          {(proposalStatus === 'Pending' || proposalStatus === 'Passed') && (
-            <div 
-              className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
-              onMouseEnter={() => setHoveredPayout('pass')}
-              onMouseLeave={() => setHoveredPayout(null)}
-            >
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-emerald-400">
-                  {proposalStatus === 'Passed' ? 'Passed' : 'If Pass'}
-                </span>
-                <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
+          {/* Show user position if they have one, otherwise show expected payouts */}
+          {proposalStatus === 'Pending' && userPosition ? (
+            <>
+              {/* User has a position - show their actual holdings in same format as expected payouts */}
+              <div 
+                className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
+                onMouseEnter={() => setHoveredPayout('pass')}
+                onMouseLeave={() => setHoveredPayout(null)}
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-emerald-400">If Pass</span>
+                  <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="text-base font-medium text-white">
+                  {hoveredPayout === 'pass' ? (
+                    // Pass position gets oogway, fail position gets SOL
+                    formatCurrency(
+                      userPosition.type === 'pass' 
+                        ? (userPosition.passAmount / 1e6) * oogwayPrice  // oogway with 6 decimals
+                        : (userPosition.passAmount / 1e9) * solPrice     // SOL with 9 decimals
+                    )
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {formatNumber(
+                        userPosition.type === 'pass'
+                          ? userPosition.passAmount / 1e6  // oogway with 6 decimals
+                          : userPosition.passAmount / 1e9  // SOL with 9 decimals
+                      )}
+                      {userPosition.type === 'pass' ? (
+                        <span className="text-gray-400 text-sm font-bold">$oogway</span>
+                      ) : (
+                        <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-base font-medium text-white">
-                {hoveredPayout === 'pass' ? (
-                  formatCurrency(proposalStatus !== 'Pending' ? 100 * oogwayPrice : (amount ? (parseFloat(amount) / passPrice) * oogwayPrice : 0))
-                ) : (
+              <div 
+                className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
+                onMouseEnter={() => setHoveredPayout('fail')}
+                onMouseLeave={() => setHoveredPayout(null)}
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-rose-400">If Fail</span>
+                  <svg className="w-3 h-3 text-rose-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="text-base font-medium text-white">
+                  {hoveredPayout === 'fail' ? (
+                    // Pass position gets SOL on fail, fail position gets oogway on fail
+                    formatCurrency(
+                      userPosition.type === 'pass'
+                        ? (userPosition.failAmount / 1e9) * solPrice     // SOL with 9 decimals
+                        : (userPosition.failAmount / 1e6) * oogwayPrice  // oogway with 6 decimals
+                    )
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {formatNumber(
+                        userPosition.type === 'pass'
+                          ? userPosition.failAmount / 1e9  // SOL with 9 decimals
+                          : userPosition.failAmount / 1e6  // oogway with 6 decimals
+                      )}
+                      {userPosition.type === 'pass' ? (
+                        <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                        </svg>
+                      ) : (
+                        <span className="text-gray-400 text-sm font-bold">$oogway</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Show expected payouts for new bets */}
+              {(proposalStatus === 'Pending' || proposalStatus === 'Passed') && (
+                <div 
+                  className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
+                  onMouseEnter={() => setHoveredPayout('pass')}
+                  onMouseLeave={() => setHoveredPayout(null)}
+                >
                   <div className="flex items-center gap-1">
-                    {formatNumber(proposalStatus !== 'Pending' ? 100 : (amount ? parseFloat(amount) / passPrice : 0))}
-                    <span className="text-gray-400 text-sm font-bold">$oogway</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {(proposalStatus === 'Pending' || proposalStatus === 'Failed') && (
-            <div 
-              className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
-              onMouseEnter={() => setHoveredPayout('fail')}
-              onMouseLeave={() => setHoveredPayout(null)}
-            >
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-rose-400">
-                  {proposalStatus === 'Failed' ? 'Failed' : 'If Fail'}
-                </span>
-                <svg className="w-3 h-3 text-rose-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="text-base font-medium text-white">
-                {hoveredPayout === 'fail' ? (
-                  formatCurrency(proposalStatus !== 'Pending' ? 100 * solPrice : (amount ? (parseFloat(amount) / failPrice) * solPrice : 0))
-                ) : (
-                  <div className="flex items-center gap-1">
-                    {formatNumber(proposalStatus !== 'Pending' ? 100 : (amount ? parseFloat(amount) / failPrice : 0))}
-                    <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                    <span className="text-xs text-emerald-400">
+                      {proposalStatus === 'Passed' ? 'Passed' : 'If Pass'}
+                    </span>
+                    <svg className="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
-                )}
-              </div>
-            </div>
+                  <div className="text-base font-medium text-white">
+                    {hoveredPayout === 'pass' ? (
+                      formatCurrency(proposalStatus !== 'Pending' ? 100 * oogwayPrice : (amount ? (parseFloat(amount) / passPrice) * oogwayPrice : 0))
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {formatNumber(proposalStatus !== 'Pending' ? 100 : (amount ? parseFloat(amount) / passPrice : 0))}
+                        <span className="text-gray-400 text-sm font-bold">$oogway</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {(proposalStatus === 'Pending' || proposalStatus === 'Failed') && (
+                <div 
+                  className="border border-[#2A2A2A] rounded-lg p-3 flex items-center justify-between cursor-pointer transition-colors hover:bg-[#2a2a2a]/30"
+                  onMouseEnter={() => setHoveredPayout('fail')}
+                  onMouseLeave={() => setHoveredPayout(null)}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-rose-400">
+                      {proposalStatus === 'Failed' ? 'Failed' : 'If Fail'}
+                    </span>
+                    <svg className="w-3 h-3 text-rose-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="text-base font-medium text-white">
+                    {hoveredPayout === 'fail' ? (
+                      formatCurrency(proposalStatus !== 'Pending' ? 100 * solPrice : (amount ? (parseFloat(amount) / failPrice) * solPrice : 0))
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {formatNumber(proposalStatus !== 'Pending' ? 100 : (amount ? parseFloat(amount) / failPrice : 0))}
+                        <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
         
-        {/* Move Reduce/Claim section here for closed proposals */}
-        {proposalStatus !== 'Pending' && (
-          <div className="mt-2">
-            {/* Input Field */}
-            <div>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  pattern="[0-9]*[.]?[0-9]*"
-                  value={reducePercent}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                      setReducePercent(value);
-                    }
-                  }}
-                  placeholder=""
-                  className="w-full px-3 py-3 pr-20 bg-[#2a2a2a] rounded-t-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 border-t border-l border-r border-[#2A2A2A]"
-                  style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+        {/* Claim section for closed proposals */}
+        {proposalStatus !== 'Pending' && userPosition && (
+          <div className="mt-4">
+            {/* Claimable Amount Display */}
+            <div className="border border-[#2A2A2A] rounded-lg p-3 mb-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Claimable Amount</span>
+                <div className="text-base font-medium text-white flex items-center gap-1">
+                  {/* Show the winning position amount */}
+                  {proposalStatus === 'Passed' ? (
+                    <>
+                      {formatNumber(
+                        userPosition.type === 'pass'
+                          ? userPosition.passAmount / 1e6  // oogway with 6 decimals
+                          : userPosition.passAmount / 1e9  // SOL with 9 decimals for fail position
+                      )}
+                      {userPosition.type === 'pass' ? (
+                        <span className="text-gray-400 text-sm font-bold">$oogway</span>
+                      ) : (
+                        <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                        </svg>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {formatNumber(
+                        userPosition.type === 'pass'
+                          ? userPosition.failAmount / 1e9  // SOL with 9 decimals for pass position fail
+                          : userPosition.failAmount / 1e6  // oogway with 6 decimals for fail position fail
+                      )}
+                      {userPosition.type === 'pass' ? (
+                        <svg className="h-3 w-3 text-gray-400" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
+                        </svg>
+                      ) : (
+                        <span className="text-gray-400 text-sm font-bold">$oogway</span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Quick Amount Buttons */}
-            <div className="flex mb-4">
-              <button
-                onClick={() => setReducePercent('10')}
-                className="flex-1 py-1.5 border-b border-l border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer rounded-bl-lg"
-              >
-                10
-              </button>
-              <button
-                onClick={() => setReducePercent('25')}
-                className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-              >
-                25
-              </button>
-              <button
-                onClick={() => setReducePercent('50')}
-                className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-              >
-                50
-              </button>
-              <button
-                onClick={() => setReducePercent('100')}
-                className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-              >
-                100
-              </button>
-              <div className="px-3 py-1.5 border-b border-r border-[#2A2A2A] rounded-br-lg text-sm text-gray-400">
-                %
-              </div>
-            </div>
-
-            {/* Submit Button */}
+            {/* Claim Button */}
             <button
               onClick={() => {
                 if (!isConnected) {
                   login();
                   return;
                 }
-                console.log('Claiming position:', reducePercent, '%');
+                console.log('Claiming winnings');
               }}
-              disabled={!reducePercent || parseFloat(reducePercent) <= 0}
-              className={`w-full py-3 rounded-lg font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
-                reducePercent && parseFloat(reducePercent) > 0
-                  ? 'bg-[#4CBBF4] hover:bg-[#3CA5D8] text-[#181818]'
-                  : 'bg-[#2a2a2a] text-gray-600 cursor-not-allowed'
-              }`}
+              className="w-full py-3 rounded-lg font-semibold transition cursor-pointer bg-sky-500 hover:bg-sky-600 text-[#181818]"
             >
-              <span>Claim {proposalStatus === 'Passed' ? 'Pass' : 'Fail'} {formatNumber(reducePercent ? (parseFloat(reducePercent) / 100) * 100 : 100)}</span>
-              {proposalStatus === 'Passed' ? (
-                <span className="font-bold">$oogway</span>
-              ) : (
-                <svg className="h-3.5 w-3.5" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
-                </svg>
-              )}
+              Claim Winnings
             </button>
           </div>
         )}
@@ -285,15 +389,8 @@ const TradingInterface = memo(({
       {proposalStatus === 'Pending' && (
         <>
       {/* PASS/FAIL Market Selection - Toggle Style */}
-      <div className="flex justify-between items-center mb-2">
+      <div className="mb-2">
         <div className="text-xs text-gray-400">Place Bet</div>
-        <div className="text-xs text-gray-400 flex items-center gap-1">
-          Position: 0
-          <svg className="h-2.5 w-2.5" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
-          </svg>
-          Fail
-        </div>
       </div>
       <div className="flex flex-row flex-1 min-h-[40px] max-h-[40px] gap-[2px] p-[3px] justify-center items-center rounded-full mb-2 border border-[#2A2A2A]">
         <button
@@ -428,85 +525,88 @@ const TradingInterface = memo(({
         )}
       </button>
 
-      {/* Reduce Bet Section for Pending Proposals */}
-      <div className="mt-8">
-        <div className="text-xs text-gray-400 mb-2">Reduce [Fail] Position</div>
-        
-        {/* Input Field */}
-        <div>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="decimal"
-              pattern="[0-9]*[.]?[0-9]*"
-              value={reducePercent}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                  setReducePercent(value);
-                }
-              }}
-              placeholder="100"
-              className="w-full px-3 py-3 pr-20 bg-[#2a2a2a] rounded-t-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 border-t border-l border-r border-[#2A2A2A]"
-              style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+      {/* Reduce Bet Section for Pending Proposals - Only show if user has a position */}
+      {userPosition && (
+        <div className="mt-8">
+          <div className="text-xs text-gray-400 mb-2">
+            Reduce <span className={userPosition.type === 'pass' ? 'text-emerald-400' : 'text-rose-400'}>
+              [{userPosition.type === 'pass' ? 'Pass' : 'Fail'}]
+            </span> Position
           </div>
-        </div>
-
-        {/* Quick Amount Buttons */}
-        <div className="flex mb-4">
-          <button
-            onClick={() => setReducePercent('10')}
-            className="flex-1 py-1.5 border-b border-l border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer rounded-bl-lg"
-          >
-            10
-          </button>
-          <button
-            onClick={() => setReducePercent('25')}
-            className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-          >
-            25
-          </button>
-          <button
-            onClick={() => setReducePercent('50')}
-            className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-          >
-            50
-          </button>
-          <button
-            onClick={() => setReducePercent('100')}
-            className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
-          >
-            100
-          </button>
-          <div className="px-3 py-1.5 border-b border-r border-[#2A2A2A] rounded-br-lg text-sm text-gray-400">
-            %
+          
+          {/* Input Field */}
+          <div>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9]*[.]?[0-9]*"
+                value={reducePercent}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                    setReducePercent(value);
+                  }
+                }}
+                placeholder="100"
+                className="w-full px-3 py-3 pr-20 bg-[#2a2a2a] rounded-t-lg text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 border-t border-l border-r border-[#2A2A2A]"
+                style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+            </div>
           </div>
-        </div>
 
-        {/* Submit Button */}
-        <button
-          onClick={() => {
-            if (!isConnected) {
-              login();
-              return;
-            }
-            console.log('Reducing position by', reducePercent, '%');
-          }}
-          disabled={!reducePercent || parseFloat(reducePercent) <= 0}
-          className={`w-full py-3 rounded-lg font-semibold transition cursor-pointer flex items-center justify-center gap-1 ${
-            reducePercent && parseFloat(reducePercent) > 0
-              ? 'bg-[#4CBBF4] hover:bg-[#3CA5D8] text-[#181818]'
-              : 'bg-[#2a2a2a] text-gray-600 cursor-not-allowed'
-          }`}
-        >
-          <span>Reduce Fail {formatNumber(reducePercent ? parseFloat(reducePercent) * 0.3 : 30, 1)}</span>
-          <svg className="h-3.5 w-3.5" viewBox="0 0 101 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M100.48 69.3817L83.8068 86.8015C83.4444 87.1799 83.0058 87.4816 82.5185 87.6878C82.0312 87.894 81.5055 88.0003 80.9743 88H1.93563C1.55849 88 1.18957 87.8926 0.874202 87.6912C0.558829 87.4897 0.31074 87.2029 0.160416 86.8659C0.0100923 86.529 -0.0359181 86.1566 0.0280382 85.7945C0.0919944 85.4324 0.263131 85.0964 0.520422 84.8278L17.2061 67.408C17.5676 67.0306 18.0047 66.7295 18.4904 66.5234C18.9762 66.3172 19.5002 66.2104 20.0301 66.2095H99.0644C99.4415 66.2095 99.8104 66.3169 100.126 66.5183C100.441 66.7198 100.689 67.0065 100.84 67.3435C100.99 67.6804 101.036 68.0529 100.972 68.415C100.908 68.7771 100.737 69.1131 100.48 69.3817ZM83.8068 36.3032C83.4444 35.9248 83.0058 35.6231 82.5185 35.4169C82.0312 35.2108 81.5055 35.1045 80.9743 35.1048H1.93563C1.55849 35.1048 1.18957 35.2121 0.874202 35.4136C0.558829 35.6151 0.31074 35.9019 0.160416 36.2388C0.0100923 36.5758 -0.0359181 36.9482 0.0280382 37.3103C0.0919944 37.6723 0.263131 38.0083 0.520422 38.277L17.2061 55.6968C17.5676 56.0742 18.0047 56.3752 18.4904 56.5814C18.9762 56.7875 19.5002 56.8944 20.0301 56.8952H99.0644C99.4415 56.8952 99.8104 56.7879 100.126 56.5864C100.441 56.3849 100.689 56.0981 100.84 55.7612C100.99 55.4242 101.036 55.0518 100.972 54.6897C100.908 54.3277 100.737 53.9917 100.48 53.723L83.8068 36.3032ZM1.93563 21.7905H80.9743C81.5055 21.7898 82.0312 21.6835 82.5185 21.4773C83.0058 21.2712 83.4444 20.9695 83.8068 20.5911L100.48 3.17133C100.737 2.90265 100.908 2.56667 100.972 2.2046C101.036 1.84253 100.99 1.47008 100.84 1.13314C100.689 0.796193 100.441 0.509443 100.126 0.307961C99.8104 0.106479 99.4415 -0.000854492 99.0644 -0.000854492H20.0301C19.5002 -0.00013126 18.9762 0.106791 18.4904 0.312929C18.0047 0.519068 17.5676 0.820087 17.2061 1.19754L0.524723 18.6173C0.267481 18.8859 0.0963642 19.2219 0.0323936 19.584C-0.0315771 19.946 0.0144792 20.3184 0.164862 20.6554C0.315245 20.9923 0.563347 21.2791 0.878727 21.4806C1.19411 21.682 1.56303 21.7894 1.94013 21.7896L1.93563 21.7905Z" fill="currentColor"/>
-          </svg>
-        </button>
-      </div>
+          {/* Quick Amount Buttons */}
+          <div className="flex mb-4">
+            <button
+              onClick={() => setReducePercent('10')}
+              className="flex-1 py-1.5 border-b border-l border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer rounded-bl-lg"
+            >
+              10
+            </button>
+            <button
+              onClick={() => setReducePercent('25')}
+              className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
+            >
+              25
+            </button>
+            <button
+              onClick={() => setReducePercent('50')}
+              className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
+            >
+              50
+            </button>
+            <button
+              onClick={() => setReducePercent('100')}
+              className="flex-1 py-1.5 border-b border-r border-[#2A2A2A] text-sm text-center text-gray-400 hover:bg-[#303030] transition cursor-pointer"
+            >
+              100
+            </button>
+            <div className="px-3 py-1.5 border-b border-r border-[#2A2A2A] rounded-br-lg text-sm text-gray-400">
+              %
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={() => {
+              if (!isConnected) {
+                login();
+                return;
+              }
+              console.log('Reducing position by', reducePercent, '%');
+            }}
+            disabled={!reducePercent || parseFloat(reducePercent) <= 0}
+            className={`w-full py-3 rounded-lg font-semibold transition cursor-pointer ${
+              reducePercent && parseFloat(reducePercent) > 0
+                ? 'bg-sky-500 hover:bg-sky-600 text-[#181818]'
+                : 'bg-[#2a2a2a] text-gray-600 cursor-not-allowed'
+            }`}
+          >
+            Reduce Position
+          </button>
+        </div>
+      )}
         </>
       )}
     </div>
