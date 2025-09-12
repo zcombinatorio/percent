@@ -249,9 +249,21 @@ export default function HomePage() {
                   {/* Progress Bar */}
                   <div className="relative flex-1">
                     <div className="relative h-10 bg-[#2A2A2A] rounded-full overflow-hidden border border-[#2A2A2A] flex items-center">
-                      {/* Progress Fill */}
+                      {/* Pass/Failed/Passed text at the end - behind progress bar */}
+                      <span 
+                        className={`absolute right-4 text-sm font-medium z-10 ${
+                          proposal.status === 'Failed' 
+                            ? 'text-rose-400'
+                            : proposal.status === 'Passed' || proposal.status === 'Executed'
+                            ? 'text-white'
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        {proposal.status === 'Failed' ? 'Failed' : (proposal.status === 'Passed' || proposal.status === 'Executed') ? 'Passed' : `Target PFG: ${(proposal.passThresholdBps / 100).toFixed(2)}%`}
+                      </span>
+                      {/* Progress Fill - on top to overlap text */}
                       <div 
-                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-3 ${
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-3 z-20 ${
                           proposal.status === 'Passed' || proposal.status === 'Executed'
                             ? 'bg-emerald-500'
                             : proposal.status === 'Failed'
@@ -278,18 +290,6 @@ export default function HomePage() {
                           </span>
                         )}
                       </div>
-                      {/* Pass/Failed/Passed text at the end */}
-                      <span 
-                        className={`absolute right-4 text-sm font-medium ${
-                          proposal.status === 'Failed' 
-                            ? 'text-rose-400'
-                            : proposal.status === 'Passed' || proposal.status === 'Executed'
-                            ? 'text-white'
-                            : 'text-gray-500'
-                        }`}
-                      >
-                        {proposal.status === 'Failed' ? 'Failed' : (proposal.status === 'Passed' || proposal.status === 'Executed') ? 'Passed' : `Target PFG: ${(proposal.passThresholdBps / 100).toFixed(2)}%`}
-                      </span>
                     </div>
                   </div>
 
