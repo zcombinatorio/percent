@@ -94,10 +94,11 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     const fetchTwap = async () => {
       try {
         const response = await fetch(`http://localhost:3001/api/history/${proposalId}/twap`);
+        console.log(response);
         if (response.ok) {
           const data = await response.json();
           if (data.data && data.data.length > 0) {
-            const latest = data.data[data.data.length - 1];
+            const latest = data.data[0];
             setTwapData({
               passTwap: parseFloat(latest.passTwap),
               failTwap: parseFloat(latest.failTwap)
@@ -112,7 +113,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     fetchTwap();
     
     // Poll for TWAP updates every 30 seconds
-    const interval = setInterval(fetchTwap, 30000);
+    const interval = setInterval(fetchTwap, 10000);
     
     return () => clearInterval(interval);
   }, [proposalId]);
