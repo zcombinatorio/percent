@@ -83,12 +83,14 @@ export interface IVault {
    * User receives equal amounts of both conditional tokens for each regular token
    * @param user - User's public key who is splitting tokens
    * @param amount - Amount to split in smallest units
+   * @param skipBalanceCheck - Skip balance validation (used for wrapped SOL on mainnet)
    * @returns Unsigned transaction requiring user and authority signatures
    * @throws Error if insufficient balance or vault is finalized
    */
   buildSplitTx(
     user: PublicKey,
-    amount: bigint
+    amount: bigint,
+    skipBalanceCheck?: boolean
   ): Promise<Transaction>;
   
   /**

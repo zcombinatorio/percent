@@ -198,6 +198,30 @@ export interface ISPLTokenService {
     authorityType: AuthorityType,
     currentAuthority: Keypair
   ): Promise<string>;
+
+  /**
+   * Builds instructions to wrap SOL into wrapped SOL tokens
+   * @param owner - The owner of the wrapped SOL account
+   * @param amount - Amount of SOL to wrap in lamports
+   * @returns Array of instructions to wrap SOL
+   */
+  buildWrapSolIxs(
+    owner: PublicKey,
+    amount: bigint
+  ): Promise<TransactionInstruction[]>;
+
+  /**
+   * Builds instruction to unwrap SOL by closing the wrapped SOL account
+   * @param wrappedSolAccount - The wrapped SOL token account to close
+   * @param destination - Account to receive the unwrapped SOL
+   * @param owner - The owner of the wrapped SOL account
+   * @returns Close account instruction to unwrap SOL
+   */
+  buildUnwrapSolIx(
+    wrappedSolAccount: PublicKey,
+    destination: PublicKey,
+    owner: PublicKey
+  ): TransactionInstruction;
 }
 
 /**

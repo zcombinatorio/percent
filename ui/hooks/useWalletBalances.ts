@@ -34,6 +34,7 @@ export function useWalletBalances(walletAddress: string | null): WalletBalances 
 
         // Fetch SOL balance
         const solBalance = await connection.getBalance(pubKey);
+        console.log("SOL BALANCE", solBalance)
         const solAmount = solBalance / LAMPORTS_PER_SOL;
 
         // Fetch $oogway token balance

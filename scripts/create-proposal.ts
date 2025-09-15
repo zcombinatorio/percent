@@ -31,13 +31,13 @@ async function createProposal() {
   
   const request: CreateProposalRequest = {
     description: 'First Mainnet Proposal! 🥳',
-    proposalLength: 3000, // 5 minutes
+    proposalLength: 300, // 5 minutes
     twap: {
       initialTwapValue: ammPrice, // Decimal-adjusted price (0.1)
       twapMaxObservationChangePerUpdate: null,
       twapStartDelay: 0, // Changed from 5000
       passThresholdBps: 300,
-      minUpdateInterval: 60000 // 1 minute in milliseconds
+      minUpdateInterval: 6000 // 1 minute in milliseconds
     },
     amm: {
       initialBaseAmount,

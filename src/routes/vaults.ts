@@ -1,8 +1,16 @@
 import { Router } from 'express';
 import { getModerator } from '../services/moderator.service';
 import { PublicKey, Transaction } from '@solana/web3.js';
+import { SPLTokenService, NATIVE_MINT } from '../../app/services/spl-token.service';
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 const router = Router();
+
+// Helper function to check if we're on mainnet
+function isMainnet(): boolean {
+  const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  return !rpcUrl.includes('devnet');
+}
 
 // Helper function to get vault from proposal
 async function getVault(proposalId: number, vaultType: string) {
@@ -45,7 +53,57 @@ router.post('/:id/:type/buildSplitTx', async (req, res, next) => {
     const userPubkey = new PublicKey(user);
     const amountBigInt = BigInt(amount);
     
-    const transaction = await vault.buildSplitTx(userPubkey, amountBigInt);
+    let transaction;
+    console.log("WE ARE SPLITTING")
+    // Check if we need to wrap SOL (mainnet + quote vault)
+    console.log(isMainnet(), vaultType)
+    if (isMainnet() && vaultType === 'quote') {
+      // Get the moderator to access the connection
+      const moderator = await getModerator();
+      const connection = moderator.config.connection;
+      
+      // Check native SOL balance
+      const solBalance = await connection.getBalance(userPubkey);
+      const solBalanceBigInt = BigInt(solBalance);
+      
+      if (solBalanceBigInt < amountBigInt) {
+        return res.status(400).json({
+          error: `Insufficient SOL balance: ${solBalance / 1e9} SOL available, ${Number(amountBigInt) / 1e9} SOL required`
+        });
+      }
+      
+      // Build split transaction with balance check skipped (we already checked SOL)
+      transaction = await vault.buildSplitTx(userPubkey, amountBigInt, true);
+      
+      // Create SPL Token Service instance
+      const tokenService = new SPLTokenService(connection);
+      
+      // Build wrap SOL instructions
+      const wrapInstructions = await tokenService.buildWrapSolIxs(userPubkey, amountBigInt);
+      
+      // Prepend wrap instructions to the transaction
+      // We need to deserialize, modify, and reserialize the transaction
+      const txBuffer = transaction.serialize({ requireAllSignatures: false });
+      const deserializedTx = Transaction.from(txBuffer);
+      
+      // Create a new transaction with wrap instructions first
+      const newTransaction = new Transaction();
+      
+      // Add wrap instructions first
+      wrapInstructions.forEach(ix => newTransaction.add(ix));
+      
+      // Then add all original instructions
+      deserializedTx.instructions.forEach(ix => newTransaction.add(ix));
+      
+      // Copy over other transaction properties
+      newTransaction.recentBlockhash = deserializedTx.recentBlockhash;
+      newTransaction.feePayer = deserializedTx.feePayer;
+      
+      transaction = newTransaction;
+    } else {
+      // Normal flow - vault will check token balance
+      transaction = await vault.buildSplitTx(userPubkey, amountBigInt);
+    }
     
     res.json({
       transaction: transaction.serialize({ requireAllSignatures: false }).toString('base64'),
@@ -111,7 +169,52 @@ router.post('/:id/:type/buildMergeTx', async (req, res, next) => {
     const userPubkey = new PublicKey(user);
     const amountBigInt = BigInt(amount);
     
-    const transaction = await vault.buildMergeTx(userPubkey, amountBigInt);
+    let transaction = await vault.buildMergeTx(userPubkey, amountBigInt);
+    // Check if we need to unwrap SOL (mainnet + quote vault)
+    if (isMainnet() && vaultType === 'quote') {
+      // Get the user's wrapped SOL account
+      const wrappedSolAccount = await getAssociatedTokenAddress(
+        NATIVE_MINT,
+        userPubkey,
+        false,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+      
+      // Get the moderator to access the connection
+      const moderator = await getModerator();
+      const connection = moderator.config.connection;
+      
+      // Create SPL Token Service instance
+      const tokenService = new SPLTokenService(connection);
+      
+      // Build unwrap SOL instruction (close the wrapped SOL account)
+      const unwrapInstruction = tokenService.buildUnwrapSolIx(
+        wrappedSolAccount,
+        userPubkey, // Send unwrapped SOL back to user
+        userPubkey  // Owner of the wrapped SOL account
+      );
+      
+      // Append unwrap instruction to the transaction
+      // We need to deserialize, modify, and reserialize the transaction
+      const txBuffer = transaction.serialize({ requireAllSignatures: false });
+      const deserializedTx = Transaction.from(txBuffer);
+      
+      // Create a new transaction with original instructions plus unwrap
+      const newTransaction = new Transaction();
+      
+      // Add all original instructions first
+      deserializedTx.instructions.forEach(ix => newTransaction.add(ix));
+      
+      // Then add unwrap instruction at the end
+      newTransaction.add(unwrapInstruction);
+      
+      // Copy over other transaction properties
+      newTransaction.recentBlockhash = deserializedTx.recentBlockhash;
+      newTransaction.feePayer = deserializedTx.feePayer;
+      
+      transaction = newTransaction;
+    }
     
     res.json({
       transaction: transaction.serialize({ requireAllSignatures: false }).toString('base64'),

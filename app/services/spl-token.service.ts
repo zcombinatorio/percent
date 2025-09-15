@@ -14,21 +14,26 @@ import {
   createTransferInstruction,
   createCloseAccountInstruction,
   createSetAuthorityInstruction,
+  createSyncNativeInstruction,
+  createInitializeAccountInstruction,
   getAssociatedTokenAddress,
   getMint,
   getAccount,
   AuthorityType,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
   MINT_SIZE,
-  getMinimumBalanceForRentExemptMint
+  ACCOUNT_SIZE,
+  getMinimumBalanceForRentExemptMint,
+  getMinimumBalanceForRentExemptAccount
 } from '@solana/spl-token';
 import { ExecutionService } from './execution.service';
 import { IExecutionConfig } from '../types/execution.interface';
 import { ISPLTokenService, ITokenAccountInfo } from '../types/spl-token.interface';
 
-// Re-export AuthorityType for external use
-export { AuthorityType } from '@solana/spl-token';
+// Re-export AuthorityType and NATIVE_MINT for external use
+export { AuthorityType, NATIVE_MINT } from '@solana/spl-token';
 
 /**
  * SPL Token Service
@@ -473,5 +478,91 @@ export class SPLTokenService implements ISPLTokenService {
     }
 
     return result.signature;
+  }
+
+  /**
+   * Builds instructions to wrap SOL into wrapped SOL tokens
+   * @param owner - The owner of the wrapped SOL account
+   * @param amount - Amount of SOL to wrap in lamports
+   * @returns Array of instructions to wrap SOL
+   */
+  async buildWrapSolIxs(
+    owner: PublicKey,
+    amount: bigint
+  ): Promise<TransactionInstruction[]> {
+    const instructions: TransactionInstruction[] = [];
+    
+    // Get the associated token account for wrapped SOL
+    const wrappedSolAccount = await getAssociatedTokenAddress(
+      NATIVE_MINT,
+      owner,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    
+    // Check if the account already exists
+    const accountInfo = await this.connection.getAccountInfo(wrappedSolAccount);
+    
+    if (!accountInfo) {
+      // Create associated token account for wrapped SOL if it doesn't exist
+      instructions.push(
+        createAssociatedTokenAccountInstruction(
+          owner, // payer
+          wrappedSolAccount,
+          owner, // owner
+          NATIVE_MINT,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
+    
+    // Transfer SOL to the wrapped SOL account
+    instructions.push(
+      SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: wrappedSolAccount,
+        lamports: Number(amount),
+      })
+    );
+    
+    // Sync native to update the token balance
+    instructions.push(
+      createSyncNativeInstruction(
+        wrappedSolAccount,
+        TOKEN_PROGRAM_ID
+      )
+    );
+    
+    return instructions;
+  }
+
+  /**
+   * Builds instruction to unwrap SOL by closing the wrapped SOL account
+   * @param wrappedSolAccount - The wrapped SOL token account to close
+   * @param destination - Account to receive the unwrapped SOL
+   * @param owner - The owner of the wrapped SOL account
+   * @returns Close account instruction to unwrap SOL
+   */
+  buildUnwrapSolIx(
+    wrappedSolAccount: PublicKey,
+    destination: PublicKey,
+    owner: PublicKey
+  ): TransactionInstruction {
+    // Closing a wrapped SOL account automatically unwraps the SOL
+    return this.buildCloseAccountIx(
+      wrappedSolAccount,
+      destination,
+      owner
+    );
+  }
+
+  /**
+   * Gets the wrapped SOL (NATIVE_MINT) address
+   * @returns The NATIVE_MINT public key
+   */
+  static getNativeMint(): PublicKey {
+    return NATIVE_MINT;
   }
 }

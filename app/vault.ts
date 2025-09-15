@@ -149,12 +149,14 @@ export class Vault implements IVault {
    * User receives equal amounts of both conditional tokens for each regular token
    * @param user - User's public key who is splitting tokens
    * @param amount - Amount to split in smallest units
+   * @param skipBalanceCheck - Skip balance validation (used for wrapped SOL on mainnet)
    * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if vault is finalized, amount is invalid, or insufficient balance
    */
   async buildSplitTx(
     user: PublicKey,
-    amount: bigint
+    amount: bigint,
+    skipBalanceCheck: boolean = false
   ): Promise<Transaction> {
     if (this._state === VaultState.Uninitialized) {
       throw new Error('Vault not initialized');
@@ -168,12 +170,14 @@ export class Vault implements IVault {
       throw new Error('Amount must be positive');
     }
     
-    // Check user has sufficient regular token balance
-    const userBalance = await this.getBalance(user);
-    if (amount > userBalance) {
-      throw new Error(
-        `Insufficient ${this.vaultType} token balance: requested ${amount}, available ${userBalance}`
-      );
+    // Check user has sufficient regular token balance (skip for wrapped SOL on mainnet)
+    if (!skipBalanceCheck) {
+      const userBalance = await this.getBalance(user);
+      if (amount > userBalance) {
+        throw new Error(
+          `Insufficient ${this.vaultType} token balance: requested ${amount}, available ${userBalance}`
+        );
+      }
     }
     
     const tx = new Transaction();
