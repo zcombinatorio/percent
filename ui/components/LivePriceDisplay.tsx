@@ -224,9 +224,10 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
         tokenName="Pass-Fail Gap (PFG)"
         tokenSymbol="TWAP"
         price={
-          // ONLY use TWAP for governance - no spot price fallback
-          twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0 
-            ? ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100 
+          // Match backend calculation: (passTwap - failTwap) / failTwap * 100
+          // Backend uses this to compare against passThresholdBps/100
+          twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0
+            ? ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100
             : null
         }
         isLoading={false}

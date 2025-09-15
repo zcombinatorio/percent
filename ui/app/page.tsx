@@ -146,15 +146,20 @@ export default function HomePage() {
     }
   }, [proposal?.id]);
 
-  // Calculate PFG percentage from TWAP data ONLY - no spot price fallback for governance
-  const pfgPercentage = useMemo(() => {
-    // ONLY use TWAP for governance decisions
+  // Calculate PFG percentage and passing status to match backend logic
+  const { pfgPercentage, isPassing } = useMemo(() => {
+    // Match backend calculation exactly from app/twap-oracle.ts
     if (twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0) {
-      return ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100;
+      const percentage = ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100;
+      // Backend checks: difference > threshold
+      // Where threshold = (failTwap * passThresholdBps) / 10000
+      // Which simplifies to: percentage > passThresholdBps/100
+      const thresholdPercentage = proposal ? proposal.passThresholdBps / 100 : 0;
+      const passing = percentage > thresholdPercentage;
+      return { pfgPercentage: percentage, isPassing: passing };
     }
-    // No fallback - return null if TWAP unavailable
-    return null;
-  }, [twapData.passTwap, twapData.failTwap]);
+    return { pfgPercentage: null, isPassing: false };
+  }, [twapData.passTwap, twapData.failTwap, proposal?.passThresholdBps]);
 
   if (loading) {
     return (
@@ -318,9 +323,9 @@ export default function HomePage() {
                         {/* Percentage Text inside progress - show TWAP-based PFG for Pending status */}
                         {proposal.status === 'Pending' && (
                           <span className="text-base font-bold text-white">
-                            {pfgPercentage !== null 
-                              ? pfgPercentage >= (proposal.passThresholdBps / 100) 
-                                ? `${pfgPercentage.toFixed(1)}% (Target: ${(proposal.passThresholdBps / 100).toFixed(1)}%)`
+                            {pfgPercentage !== null
+                              ? isPassing
+                                ? `${pfgPercentage.toFixed(1)}% (Passing)`
                                 : `${pfgPercentage.toFixed(1)}%`
                               : 'Loading TWAP...'
                             }

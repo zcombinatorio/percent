@@ -50,6 +50,9 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.16.3
+      ws:
+        specifier: ^8.18.3
+        version: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
     devDependencies:
       '@solana/spl-token-registry':
         specifier: ^0.2.4574

@@ -32,7 +32,8 @@
     "decimal.js": "^10.6.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@solana/spl-token-registry": "^0.2.4574",
