@@ -11,7 +11,7 @@ import { getModerator } from './moderator.service';
  * Service for handling token swaps via Jupiter
  */
 export class SwapService {
-  private readonly jupiterApi = 'https://lite-api.jup.ag/swap/v1';
+  private readonly jupiterSwapApi = 'https://lite-api.jup.ag/swap/v1';
   private readonly executionService: ExecutionService;
   
   constructor(executionConfig: IExecutionConfig) {
@@ -34,6 +34,33 @@ export class SwapService {
     if (pAMM.isFinalized || fAMM.isFinalized) {
       throw new Error('Cannot swap on finalized AMMs');
     }
+  }
+
+  
+  /**
+   * Fetch quote from Jupiter
+   */
+  async fetchQuote(
+    inputMint: PublicKey,
+    outputMint: PublicKey,
+    amount: BN,
+    slippageBps: number = 50
+  ): Promise<any> {
+    const quoteParams = new URLSearchParams({
+      inputMint: inputMint.toString(),
+      outputMint: outputMint.toString(),
+      amount: amount.toString(),
+      slippageBps: slippageBps.toString()
+    });
+    
+    const quoteResponse = await fetch(`${this.jupiterSwapApi}/quote?${quoteParams}`);
+    
+    if (!quoteResponse.ok) {
+      const error = await quoteResponse.text();
+      throw new Error(`Jupiter quote failed: ${error}`);
+    }
+    
+    return await quoteResponse.json();
   }
   
   /**
@@ -65,24 +92,10 @@ export class SwapService {
   ): Promise<Transaction> {
     try {
       // Get quote first
-      const quoteParams = new URLSearchParams({
-        inputMint: inputMint.toString(),
-        outputMint: outputMint.toString(),
-        amount: amount.toString(),
-        slippageBps: slippageBps.toString()
-      });
-      
-      const quoteResponse = await fetch(`${this.jupiterApi}/quote?${quoteParams}`);
-      
-      if (!quoteResponse.ok) {
-        const error = await quoteResponse.text();
-        throw new Error(`Jupiter quote failed: ${error}`);
-      }
-      
-      const quoteData = await quoteResponse.json();
+      const quoteData = await this.fetchQuote(inputMint, outputMint, amount, slippageBps);
       
       // Get swap transaction
-      const swapResponse = await fetch(`${this.jupiterApi}/swap`, {
+      const swapResponse = await fetch(`${this.jupiterSwapApi}/swap`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -136,8 +149,14 @@ export class SwapService {
 // Singleton instance management
 let instance: SwapService | null = null;
 
-export function getSwapService(executionConfig: IExecutionConfig): SwapService {
+export function getSwapService(): SwapService {
   if (!instance) {
+    // Initialize with config from environment
+    const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const executionConfig: IExecutionConfig = {
+      rpcEndpoint: rpcUrl,
+      commitment: 'confirmed'
+    };
     instance = new SwapService(executionConfig);
   }
   return instance;

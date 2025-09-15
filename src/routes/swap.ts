@@ -5,6 +5,7 @@ import { BN } from '@coral-xyz/anchor';
 import { IAMM } from '../../app/types/amm.interface';
 import { HistoryService } from '../../app/services/history.service';
 import { Decimal } from 'decimal.js';
+import { getSwapService } from '../services/swap.service';
 
 const router = Router();
 
@@ -215,108 +216,243 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
   }
 });
 
-
 /**
- * Get current price from the specified AMM
- * GET /:id/:market/price
+ * Get quote from Jupiter for direct swaps
+ * GET /:id/jupiter/quote
  * 
- * Returns the current price as base/quote ratio
+ * Query params:
+ * - inputMint: string - Input token mint address
+ * - outputMint: string - Output token mint address
+ * - amount: string - Amount of input tokens (as string to preserve precision)
+ * - slippageBps?: number - Optional slippage tolerance in basis points (default: 50 = 0.5%)
  */
-router.get('/:id/:market/price', async (req, res, next) => {
+router.get('/:id/jupiter/quote', async (req, res, next) => {
   try {
-    const proposalId = parseInt(req.params.id);
-    const market = req.params.market;
     
-    // Get the appropriate AMM
-    const amm = await getAMM(proposalId, market);
+    // Validate query parameters
+    const { inputMint, outputMint, amount, slippageBps } = req.query;
     
-    // Fetch current price
-    const price = await amm.fetchPrice();
-    
-    res.json({
-      proposalId,
-      market,
-      price: price.toString(),
-      baseMint: amm.baseMint.toString(),
-      quoteMint: amm.quoteMint.toString()
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * Get AMM pool information
- * GET /:id/:market/info
- * 
- * Returns pool address and position information if available
- */
-router.get('/:id/:market/info', async (req, res, next) => {
-  try {
-    const proposalId = parseInt(req.params.id);
-    const market = req.params.market;
-    
-    // Get the appropriate AMM
-    const amm = await getAMM(proposalId, market);
-    
-    res.json({
-      proposalId,
-      market,
-      state: amm.state,
-      isFinalized: amm.isFinalized,
-      baseMint: amm.baseMint.toString(),
-      quoteMint: amm.quoteMint.toString(),
-      baseDecimals: amm.baseDecimals,
-      quoteDecimals: amm.quoteDecimals,
-      pool: amm.pool?.toString() || null,
-      position: amm.position?.toString() || null,
-      positionNft: amm.positionNft?.toString() || null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * Get current prices from both AMMs (pass and fail)
- * GET /:id/prices
- * 
- * Returns prices for both pass and fail markets
- */
-router.get('/:id/prices', async (req, res, next) => {
-  try {
-    const proposalId = parseInt(req.params.id);
-    
-    if (isNaN(proposalId) || proposalId < 0) {
-      return res.status(400).json({ error: 'Invalid proposal ID' });
+    if (!inputMint || !outputMint || !amount) {
+      return res.status(400).json({
+        error: 'Missing required query parameters',
+        required: ['inputMint', 'outputMint', 'amount'],
+        optional: ['slippageBps']
+      });
     }
     
-    // Get both AMMs
-    const passAMM = await getAMM(proposalId, 'pass');
-    const failAMM = await getAMM(proposalId, 'fail');
+    // Validate slippageBps if provided
+    const slippage = slippageBps ? parseInt(slippageBps as string) : 50;
+    if (isNaN(slippage) || slippage < 0) {
+      return res.status(400).json({
+        error: 'Invalid slippageBps: must be a positive number'
+      });
+    }
     
-    // Fetch prices from both AMMs in parallel
-    const [passPrice, failPrice] = await Promise.all([
-      passAMM.fetchPrice(),
-      failAMM.fetchPrice()
-    ]);
+    // Convert parameters
+    const inputMintPubkey = new PublicKey(inputMint as string);
+    const outputMintPubkey = new PublicKey(outputMint as string);
+    const amountBN = new BN(amount as string);
+    
+    // Get swap service and fetch quote
+    const swapService = getSwapService();
+    
+    const quote = await swapService.fetchQuote(
+      inputMintPubkey,
+      outputMintPubkey,
+      amountBN,
+      slippage
+    );
+    
+    res.json(quote);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Get quote from conditional AMM
+ * GET /:id/:market/quote
+ * 
+ * Query params:
+ * - isBaseToQuote: boolean - Direction of swap (true: base->quote, false: quote->base)
+ * - amountIn: string - Amount of input tokens (as string to preserve precision)
+ * - slippageBps?: number - Optional slippage tolerance in basis points (default: 50 = 0.5%)
+ */
+router.get('/:id/:market/quote', async (req, res, next) => {
+  try {
+    const proposalId = parseInt(req.params.id);
+    const market = req.params.market;
+    
+    // Validate market
+    if (market !== 'pass' && market !== 'fail') {
+      return res.status(400).json({
+        error: 'Invalid market: must be "pass" or "fail"'
+      });
+    }
+    
+    // Validate query parameters
+    const { isBaseToQuote, amountIn, slippageBps } = req.query;
+    
+    if (isBaseToQuote === undefined || !amountIn) {
+      return res.status(400).json({
+        error: 'Missing required query parameters',
+        required: ['isBaseToQuote', 'amountIn'],
+        optional: ['slippageBps']
+      });
+    }
+    
+    // Parse isBaseToQuote
+    const direction = isBaseToQuote === 'true';
+    
+    // Validate slippageBps if provided
+    const slippage = slippageBps ? parseInt(slippageBps as string) : 50;
+    if (isNaN(slippage) || slippage < 0) {
+      return res.status(400).json({
+        error: 'Invalid slippageBps: must be a positive number'
+      });
+    }
+    
+    // Get the appropriate AMM
+    const amm = await getAMM(proposalId, market);
+    
+    // Convert amount
+    const amountInBN = new BN(amountIn as string);
+    
+    // Get quote from AMM
+    const quote = await amm.getQuote(direction, amountInBN, slippage);
+    
+    // Determine input and output mints based on direction
+    const inputMint = direction ? amm.baseMint : amm.quoteMint;
+    const outputMint = direction ? amm.quoteMint : amm.baseMint;
     
     res.json({
       proposalId,
-      pass: {
-        market: 'pass',
-        price: passPrice.toString(),
-        baseMint: passAMM.baseMint.toString(),
-        quoteMint: passAMM.quoteMint.toString()
-      },
-      fail: {
-        market: 'fail',
-        price: failPrice.toString(),
-        baseMint: failAMM.baseMint.toString(),
-        quoteMint: failAMM.quoteMint.toString()
-      }
+      market: market as 'pass' | 'fail',
+      isBaseToQuote: direction,
+      swapInAmount: quote.swapInAmount.toString(),
+      consumedInAmount: quote.consumedInAmount.toString(),
+      swapOutAmount: quote.swapOutAmount.toString(),
+      minSwapOutAmount: quote.minSwapOutAmount.toString(),
+      totalFee: quote.totalFee.toString(),
+      priceImpact: quote.priceImpact,
+      slippageBps: slippage,
+      inputMint: inputMint.toString(),
+      outputMint: outputMint.toString()
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Build a Jupiter swap transaction
+ * POST /:id/jupiter/buildSwapTx
+ * 
+ * Body:
+ * - user: string - User's public key who is swapping tokens
+ * - inputMint: string - Input token mint address
+ * - outputMint: string - Output token mint address
+ * - amount: string - Amount of input tokens (as string to preserve precision)
+ * - slippageBps?: number - Optional slippage tolerance in basis points (default: 50 = 0.5%)
+ */
+router.post('/:id/jupiter/buildSwapTx', async (req, res, next) => {
+  try {
+    const proposalId = parseInt(req.params.id);
+    
+    // Validate request body
+    const { user, inputMint, outputMint, amount, slippageBps } = req.body;
+    
+    if (!user || !inputMint || !outputMint || !amount) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['user', 'inputMint', 'outputMint', 'amount'],
+        optional: ['slippageBps']
+      });
+    }
+    
+    // Validate slippageBps if provided
+    const slippage = slippageBps !== undefined ? slippageBps : 50;
+    if (typeof slippage !== 'number' || slippage < 0) {
+      return res.status(400).json({
+        error: 'Invalid slippageBps: must be a positive number'
+      });
+    }
+    
+    // Convert parameters
+    const userPubkey = new PublicKey(user);
+    const inputMintPubkey = new PublicKey(inputMint);
+    const outputMintPubkey = new PublicKey(outputMint);
+    const amountBN = new BN(amount);
+    
+    // Get swap service and build transaction
+    const swapService = getSwapService();
+    
+    const transaction = await swapService.buildSwapTx(
+      proposalId,
+      userPubkey,
+      inputMintPubkey,
+      outputMintPubkey,
+      amountBN,
+      slippage
+    );
+    
+    res.json({
+      transaction: transaction.serialize({ requireAllSignatures: false }).toString('base64'),
+      message: 'Jupiter swap transaction built successfully. User must sign before execution.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Execute a pre-signed Jupiter swap transaction
+ * POST /:id/jupiter/executeSwapTx
+ * 
+ * Body:
+ * - transaction: string - Base64 encoded signed transaction
+ */
+router.post('/:id/jupiter/executeSwapTx', async (req, res, next) => {
+  try {
+    // Validate request body
+    const { transaction } = req.body;
+    
+    if (!transaction) {
+      return res.status(400).json({
+        error: 'Missing required field',
+        required: ['transaction']
+      });
+    }
+    
+    // Deserialize the transaction
+    let tx: Transaction;
+    try {
+      tx = Transaction.from(Buffer.from(transaction, 'base64'));
+    } catch (error) {
+      return res.status(400).json({
+        error: 'Invalid transaction: unable to deserialize'
+      });
+    }
+    
+    // Get swap service and execute transaction
+    const swapService = getSwapService();
+    
+    const signature = await swapService.executeSwapTx(tx);
+    
+    res.json({
+      signature,
+      status: 'success',
+      message: 'Jupiter swap executed successfully'
+    });
+  } catch (error) {
+    // Handle execution errors specifically
+    if (error instanceof Error && error.message.includes('Swap execution failed')) {
+      return res.status(500).json({
+        signature: '',
+        status: 'failed',
+        message: error.message
+      });
+    }
     next(error);
   }
 });

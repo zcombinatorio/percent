@@ -59,6 +59,27 @@ export interface IAMM {
   removeLiquidity(): Promise<void>;
   
   /**
+   * Gets a quote for swapping tokens on the AMM
+   * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)
+   * @param amountIn - Amount of input tokens to swap
+   * @param slippageBps - Slippage tolerance in basis points (default: 50 = 0.5%)
+   * @returns Quote with expected output, fees, and price impact
+   * @throws Error if pool is finalized or uninitialized
+   */
+  getQuote(
+    isBaseToQuote: boolean,
+    amountIn: BN,
+    slippageBps?: number
+  ): Promise<{
+    swapInAmount: BN;
+    consumedInAmount: BN;
+    swapOutAmount: BN;
+    minSwapOutAmount: BN;
+    totalFee: BN;
+    priceImpact: number;
+  }>;
+  
+  /**
    * Builds a transaction for swapping tokens on the AMM
    * @param user - User's public key who is swapping tokens
    * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)

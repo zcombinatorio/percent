@@ -159,3 +159,56 @@ export interface UserBalancesResponse {
     failConditional: string;
   };
 }
+
+export interface JupiterQuoteResponse {
+  inputMint: string;
+  outputMint: string;
+  inAmount: string;
+  outAmount: string;
+  otherAmountThreshold: string;
+  swapMode: string;
+  slippageBps: number;
+  platformFee: any;
+  priceImpactPct: string;
+  routePlan: any[];
+  contextSlot: number;
+  timeTaken: number;
+}
+
+export interface AMMQuoteResponse {
+  proposalId: number;
+  market: 'pass' | 'fail';
+  isBaseToQuote: boolean;
+  swapInAmount: string;
+  consumedInAmount: string;
+  swapOutAmount: string;
+  minSwapOutAmount: string;
+  totalFee: string;
+  priceImpact: number;
+  slippageBps: number;
+  inputMint: string;
+  outputMint: string;
+}
+
+export interface JupiterBuildSwapTxRequest {
+  user: string;
+  inputMint: string;
+  outputMint: string;
+  amount: string;
+  slippageBps?: number;
+}
+
+export interface JupiterBuildSwapTxResponse {
+  transaction: string;
+  message: string;
+}
+
+export interface JupiterExecuteSwapTxRequest {
+  transaction: string;
+}
+
+export interface JupiterExecuteSwapTxResponse {
+  signature: string;
+  status: 'success' | 'failed';
+  message: string;
+}
