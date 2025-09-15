@@ -263,6 +263,72 @@ export class AMM implements IAMM {
   }
 
   /**
+   * Gets a quote for swapping tokens on the AMM
+   * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)
+   * @param amountIn - Amount of input tokens to swap
+   * @param slippageBps - Slippage tolerance in basis points (default: 50 = 0.5%)
+   * @returns Quote with expected output, fees, and price impact
+   * @throws Error if pool is finalized or uninitialized
+   */
+  async getQuote(
+    isBaseToQuote: boolean,
+    amountIn: BN,
+    slippageBps: number = 50
+  ): Promise<{
+    swapInAmount: BN;
+    consumedInAmount: BN;
+    swapOutAmount: BN;
+    minSwapOutAmount: BN;
+    totalFee: BN;
+    priceImpact: number;
+  }> {
+    if (this._state === AMMState.Uninitialized) {
+      throw new Error('AMM not initialized');
+    }
+    
+    if (this._state === AMMState.Finalized) {
+      throw new Error('AMM is finalized - cannot get quote');
+    }
+    
+    if (!this.pool) {
+      throw new Error('AMM pool is uninitialized');
+    }
+
+    // Fetch current pool state
+    const poolState: PoolState = await this.cpAmm.fetchPoolState(this.pool);
+    
+    // Get current slot and block time for quote calculation
+    const connection = this.executionService.connection;
+    const currentSlot = await connection.getSlot();
+    const blockTime = await connection.getBlockTime(currentSlot);
+    
+    if (!blockTime) {
+      throw new Error('Failed to get block time');
+    }
+
+    // Determine input and output mints based on swap direction
+    const inputTokenMint = isBaseToQuote ? this.baseMint : this.quoteMint;
+    
+    // Get quote with slippage protection
+    const quote = this.cpAmm.getQuote({
+      inAmount: amountIn,
+      inputTokenMint: inputTokenMint,
+      slippage: slippageBps / 10000, // Convert basis points to decimal
+      poolState,
+      currentTime: blockTime,
+      currentSlot,
+      tokenADecimal: this.baseDecimals,
+      tokenBDecimal: this.quoteDecimals,
+    });
+
+    // Convert priceImpact from Decimal to number
+    return {
+      ...quote,
+      priceImpact: quote.priceImpact.toNumber()
+    };
+  }
+
+  /**
    * Builds a transaction for swapping tokens on the AMM
    * @param user - User's public key who is swapping tokens
    * @param isBaseToQuote - Direction of swap (true: base->quote, false: quote->base)
