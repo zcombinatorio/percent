@@ -693,7 +693,7 @@ const TradingInterface = memo(({
         <div className="mt-8">
           <div className="text-xs text-gray-400 mb-2">
             Reduce <span className={userPosition.type === 'pass' ? 'text-emerald-400' : 'text-rose-400'}>
-              [{userPosition.type === 'pass' ? 'Pass' : 'Fail'}]
+              {userPosition.type === 'pass' ? 'Pass' : 'Fail'}
             </span> Position
           </div>
           
