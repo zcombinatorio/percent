@@ -100,7 +100,8 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     // Fetch TWAP data for governance decision
     const fetchTwap = async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/history/${proposalId}/twap`);
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_BASE_URL}/api/history/${proposalId}/twap`);
         console.log(response);
         if (response.ok) {
           const data = await response.json();
