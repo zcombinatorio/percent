@@ -616,9 +616,9 @@ const TradingInterface = memo(({
                 onClick={handleClaim}
                 disabled={isClaiming}
                 className={`w-full py-3 rounded-lg font-semibold transition cursor-pointer ${
-                  isClaiming 
-                    ? 'bg-gray-500 cursor-not-allowed' 
-                    : 'bg-emerald-500 hover:bg-emerald-600'
+                  isClaiming
+                    ? 'bg-gray-500 cursor-not-allowed'
+                    : 'bg-[#4CBBF4] hover:bg-[#3AA5E3]'
                 } text-[#181818]`}
               >
                 {isClaiming ? 'Claiming...' : 'Claim'}
