@@ -17,8 +17,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Prediction Market",
-  description: "Trade on governance proposal outcomes",
+  title: "Percent | oogway",
+  description: "Trade decision markets",
 };
 
 export default function RootLayout({
