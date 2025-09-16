@@ -257,10 +257,50 @@ export default function HomePage() {
                 </span>
               </div>
               <div className="mb-4">
-                <h1 className="text-3xl font-semibold">
-                  {proposal.description}
-                </h1>
-                <p className="text-sm text-gray-500 mt-4">Proposal #{proposal.id}</p>
+                {proposal.id === 0 ? (
+                  <>
+                    <h1 className="text-3xl font-semibold mb-4">
+                      OOG-1
+                    </h1>
+                    <div className="space-y-4 text-gray-300">
+                      <p>
+                        Mint 5,000,000 $oogway, stake them in the $oogway vault and distribute staked tokens proportionally based on wallet volume to all traders of this decision market.
+                      </p>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">How is volume calculated?</h3>
+                        <p>
+                          All trading volume on the pass and fail markets occurring before the implied resolution on either the pass or fail markets is counted towards the reward calculation. Volume is calculated as if both pass and fail markets resolve.
+                        </p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">What is implied resolution?</h3>
+                        <p>
+                          Implied resolution occurs once the pass-fail gap is sufficiently large such that no additional price movement can change the outcome of the market. This is an anti-manipulation feature.
+                        </p>
+                      </div>
+
+                      <p>
+                        The proposal passes if pass-fail gap &gt; 3%. Pass-fail gap is calculated using TWAP
+                      </p>
+
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">I need help - who can I talk to?</h3>
+                        <p>
+                          Come join our telegram: <a href="https://t.me/oogwayexperimentportal" className="text-blue-400 hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer">https://t.me/oogwayexperimentportal</a>
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-semibold">
+                      {proposal.description}
+                    </h1>
+                    <p className="text-sm text-gray-500 mt-4">Proposal #{proposal.id}</p>
+                  </>
+                )}
               </div>
             </div>
 
