@@ -505,7 +505,7 @@ export default function HomePage() {
                             </svg>
                           </a>
                         </div>
-                        <div className={trade.market === 'pass' ? 'text-emerald-400' : 'text-rose-400'}>
+                        <div className={trade.market === 'pass' ? 'text-rose-400' : 'text-emerald-400'}>
                           {trade.market === 'pass' ? 'Fail' : 'Pass'}
                         </div>
                         <div className={isBuy ? 'text-emerald-400' : 'text-rose-400'}>
