@@ -433,11 +433,10 @@ export default function HomePage() {
             {/* Trading History Table */}
             <div className="border-b border-l border-r border-[#282828]">
               {/* Table Header */}
-              <div className="grid gap-4 px-4 py-3 text-xs text-[#9C9D9E] font-medium border-b border-[#2A2A2A]" style={{ gridTemplateColumns: '1.5fr 0.7fr 0.7fr 0.7fr 1.5fr 1.5fr 1.5fr 0.7fr' }}>
+              <div className="grid gap-4 px-4 py-3 text-xs text-[#9C9D9E] font-medium border-b border-[#2A2A2A]" style={{ gridTemplateColumns: '1.5fr 0.7fr 0.7fr 1.5fr 1.5fr 1.5fr 0.7fr' }}>
                 <div>Trader</div>
                 <div>Bet</div>
                 <div>Type</div>
-                <div>Price</div>
                 <div>Amount</div>
                 <div>Volume</div>
                 <div>Tx</div>
@@ -461,7 +460,7 @@ export default function HomePage() {
                     const isBuy = trade.isBaseToQuote;
 
                     return (
-                      <div key={trade.id} className="grid gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors" style={{ gridTemplateColumns: '1.5fr 0.7fr 0.7fr 0.7fr 1.5fr 1.5fr 1.5fr 0.7fr' }}>
+                      <div key={trade.id} className="grid gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors" style={{ gridTemplateColumns: '1.5fr 0.7fr 0.7fr 1.5fr 1.5fr 1.5fr 0.7fr' }}>
                         <div className="text-white flex items-center gap-1">
                           <span>{formatAddress(trade.userAddress)}</span>
                           <button
@@ -512,7 +511,6 @@ export default function HomePage() {
                         <div className={isBuy ? 'text-emerald-400' : 'text-rose-400'}>
                           {isBuy ? 'Buy' : 'Sell'}
                         </div>
-                        <div className="text-white">{formatCurrency(parseFloat(trade.price), 3)}</div>
                         <div className="text-white">
                           {formatNumber(parseFloat(trade.amountIn), 2)} {tokenUsed}
                         </div>
