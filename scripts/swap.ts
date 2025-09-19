@@ -48,7 +48,7 @@ function loadWallet(): Keypair {
 }
 
 async function swap() {
-  const API_URL = process.env.API_URL || 'https://api.percent.gg';
+  const API_URL = process.env.API_URL || 'https://api.percent.markets';
   
   // Get proposal ID from command line or use default
   const proposalId = process.argv[2];
@@ -75,62 +75,60 @@ async function swap() {
   console.log();
   
   try {
-    // Step 1: Split tokens if buying conditional tokens (not base to quote)
-    if (!IS_BASE_TO_QUOTE) {
-      console.log('Step 1: Splitting tokens to get conditional tokens...');
-      
-      // Determine which vault to use based on input token
-      const vaultType = INPUT_TOKEN === 'sol' ? 'quote' : 'base';
-      
-      const splitRequest = {
-        user: walletPublicKey,
-        amount: AMOUNT_IN
-      };
-      
-      console.log(`Building split transaction for ${vaultType} vault...`);
-      const splitResponse = await fetch(`${API_URL}/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(splitRequest)
-      });
-      
-      if (!splitResponse.ok) {
-        const error = await splitResponse.json();
-        console.error('Split failed:', JSON.stringify(error, null, 2));
-        process.exit(1);
-      }
-      
-      const splitData = await splitResponse.json() as { transaction: string };
-      console.log('Split transaction built successfully');
-      
-      // Sign the transaction
-      const splitTx = Transaction.from(Buffer.from(splitData.transaction, 'base64'));
-      splitTx.partialSign(wallet);
-      
-      // Execute the signed split transaction
-      console.log('Executing split transaction...');
-      const executeSplitResponse = await fetch(`${API_URL}/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transaction: Buffer.from(splitTx.serialize({ requireAllSignatures: false })).toString('base64')
-        })
-      });
-      
-      if (!executeSplitResponse.ok) {
-        const error = await executeSplitResponse.json();
-        console.error('Split execution failed:', JSON.stringify(error, null, 2));
-        process.exit(1);
-      }
-      
-      const executeSplitResult = await executeSplitResponse.json() as { signature: string };
-      console.log(`Split executed: https://solscan.io/tx/${executeSplitResult.signature}`);
-      console.log();
+    // Step 1: Always split tokens to get conditional tokens
+    console.log('Step 1: Splitting tokens to get conditional tokens...');
+
+    // Determine which vault to use based on input token
+    const vaultType = INPUT_TOKEN === 'sol' ? 'quote' : 'base';
+
+    const splitRequest = {
+      user: walletPublicKey,
+      amount: AMOUNT_IN
+    };
+
+    console.log(`Building split transaction for ${vaultType} vault...`);
+    const splitResponse = await fetch(`${API_URL}/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(splitRequest)
+    });
+
+    if (!splitResponse.ok) {
+      const error = await splitResponse.json();
+      console.error('Split failed:', JSON.stringify(error, null, 2));
+      process.exit(1);
     }
+
+    const splitData = await splitResponse.json() as { transaction: string };
+    console.log('Split transaction built successfully');
+
+    // Sign the transaction
+    const splitTx = Transaction.from(Buffer.from(splitData.transaction, 'base64'));
+    splitTx.partialSign(wallet);
+
+    // Execute the signed split transaction
+    console.log('Executing split transaction...');
+    const executeSplitResponse = await fetch(`${API_URL}/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        transaction: Buffer.from(splitTx.serialize({ requireAllSignatures: false })).toString('base64')
+      })
+    });
+
+    if (!executeSplitResponse.ok) {
+      const error = await executeSplitResponse.json();
+      console.error('Split execution failed:', JSON.stringify(error, null, 2));
+      process.exit(1);
+    }
+
+    const executeSplitResult = await executeSplitResponse.json() as { signature: string };
+    console.log(`Split executed: https://solscan.io/tx/${executeSplitResult.signature}`);
+    console.log();
     
     // Step 2: Build and execute swap
     console.log(`Step 2: Building swap transaction for ${MARKET} market...`);
