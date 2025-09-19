@@ -76,7 +76,7 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
     if (tokenType === 'gap') {
       return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
     }
-    return `$${value.toFixed(6)}`;
+    return `$${value.toFixed(7)}`;
   };
 
   const formatPriceChange = (change: number) => {
