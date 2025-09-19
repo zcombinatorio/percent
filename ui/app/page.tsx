@@ -343,7 +343,7 @@ export default function HomePage() {
                         <h3 className="text-lg font-semibold text-white mb-2">Mint</h3>
                         <ul className="list-disc list-inside space-y-1">
                           <li>40,000,000 $oogway for the purpose of creating a liquid sOogway token</li>
-                          <li>10,000,000 $oogway to be distributed to traders of this market. distribution should be volume based</li>
+                          <li>10,000,000 $oogway to be distributed to traders of this market. distribution will be volume based and in the form of staked oogway</li>
                         </ul>
                       </div>
 
