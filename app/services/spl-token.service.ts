@@ -56,26 +56,24 @@ export class SPLTokenService implements ISPLTokenService {
   }
 
   /**
-   * Creates a new SPL token mint
+   * Builds instructions to create a new SPL token mint
+   * @param mintKeypair - Keypair for the new mint account
    * @param decimals - Number of decimals for the token
    * @param mintAuthority - Authority that can mint new tokens
-   * @param payer - Keypair that pays for the mint creation
-   * @returns PublicKey of the created mint
+   * @param payer - Public key that pays for the mint creation
+   * @returns Array of instructions to create and initialize the mint
    */
-  async createMint(
+  async buildCreateMintIxs(
+    mintKeypair: Keypair,
     decimals: number,
     mintAuthority: PublicKey,
-    payer: Keypair
-  ): Promise<PublicKey> {
-    const mintKeypair = Keypair.generate();
+    payer: PublicKey
+  ): Promise<TransactionInstruction[]> {
     const lamports = await getMinimumBalanceForRentExemptMint(this.connection);
-    
-    // Log rent cost for transparency
-    console.log(`Creating SPL token mint - Rent cost: ${lamports} lamports (${lamports / 1e9} SOL)`);
 
-    const transaction = new Transaction().add(
+    return [
       SystemProgram.createAccount({
-        fromPubkey: payer.publicKey,
+        fromPubkey: payer,
         newAccountPubkey: mintKeypair.publicKey,
         space: MINT_SIZE,
         lamports,
@@ -88,7 +86,35 @@ export class SPLTokenService implements ISPLTokenService {
         null, // Freeze authority always null - we don't freeze accounts in prediction markets
         TOKEN_PROGRAM_ID
       )
+    ];
+  }
+
+  /**
+   * Creates a new SPL token mint
+   * @param decimals - Number of decimals for the token
+   * @param mintAuthority - Authority that can mint new tokens
+   * @param payer - Keypair that pays for the mint creation
+   * @returns PublicKey of the created mint
+   */
+  async createMint(
+    decimals: number,
+    mintAuthority: PublicKey,
+    payer: Keypair
+  ): Promise<PublicKey> {
+    const mintKeypair = Keypair.generate();
+
+    // Log rent cost for transparency
+    const lamports = await getMinimumBalanceForRentExemptMint(this.connection);
+    console.log(`Creating SPL token mint - Rent cost: ${lamports} lamports (${lamports / 1e9} SOL)`);
+
+    const ixs = await this.buildCreateMintIxs(
+      mintKeypair,
+      decimals,
+      mintAuthority,
+      payer.publicKey
     );
+
+    const transaction = new Transaction().add(...ixs);
     console.log('Executing transaction to create mint');
     const result = await this.executionService.executeTx(
       transaction,

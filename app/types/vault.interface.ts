@@ -48,15 +48,6 @@ export interface IVaultConfig {
 }
 
 /**
- * Information about vault's escrow accounts and conditional mints
- */
-export interface IEscrowInfo {
-  escrow: PublicKey;              // Escrow account holding regular tokens
-  passConditionalMint: PublicKey; // Mint for pass conditional tokens
-  failConditionalMint: PublicKey; // Mint for fail conditional tokens
-}
-
-/**
  * Interface for vault managing 1:1 token exchange in prediction markets
  * Each vault manages both pass and fail conditional tokens for a single regular token type
  */
@@ -188,24 +179,4 @@ export interface IVault {
    * @returns Transaction signature
    */
   executeRedeemWinningTokensTx(transaction: Transaction): Promise<string>;
-  
-  /**
-   * Builds transaction to close empty token accounts and recover SOL rent
-   * @param user - User's public key
-   * @returns Transaction to close empty accounts (requires user signature)
-   */
-  buildCloseEmptyAccountsTx(user: PublicKey): Promise<Transaction>;
-  
-  /**
-   * Executes a pre-signed close empty accounts transaction
-   * @param transaction - Transaction already signed by user
-   * @returns Transaction signature
-   */
-  executeCloseEmptyAccountsTx(transaction: Transaction): Promise<string>;
-  
-  /**
-   * Gets escrow and conditional mint information
-   * @returns Escrow accounts and conditional token mints
-   */
-  getEscrowInfo(): IEscrowInfo;
 }

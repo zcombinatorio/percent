@@ -20,6 +20,21 @@ export interface ISPLTokenService {
   ): Promise<PublicKey>;
 
   /**
+   * Builds instructions to create a new SPL token mint
+   * @param mintKeypair - Keypair for the new mint account
+   * @param decimals - Number of decimals for the token
+   * @param mintAuthority - Authority that can mint new tokens
+   * @param payer - Public key that pays for the mint creation
+   * @returns Array of instructions to create and initialize the mint
+   */
+  buildCreateMintIxs(
+    mintKeypair: Keypair,
+    decimals: number,
+    mintAuthority: PublicKey,
+    payer: PublicKey
+  ): Promise<TransactionInstruction[]>;
+
+  /**
    * Builds a mint instruction
    * @param mint - The token mint to create tokens from
    * @param destination - The token account to receive minted tokens

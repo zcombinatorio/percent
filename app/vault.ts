@@ -1,24 +1,24 @@
 import { PublicKey, Keypair, Connection, Transaction } from '@solana/web3.js';
 import * as crypto from 'crypto';
-import { 
+import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
-import { 
-  IVault, 
-  IVaultConfig, 
-  ITokenBalance, 
+import {
+  IVault,
+  IVaultConfig,
+  ITokenBalance,
   VaultType,
-  VaultState,
-  IEscrowInfo
+  VaultState
 } from './types/vault.interface';
 import { ProposalStatus } from './types/moderator.interface';
 import { SPLTokenService } from './services/spl-token.service';
 import { ISPLTokenService } from './types/spl-token.interface';
 import { ExecutionService } from './services/execution.service';
 import { IExecutionService, IExecutionConfig } from './types/execution.interface';
+import { createMemoIx } from './utils/memo';
 
 /**
  * Vault implementation for managing conditional tokens in prediction markets
@@ -45,6 +45,8 @@ export class Vault implements IVault {
   private _state: VaultState = VaultState.Uninitialized;
   private _isFinalized: boolean = false;
   private _proposalStatus: ProposalStatus = ProposalStatus.Pending;
+  private _passMintKeypair: Keypair | null = null;
+  private _failMintKeypair: Keypair | null = null;
 
   // Public readonly getters
   get passConditionalMint(): PublicKey { return this._passConditionalMint; }
@@ -112,34 +114,77 @@ export class Vault implements IVault {
    * Initializes the vault by creating both pass and fail conditional token mints and escrow account
    * Must be called before any split/merge operations
    * Creates two conditional mints (pass/fail) with decimals specified in constructor
+   * All operations are atomic in a single transaction
    */
   async initialize(): Promise<void> {
     if (this._state !== VaultState.Uninitialized) {
       throw new Error('Vault already initialized');
     }
-    
-    // Create both pass and fail conditional token mints with specified decimals
-    // Authority has mint authority but does NOT own the escrow
-    this._passConditionalMint = await this.tokenService.createMint(
+
+    // Generate mint keypairs upfront
+    this._passMintKeypair = Keypair.generate();
+    this._failMintKeypair = Keypair.generate();
+
+    // Store public keys
+    this._passConditionalMint = this._passMintKeypair.publicKey;
+    this._failConditionalMint = this._failMintKeypair.publicKey;
+
+    // Build single transaction with all instructions
+    const transaction = new Transaction();
+
+    // Create and initialize pass conditional mint using token service
+    const passMinIxs = await this.tokenService.buildCreateMintIxs(
+      this._passMintKeypair,
       this.decimals,
       this.authority.publicKey,
-      this.authority  // Authority pays for mint creation
+      this.authority.publicKey
     );
-    
-    this._failConditionalMint = await this.tokenService.createMint(
+    transaction.add(...passMinIxs);
+
+    // Create and initialize fail conditional mint using token service
+    const failMintIxs = await this.tokenService.buildCreateMintIxs(
+      this._failMintKeypair,
       this.decimals,
       this.authority.publicKey,
-      this.authority  // Authority pays for mint creation
+      this.authority.publicKey
     );
-    
-    // Create escrow account for regular tokens owned by escrow keypair
-    // Authority pays for the account creation
-    this._escrow = await this.tokenService.getOrCreateAssociatedTokenAccount(
+    transaction.add(...failMintIxs);
+
+    // Get escrow token account address
+    this._escrow = await getAssociatedTokenAddress(
       this.regularMint,
-      this.escrowKeypair.publicKey,  // Escrow owns the token account
-      this.authority  // Authority pays for account creation
+      this.escrowKeypair.publicKey
     );
-    
+
+    // Check if escrow account needs to be created
+    const escrowAccountIx = await this.tokenService.buildCreateAssociatedTokenAccountIxIfNeeded(
+      this.regularMint,
+      this.escrowKeypair.publicKey,
+      this.authority.publicKey
+    );
+
+    if (escrowAccountIx) {
+      transaction.add(escrowAccountIx);
+    }
+
+    // Add memo for transaction identification
+    const memoMessage = `%[Initialize] Vault ${this.vaultType} | Proposal #${this.proposalId} | Authority: ${this.authority.publicKey.toBase58()}`;
+    transaction.add(createMemoIx(memoMessage));
+
+    // Execute the transaction with all signers
+    console.log(`Initializing vault for proposal #${this.proposalId}, vault type: ${this.vaultType}`);
+    const result = await this.executionService.executeTx(
+      transaction,
+      this.authority,
+      [this._passMintKeypair, this._failMintKeypair] // Additional signers for mint accounts
+    );
+
+    if (result.status === 'failed') {
+      throw new Error(`Vault initialization failed: ${result.error}`);
+    }
+
+    console.log(`Vault initialized successfully. Transaction: ${result.signature}`);
+
     // Update state to Active
     this._state = VaultState.Active;
   }
@@ -243,7 +288,11 @@ export class Vault implements IVault {
       this.authority.publicKey // authority must sign
     );
     tx.add(mintFailIx);
-    
+
+    // Add memo for transaction identification on Solscan
+    const memoMessage = `%[Split] ${amount} ${this.vaultType} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    tx.add(createMemoIx(memoMessage));
+
     // Add blockhash and fee payer so transaction can be signed
     const { blockhash } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -344,7 +393,11 @@ export class Vault implements IVault {
       );
       tx.add(closeFailIx);
     }
-    
+
+    // Add memo for transaction identification on Solscan
+    const memoMessage = `%[Merge] ${amount} ${this.vaultType} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    tx.add(createMemoIx(memoMessage));
+
     // Add blockhash and fee payer so transaction can be signed
     const { blockhash } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -589,7 +642,12 @@ export class Vault implements IVault {
       user
     );
     tx.add(closeIx);
-    
+
+    // Add memo for transaction identification on Solscan
+    const winningType = isPassWinning ? 'pass' : 'fail';
+    const memoMessage = `%[Redeem] ${winningBalance} ${this.vaultType} (${winningType}) | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    tx.add(createMemoIx(memoMessage));
+
     // Add blockhash and fee payer so transaction can be signed
     const { blockhash } = await this.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
@@ -620,108 +678,4 @@ export class Vault implements IVault {
     return result.signature;
   }
 
-  /**
-   * Builds transaction to close empty token accounts and recover SOL rent
-   * @param user - User's public key
-   * @returns Transaction with blockhash and fee payer set, ready for user signature
-   * 
-   * Note: Only includes instructions for accounts with zero balance
-   */
-  async buildCloseEmptyAccountsTx(user: PublicKey): Promise<Transaction> {
-    const transaction = new Transaction();
-    
-    // Check both conditional token accounts
-    const passAccount = await getAssociatedTokenAddress(this.passConditionalMint, user);
-    const failAccount = await getAssociatedTokenAddress(this.failConditionalMint, user);
-    
-    const passBalance = await this.tokenService.getBalance(passAccount);
-    if (passBalance === 0n) {
-      const closeTx = this.tokenService.buildCloseAccountIx(
-        passAccount,
-        user,  // rent destination
-        user   // owner who must sign
-      );
-      transaction.add(closeTx);
-    }
-    
-    const failBalance = await this.tokenService.getBalance(failAccount);
-    if (failBalance === 0n) {
-      const closeTx = this.tokenService.buildCloseAccountIx(
-        failAccount,
-        user,  // rent destination  
-        user   // owner who must sign
-      );
-      transaction.add(closeTx);
-    }
-    
-    // Add blockhash and fee payer so transaction can be signed
-    const { blockhash } = await this.connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = user;
-    
-    return transaction;
-  }
-
-  /**
-   * Executes a pre-signed close empty accounts transaction
-   * @param transaction - Transaction already signed by user
-   * @returns Transaction signature
-   * @throws Error if transaction execution fails
-   * 
-   * Note: User must sign the transaction as they own the token accounts
-   */
-  async executeCloseEmptyAccountsTx(transaction: Transaction): Promise<string> {
-    // Transaction is already signed by user (they own the accounts)
-    // No authority signature needed - just send the transaction
-    try {
-      const signature = await this.connection.sendRawTransaction(
-        transaction.serialize(),
-        { skipPreflight: false }
-      );
-      
-      // Wait for confirmation
-      const latestBlockhash = await this.connection.getLatestBlockhash();
-      await this.connection.confirmTransaction({
-        signature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
-      }, 'confirmed');
-      
-      return signature;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`Close accounts transaction failed: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Gets escrow and conditional mint information
-   * @returns Escrow accounts and conditional token mints
-   */
-  getEscrowInfo(): IEscrowInfo {
-    return {
-      escrow: this.escrow,
-      passConditionalMint: this.passConditionalMint,
-      failConditionalMint: this.failConditionalMint
-    };
-  }
-
-  /**
-   * TEST ONLY: Resets vault finalization state for testing
-   * WARNING: This method bypasses normal blockchain immutability for testing purposes
-   * @throws Error if not in test environment
-   */
-  __resetFinalizationForTesting(): void {
-    // Safety check - only allow in test environment
-    if (process.env.NODE_ENV !== 'test') {
-      throw new Error('__resetFinalizationForTesting() is only available in test environment');
-    }
-    
-    // Reset finalization state to allow testing different scenarios
-    this._isFinalized = false;
-    this._proposalStatus = ProposalStatus.Pending;
-    
-    // Note: We don't reset the mints or escrow as those are on-chain
-    // This is purely for testing finalization logic
-  }
 }
