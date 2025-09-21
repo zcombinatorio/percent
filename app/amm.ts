@@ -1,6 +1,7 @@
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { IAMM, AMMState } from './types/amm.interface';
 import { ExecutionService } from './services/execution.service';
+import { createMemoIx } from './utils/memo';
 import { 
   CpAmm, 
   MAX_SQRT_PRICE, 
@@ -402,12 +403,17 @@ export class AMM implements IAMM {
 
     // Build swap transaction
     const swapTx = await this.cpAmm.swap(swapParams);
-    
+
+    // Add memo for transaction identification on Solscan
+    const swapDirection = isBaseToQuote ? 'base→quote' : 'quote→base';
+    const memoMessage = `%[Swap] ${amountIn} ${swapDirection} | Pool: ${this.pool.toBase58().slice(0, 8)}... | ${user.toBase58()}`;
+    swapTx.add(createMemoIx(memoMessage));
+
     // Add blockhash and fee payer so transaction can be signed
     const { blockhash } = await this.executionService.connection.getLatestBlockhash();
     swapTx.recentBlockhash = blockhash;
     swapTx.feePayer = user;
-    
+
     return swapTx;
   }
 
