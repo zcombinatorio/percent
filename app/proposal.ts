@@ -510,6 +510,184 @@ export class Proposal implements IProposal {
   }
 
   /**
+   * Finalizes the proposal using Jito bundles for atomic execution
+   * Removes liquidity from AMMs and redeems authority's winning tokens
+   * All operations execute atomically in a single bundle
+   * @returns The updated proposal status (Passed or Failed)
+   * @throws Error if finalization fails or proposal not ready
+   */
+  async finalizeViaBundle(): Promise<ProposalStatus> {
+    if (this._status === ProposalStatus.Uninitialized) {
+      throw new Error(`Proposal #${this.id}: Not initialized - call initialize() first`);
+    }
+
+    // Still pending if before finalization time
+    if (Date.now() < this.finalizedAt) {
+      throw new Error(`Proposal #${this.id}: Cannot finalize before end time`);
+    }
+
+    // Already finalized
+    if (this._status !== ProposalStatus.Pending) {
+      console.log(`Proposal #${this.id} already finalized with status: ${this._status}`);
+      return this._status;
+    }
+
+    console.log(`Finalizing proposal #${this.id} via Jito bundle`);
+
+    // Initialize Jito service
+    const jito = new JitoService(BlockEngineUrl.MAINNET, this.config.jitoUuid);
+
+    try {
+      // Perform final TWAP crank to ensure we have the most up-to-date data
+      await this.twapOracle.crankTWAP();
+
+      // Use TWAP oracle to determine pass/fail with fresh data
+      const twapStatus = await this.twapOracle.fetchStatus();
+      const passed = twapStatus === TWAPStatus.Passing;
+      const newStatus = passed ? ProposalStatus.Passed : ProposalStatus.Failed;
+
+      // Get fee recommendations
+      const fees = await jito.getRecommendedFeeFromTipFloor(TipPercentile.P75);
+      console.log(`Jito tip for finalization bundle: ${fees.jitoTipSol} SOL`);
+
+      // ========================================
+      // Build Finalization Bundle
+      // ========================================
+      console.log('\n📦 Building Finalization Bundle');
+      const bundleTxs: Transaction[] = [];
+
+      // 1. Create Jito tip transaction with memo
+      const tipAccount = await jito.getRandomTipAccount();
+      const tipTx = new Transaction();
+      const { blockhash } = await this.config.connection.getLatestBlockhash();
+      tipTx.recentBlockhash = blockhash;
+      tipTx.feePayer = this.config.authority.publicKey;
+
+      tipTx.add(SystemProgram.transfer({
+        fromPubkey: this.config.authority.publicKey,
+        toPubkey: new PublicKey(tipAccount),
+        lamports: fees.jitoTipLamports
+      }));
+
+      tipTx.add(createMemoIx(
+        `%[Jito Bundle] Finalize | Proposal #${this.id} | Status: ${newStatus} | Authority: ${this.config.authority.publicKey.toBase58()}`
+      ));
+
+      tipTx.sign(this.config.authority);
+      bundleTxs.push(tipTx);
+
+      // 2. Remove liquidity from pAMM (if not already finalized)
+      if (this.__pAMM && !this.__pAMM.isFinalized) {
+        console.log('Building pAMM liquidity removal transaction');
+        const pAmmRemoveTx = await this.__pAMM.buildRemoveLiquidityTx();
+        pAmmRemoveTx.recentBlockhash = blockhash;
+        pAmmRemoveTx.feePayer = this.config.authority.publicKey;
+        // Already pre-signed by buildRemoveLiquidityTx
+        bundleTxs.push(pAmmRemoveTx);
+      }
+
+      // 3. Remove liquidity from fAMM (if not already finalized)
+      if (this.__fAMM && !this.__fAMM.isFinalized) {
+        console.log('Building fAMM liquidity removal transaction');
+        const fAmmRemoveTx = await this.__fAMM.buildRemoveLiquidityTx();
+        fAmmRemoveTx.recentBlockhash = blockhash;
+        fAmmRemoveTx.feePayer = this.config.authority.publicKey;
+        // Already pre-signed by buildRemoveLiquidityTx
+        bundleTxs.push(fAmmRemoveTx);
+      }
+
+      // 4. Finalize vaults (state update only, no transaction needed)
+      if (this.__baseVault && this.__quoteVault) {
+        // Temporarily update vault states for building redeem transactions
+        await this.__baseVault.finalize(newStatus);
+        await this.__quoteVault.finalize(newStatus);
+
+        // 5. Build redemption transactions for authority's winning tokens
+        try {
+          console.log('Building base vault redemption transaction');
+          const baseRedeemTx = await this.__baseVault.buildRedeemWinningTokensTx(
+            this.config.authority.publicKey,
+            true  // presign with escrow
+          );
+          baseRedeemTx.recentBlockhash = blockhash;
+          baseRedeemTx.feePayer = this.config.authority.publicKey;
+          baseRedeemTx.sign(this.config.authority);
+          bundleTxs.push(baseRedeemTx);
+        } catch (error) {
+          console.log('No base vault winning tokens to redeem:', error);
+          // It's okay if there are no winning tokens to redeem
+        }
+
+        try {
+          console.log('Building quote vault redemption transaction');
+          const quoteRedeemTx = await this.__quoteVault.buildRedeemWinningTokensTx(
+            this.config.authority.publicKey,
+            true  // presign with escrow
+          );
+          quoteRedeemTx.recentBlockhash = blockhash;
+          quoteRedeemTx.feePayer = this.config.authority.publicKey;
+          quoteRedeemTx.sign(this.config.authority);
+          bundleTxs.push(quoteRedeemTx);
+        } catch (error) {
+          console.log('No quote vault winning tokens to redeem:', error);
+          // It's okay if there are no winning tokens to redeem
+        }
+      }
+
+      // Submit and confirm the bundle
+      const bundleSerialied = bundleTxs.map(tx => tx.serialize().toString('base64'));
+      const bundleSigs = bundleTxs.map(tx =>
+        tx.signature ? bs58.encode(tx.signature) : null
+      ).filter(sig => sig !== null);
+
+      console.log(`Submitting finalization bundle with ${bundleSerialied.length} transactions`);
+      const bundleResponse = await jito.sendBundle([
+        bundleSerialied,
+        { encoding: 'base64' }
+      ]);
+
+      if (!bundleResponse.result) {
+        // Revert vault states on failure
+        if (this.__baseVault) (this.__baseVault as Vault).setState(VaultState.Active);
+        if (this.__quoteVault) (this.__quoteVault as Vault).setState(VaultState.Active);
+        throw new Error(`Bundle submission failed: ${bundleResponse.error?.message || 'Unknown error'}`);
+      }
+
+      const bundleId = bundleResponse.result;
+      console.log(`Bundle ID: ${bundleId}`);
+      console.log(`Bundle signatures: ${bundleSigs.join(', ')}`);
+
+      console.log('Waiting for bundle confirmation...');
+      const bundleConfirm = await jito.confirmInflightBundle(bundleId, 60000);
+
+      if ('status' in bundleConfirm && bundleConfirm.status === 'Landed') {
+        console.log(`✅ Finalization bundle landed successfully in slot ${(bundleConfirm as any).landed_slot}`);
+      } else if ('confirmation_status' in bundleConfirm && bundleConfirm.confirmation_status) {
+        console.log(`✅ Bundle confirmed with status: ${bundleConfirm.confirmation_status}`);
+      } else {
+        // Revert vault states on failure
+        if (this.__baseVault) (this.__baseVault as Vault).setState(VaultState.Active);
+        if (this.__quoteVault) (this.__quoteVault as Vault).setState(VaultState.Active);
+        throw new Error(`Bundle failed to land: ${JSON.stringify(bundleConfirm)}`);
+      }
+
+      // Update states after successful bundle execution
+      if (this.__pAMM) (this.__pAMM as AMM).setState(AMMState.Finalized);
+      if (this.__fAMM) (this.__fAMM as AMM).setState(AMMState.Finalized);
+
+      // Update proposal status
+      this._status = newStatus;
+
+      console.log(`\n🎉 Proposal #${this.id} finalized successfully via Jito bundle with status: ${newStatus}`);
+
+    } catch (error) {
+      throw new Error(`Failed to finalize proposal via bundle: ${error}`);
+    }
+
+    return this._status;
+  }
+
+  /**
    * Executes the proposal's Solana transaction
    * Only callable for proposals with Passed status
    * @param signer - Keypair to sign and execute the transaction
@@ -518,37 +696,37 @@ export class Proposal implements IProposal {
    * @throws Error if proposal is pending, already executed, or failed
    */
   async execute(
-    signer: Keypair, 
+    signer: Keypair,
     executionConfig: IExecutionConfig
   ): Promise<IExecutionResult> {
     switch (this._status) {
       case ProposalStatus.Uninitialized:
         throw new Error(`Proposal #${this.id}: Not initialized - call initialize() first`);
-      
+
       case ProposalStatus.Pending:
         throw new Error(`Cannot execute proposal #${this.id} - not finalized`);
-      
+
       case ProposalStatus.Failed:
         throw new Error(`Cannot execute proposal #${this.id} - proposal failed`);
-      
+
       case ProposalStatus.Executed:
         throw new Error(`Proposal #${this.id} has already been executed`);
-      
+
       case ProposalStatus.Passed:
         // Execute the Solana transaction
         const executionService = new ExecutionService(executionConfig);
-        
+
         console.log('Executing transaction to execute proposal');
         const result = await executionService.executeTx(
           this.transaction,
           signer
         );
-        
+
         // Update status to Executed regardless of transaction result
         this._status = ProposalStatus.Executed;
-        
+
         return result;
-      
+
       default:
         throw new Error(`Unknown proposal status: ${this._status}`);
     }
