@@ -39,6 +39,7 @@ export interface IModeratorConfig {
   quoteDecimals: number;                       // Number of decimals for quote token conditional mints
   authority: Keypair;                          // Authority keypair (payer and mint authority)
   connection: Connection;                      // Solana connection for blockchain interactions
+  jitoUuid?: string;                           // Optional Jito UUID for bundle submissions (mainnet only)
 }
 
 /**

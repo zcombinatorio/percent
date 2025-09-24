@@ -5,6 +5,7 @@ import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { Proposal } from './proposal';
 import { SchedulerService } from './services/scheduler.service';
 import { PersistenceService } from './services/persistence.service';
+import { getNetworkFromConnection, Network } from './utils/network';
 
 /**
  * Moderator class that manages governance proposals for the protocol
@@ -80,14 +81,22 @@ export class Moderator implements IModerator {
         authority: this.config.authority,
         connection: this.config.connection,
         twap: params.twap,
-        ammConfig: params.amm
+        ammConfig: params.amm,
+        jitoUuid: this.config.jitoUuid  // Pass Jito UUID if configured
       };
-      
+
       // Create new proposal with config object
       const proposal = new Proposal(proposalConfig);
-      
-      // Initialize the proposal (blockchain interactions)
-      await proposal.initialize();
+
+      // Initialize the proposal (use Jito bundles on mainnet if UUID provided)
+      const network = getNetworkFromConnection(this.config.connection);
+      if (network === Network.MAINNET && this.config.jitoUuid) {
+        console.log(`Initializing proposal on mainnet using Jito bundles (UUID: ${this.config.jitoUuid})`);
+        await proposal.initializeViaBundle();
+      } else {
+        console.log(`Initializing proposal on ${network} using regular transactions`);
+        await proposal.initialize();
+      }
       
       // Save to database FIRST (database is source of truth)
       await this.persistenceService.saveProposal(proposal);
@@ -117,6 +126,7 @@ export class Moderator implements IModerator {
   /**
    * Finalizes a proposal after the voting period has ended
    * Determines if proposal passed or failed based on votes
+   * Uses Jito bundles on mainnet if UUID is configured
    * @param id - The ID of the proposal to finalize
    * @returns The status of the proposal after finalization
    * @throws Error if proposal with given ID doesn't exist
@@ -127,22 +137,32 @@ export class Moderator implements IModerator {
     if (!proposal) {
       throw new Error(`Proposal with ID ${id} does not exist`);
     }
-    
+
     if (proposal.status === ProposalStatus.Uninitialized) {
       throw new Error(`Proposal #${id} is not initialized - cannot finalize`);
     }
-    
+
     if (proposal.status === ProposalStatus.Failed || proposal.status === ProposalStatus.Executed) {
       return proposal.status;
     }
-    
-    const status = await proposal.finalize();
-    
+
+    // Finalize using Jito bundles on mainnet if UUID provided, otherwise use regular finalization
+    const network = getNetworkFromConnection(this.config.connection);
+    let status: ProposalStatus;
+
+    if (network === Network.MAINNET && this.config.jitoUuid) {
+      console.log(`Finalizing proposal #${id} on mainnet using Jito bundles (UUID: ${this.config.jitoUuid})`);
+      status = await proposal.finalizeViaBundle();
+    } else {
+      console.log(`Finalizing proposal #${id} on ${network} using regular transactions`);
+      status = await proposal.finalize();
+    }
+
     // Save updated state to database (database is source of truth)
     await this.persistenceService.saveProposal(proposal);
-    
+
     console.log(`Proposal #${id} finalized with status ${status}, saved to database`);
-    
+
     return status;
   }
 

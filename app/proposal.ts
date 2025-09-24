@@ -535,6 +535,7 @@ export class Proposal implements IProposal {
     console.log(`Finalizing proposal #${this.id} via Jito bundle`);
 
     // Initialize Jito service
+    console.log('Initializing Jito service with UUID:', this.config.jitoUuid);
     const jito = new JitoService(BlockEngineUrl.MAINNET, this.config.jitoUuid);
 
     try {
@@ -580,9 +581,7 @@ export class Proposal implements IProposal {
       if (this.__pAMM && !this.__pAMM.isFinalized) {
         console.log('Building pAMM liquidity removal transaction');
         const pAmmRemoveTx = await this.__pAMM.buildRemoveLiquidityTx();
-        pAmmRemoveTx.recentBlockhash = blockhash;
-        pAmmRemoveTx.feePayer = this.config.authority.publicKey;
-        // Already pre-signed by buildRemoveLiquidityTx
+        // Transaction already has blockhash, feePayer, signature, and priority fees from buildRemoveLiquidityTx
         bundleTxs.push(pAmmRemoveTx);
       }
 
@@ -590,9 +589,7 @@ export class Proposal implements IProposal {
       if (this.__fAMM && !this.__fAMM.isFinalized) {
         console.log('Building fAMM liquidity removal transaction');
         const fAmmRemoveTx = await this.__fAMM.buildRemoveLiquidityTx();
-        fAmmRemoveTx.recentBlockhash = blockhash;
-        fAmmRemoveTx.feePayer = this.config.authority.publicKey;
-        // Already pre-signed by buildRemoveLiquidityTx
+        // Transaction already has blockhash, feePayer, signature, and priority fees from buildRemoveLiquidityTx
         bundleTxs.push(fAmmRemoveTx);
       }
 
@@ -611,7 +608,8 @@ export class Proposal implements IProposal {
           );
           baseRedeemTx.recentBlockhash = blockhash;
           baseRedeemTx.feePayer = this.config.authority.publicKey;
-          baseRedeemTx.sign(this.config.authority);
+          // Need to sign as fee payer (authority) after escrow pre-sign
+          baseRedeemTx.partialSign(this.config.authority);
           bundleTxs.push(baseRedeemTx);
         } catch (error) {
           console.log('No base vault winning tokens to redeem:', error);
@@ -626,7 +624,8 @@ export class Proposal implements IProposal {
           );
           quoteRedeemTx.recentBlockhash = blockhash;
           quoteRedeemTx.feePayer = this.config.authority.publicKey;
-          quoteRedeemTx.sign(this.config.authority);
+          // Need to sign as fee payer (authority) after escrow pre-sign
+          quoteRedeemTx.partialSign(this.config.authority);
           bundleTxs.push(quoteRedeemTx);
         } catch (error) {
           console.log('No quote vault winning tokens to redeem:', error);
@@ -670,10 +669,15 @@ export class Proposal implements IProposal {
         if (this.__quoteVault) (this.__quoteVault as Vault).setState(VaultState.Active);
         throw new Error(`Bundle failed to land: ${JSON.stringify(bundleConfirm)}`);
       }
-
+      
       // Update states after successful bundle execution
       if (this.__pAMM) (this.__pAMM as AMM).setState(AMMState.Finalized);
       if (this.__fAMM) (this.__fAMM as AMM).setState(AMMState.Finalized);
+
+      if(this.__pAMM &&this.__pAMM.position) delete this.__pAMM.position;
+      if(this.__pAMM && this.__pAMM.positionNft) delete this.__pAMM.positionNft;
+      if(this.__fAMM && this.__fAMM.position) delete this.__fAMM.position;
+      if(this.__fAMM && this.__fAMM.positionNft) delete this.__fAMM.positionNft;
 
       // Update proposal status
       this._status = newStatus;

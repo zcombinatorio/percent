@@ -63,6 +63,7 @@ class ModeratorService {
           quoteDecimals: 9,
           authority,
           connection: new Connection(rpcUrl, 'confirmed'),
+          jitoUuid: process.env.JITO_UUID || undefined
         };
         
         ModeratorService.instance = new Moderator(config);

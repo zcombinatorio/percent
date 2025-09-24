@@ -1,4 +1,4 @@
-import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction} from '@solana/web3.js';
 import { IAMM, AMMState } from './types/amm.interface';
 import { ExecutionService } from './services/execution.service';
 import { createMemoIx } from './utils/memo';
@@ -283,7 +283,7 @@ export class AMM implements IAMM {
     tx.feePayer = this.authority.publicKey;
 
     // Pre-sign the transaction with authority
-    tx.partialSign(this.authority);
+    tx.sign(this.authority);
 
     return tx;
   }

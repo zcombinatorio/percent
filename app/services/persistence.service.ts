@@ -458,6 +458,7 @@ export class PersistenceService implements IPersistenceService {
           initialBaseAmount: new BN(0),
           initialQuoteAmount: new BN(0),
         },
+        jitoUuid: process.env.JITO_UUID || undefined,
       };
       
       // Create proposal instance

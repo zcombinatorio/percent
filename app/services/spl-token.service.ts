@@ -9,6 +9,7 @@ import {
 import {
   createInitializeMintInstruction,
   createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   createMintToInstruction,
   createBurnInstruction,
   createTransferInstruction,
@@ -554,7 +555,7 @@ export class SPLTokenService implements ISPLTokenService {
     amount: bigint
   ): Promise<TransactionInstruction[]> {
     const instructions: TransactionInstruction[] = [];
-    
+
     // Get the associated token account for wrapped SOL
     const wrappedSolAccount = await getAssociatedTokenAddress(
       NATIVE_MINT,
@@ -564,40 +565,26 @@ export class SPLTokenService implements ISPLTokenService {
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
     
-    // Check if the account already exists
-    const accountInfo = await this.connection.getAccountInfo(wrappedSolAccount);
-    
-    if (!accountInfo) {
-      // Create associated token account for wrapped SOL if it doesn't exist
-      instructions.push(
-        createAssociatedTokenAccountInstruction(
-          owner, // payer
-          wrappedSolAccount,
-          owner, // owner
-          NATIVE_MINT,
-          TOKEN_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      );
-    }
-    
-    // Transfer SOL to the wrapped SOL account
     instructions.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        owner, // payer
+        wrappedSolAccount,
+        owner, // owner
+        NATIVE_MINT,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      ),
       SystemProgram.transfer({
         fromPubkey: owner,
         toPubkey: wrappedSolAccount,
         lamports: Number(amount),
-      })
-    );
-    
-    // Sync native to update the token balance
-    instructions.push(
+      }),
       createSyncNativeInstruction(
         wrappedSolAccount,
         TOKEN_PROGRAM_ID
       )
     );
-    
+
     return instructions;
   }
 
