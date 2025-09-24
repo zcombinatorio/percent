@@ -13,7 +13,7 @@ export default function FeedbackWidget() {
       projectId={FEEDBACK_FISH_PROJECT_ID}
       userId={walletAddress || undefined}
       metadata={{
-        walletAddress: walletAddress || 'not-connected',
+        walletaddress: walletAddress || 'not-connected',
         url: typeof window !== 'undefined' ? window.location.href : '',
         timestamp: new Date().toISOString()
       }}

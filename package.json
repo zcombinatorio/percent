@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/src/server.js",
     "create": "tsx scripts/create-proposal.ts",
-    "execute": "tsx scripts/execute-proposal.ts",
+    "execute": "tsx scripts/execute-proposal.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
