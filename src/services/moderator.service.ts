@@ -5,7 +5,6 @@ import fs from 'fs';
 import TestModeratorService from '../test/test-moderator.service';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { SchedulerService } from '../../app/services/scheduler.service';
-import { rpc } from '@coral-xyz/anchor/dist/cjs/utils';
 
 class ModeratorService {
   private static instance: Moderator | null = null;
@@ -30,24 +29,23 @@ class ModeratorService {
     
     try {      
       // Try to load state from database
+      const jitoUuid = process.env.JITO_UUID || undefined;
+      console.log('Using Jito UUID:', jitoUuid);
       const savedState = await persistenceService.loadModeratorState();
-      
       if (savedState) {
-        console.log('Loading moderator state from database...');
+        console.log('Using saved moderator state with proposal counter:', savedState.proposalCounter);
+        savedState.config.jitoUuid = jitoUuid;
         ModeratorService.instance = new Moderator(savedState.config);
         
         // Load proposal counter from database
         ModeratorService.instance.proposalIdCounter = savedState.proposalCounter;
         
-        console.log(`Loaded moderator state with proposal counter ${savedState.proposalCounter}`);
       } else {
-        console.log('No saved state found, initializing new moderator...');
+        console.log('No Moderator saved state found, initializing new moderator ...');
         
         // Create new moderator with default config
         const keypairPath = process.env.SOLANA_KEYPAIR_PATH || './wallet.json';
         const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-
-        console.log('USING:', rpcUrl);
         
         if (!fs.existsSync(keypairPath)) {
           throw new Error(`Keypair file not found at ${keypairPath}`);
@@ -63,7 +61,7 @@ class ModeratorService {
           quoteDecimals: 9,
           authority,
           connection: new Connection(rpcUrl, 'confirmed'),
-          jitoUuid: process.env.JITO_UUID || undefined
+          jitoUuid: jitoUuid
         };
         
         ModeratorService.instance = new Moderator(config);

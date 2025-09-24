@@ -19,13 +19,13 @@ app.use(errorHandler);
 
 const startServer = async () => {
   try {
+    console.log('Starting server ...');
     const moderator = await ModeratorService.getInstance();
     console.log('Moderator service initialized');
     console.log(`Authority: ${moderator.config.authority.publicKey.toBase58()}`);
     
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      console.log(`API Key required for protected endpoints`);
       if (process.env.DB_URL) {
         console.log('Database connection configured');
       } else {
