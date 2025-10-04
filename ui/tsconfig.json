@@ -19,8 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "../public/charting_library/charting_library": ["./public/charting_library/charting_library"]
+      "@/*": ["./*"]
     }
   },
   "include": ["next-env.d.ts", "./**/*.ts", "./**/*.tsx", ".next/types/**/*.ts", "./public/charting_library/**/*.d.ts"],
