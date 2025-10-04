@@ -1,4 +1,4 @@
-import { Bar, ResolutionString } from '@/public/charting_library/charting_library';
+import { Bar, ResolutionString } from '@/types/charting-library';
 
 /**
  * Bar Aggregator for Real-Time Chart Updates

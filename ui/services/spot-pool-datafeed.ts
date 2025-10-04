@@ -6,7 +6,7 @@ import {
   HistoryCallback,
   SubscribeBarsCallback,
   PeriodParams,
-} from '@/public/charting_library/charting_library';
+} from '@/types/charting-library';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
