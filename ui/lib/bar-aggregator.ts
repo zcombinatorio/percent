@@ -1,4 +1,4 @@
-import { Bar, ResolutionString } from '../types/tradingview';
+import { Bar, ResolutionString } from '@/types/charting-library';
 
 /**
  * Bar Aggregator for Real-Time Chart Updates

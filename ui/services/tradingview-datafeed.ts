@@ -6,7 +6,7 @@ import {
   HistoryCallback,
   SubscribeBarsCallback,
   PeriodParams,
-} from '../public/charting_library/charting_library';
+} from '@/types/charting-library';
 import { getPriceStreamService, TradeUpdate } from './price-stream.service';
 import { BarAggregator } from '@/lib/bar-aggregator';
 
