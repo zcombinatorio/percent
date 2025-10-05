@@ -578,7 +578,8 @@ export default function HomePage() {
                 proposal.status === 'Executed' ? 'Passed' :
                 proposal.status as 'Pending' | 'Passed' | 'Failed'
               }
-              onBalanceUpdate={refetchBalances}
+              userBalances={userBalances}
+              refetchBalances={refetchBalances}
               visualFocusClassName={visualFocus.tradingInterface.className}
               />
             </div>

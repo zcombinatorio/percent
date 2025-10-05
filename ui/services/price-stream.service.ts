@@ -15,13 +15,22 @@ export interface TradeUpdate {
   timestamp: number;
 }
 
+export interface ChartPriceUpdate {
+  proposalId: number;
+  market: 'pass' | 'fail' | 'spot';
+  price: number;
+  timestamp: number;
+}
+
 type PriceUpdateCallback = (update: PriceUpdate) => void;
 type TradeUpdateCallback = (update: TradeUpdate) => void;
+type ChartPriceUpdateCallback = (update: ChartPriceUpdate) => void;
 
 export class PriceStreamService {
   private ws: WebSocket | null = null;
   private subscriptions: Map<string, PriceUpdateCallback[]> = new Map();
   private tradeSubscriptions: Map<number, TradeUpdateCallback[]> = new Map(); // proposalId -> callbacks
+  private chartPriceSubscriptions: Map<number, ChartPriceUpdateCallback[]> = new Map(); // proposalId -> callbacks
   private poolAddresses: Map<string, string> = new Map(); // Store pool addresses for reconnection
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
@@ -124,6 +133,29 @@ export class PriceStreamService {
           callback({ tokenAddress, price, priceUsd, timestamp });
         } catch (error) {
           console.error('Error in price callback:', error);
+        }
+      });
+    } else if (message.type === 'PRICE_UPDATE' && message.proposalId !== undefined) {
+      // Chart price update from price_history table
+      console.log('[PriceStreamService] Chart PRICE_UPDATE message received for proposal', message.proposalId);
+      const { proposalId, market, price, timestamp } = message;
+
+      // Convert timestamp to milliseconds if it's a string
+      const timestampMs = typeof timestamp === 'string'
+        ? new Date(timestamp).getTime()
+        : timestamp;
+
+      console.log('[PriceStreamService] Chart price subscriptions:', this.chartPriceSubscriptions);
+      console.log('[PriceStreamService] Callbacks for proposal', proposalId, ':', this.chartPriceSubscriptions.get(proposalId)?.length || 0);
+
+      // Notify all callbacks for this proposal
+      const callbacks = this.chartPriceSubscriptions.get(proposalId) || [];
+      callbacks.forEach(callback => {
+        try {
+          console.log('[PriceStreamService] Calling chart price callback');
+          callback({ proposalId, market, price, timestamp: timestampMs });
+        } catch (error) {
+          console.error('Error in chart price callback:', error);
         }
       });
     } else if (message.type === 'TRADE') {
@@ -301,6 +333,44 @@ export class PriceStreamService {
         console.log(`Unsubscribed from trade updates for proposal ${proposalId}`);
       } else {
         this.tradeSubscriptions.set(proposalId, callbacks);
+      }
+    }
+  }
+
+  public async subscribeToChartPrices(proposalId: number, callback: ChartPriceUpdateCallback): Promise<void> {
+    // Ensure we're connected
+    await this.connect();
+
+    // Add callback to subscription list
+    const callbacks = this.chartPriceSubscriptions.get(proposalId) || [];
+    callbacks.push(callback);
+    this.chartPriceSubscriptions.set(proposalId, callbacks);
+
+    // Reuse trade subscription to subscribe to proposal (includes both trades and prices)
+    const isFirstSubscription = !this.tradeSubscriptions.has(proposalId) && callbacks.length === 1;
+    if (isFirstSubscription) {
+      this.sendTradeSubscription(proposalId);
+    }
+
+    console.log(`Subscribed to chart price updates for proposal ${proposalId}`);
+  }
+
+  public unsubscribeFromChartPrices(proposalId: number, callback: ChartPriceUpdateCallback): void {
+    const callbacks = this.chartPriceSubscriptions.get(proposalId) || [];
+    const index = callbacks.indexOf(callback);
+
+    if (index > -1) {
+      callbacks.splice(index, 1);
+
+      if (callbacks.length === 0) {
+        this.chartPriceSubscriptions.delete(proposalId);
+        // Only unsubscribe from server if no trade subscriptions either
+        if (!this.tradeSubscriptions.has(proposalId)) {
+          this.sendTradeUnsubscription(proposalId);
+        }
+        console.log(`Unsubscribed from chart price updates for proposal ${proposalId}`);
+      } else {
+        this.chartPriceSubscriptions.set(proposalId, callbacks);
       }
     }
   }

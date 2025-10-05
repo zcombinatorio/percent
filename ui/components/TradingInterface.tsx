@@ -3,7 +3,6 @@
 import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useTokenPrices } from '@/hooks/useTokenPrices';
-import { useUserBalances } from '@/hooks/useUserBalances';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
 import { openPosition, closePosition, claimWinnings } from '@/lib/trading';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
@@ -12,6 +11,7 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getDecimals, toDecimal, toSmallestUnits } from '@/lib/constants/tokens';
 import { PayoutCard } from './trading/PayoutCard';
+import type { UserBalancesResponse } from '@/types/api';
 
 interface TradingInterfaceProps {
   proposalId: number;
@@ -20,7 +20,8 @@ interface TradingInterfaceProps {
   passPrice: number;
   failPrice: number;
   proposalStatus?: 'Pending' | 'Passed' | 'Failed';
-  onBalanceUpdate?: () => void;
+  userBalances: UserBalancesResponse | null;
+  refetchBalances: () => void;
   visualFocusClassName?: string;
 }
 
@@ -31,13 +32,13 @@ const TradingInterface = memo(({
   passPrice,
   failPrice,
   proposalStatus = 'Pending',
-  onBalanceUpdate,
+  userBalances,
+  refetchBalances,
   visualFocusClassName = ''
 }: TradingInterfaceProps) => {
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const isConnected = authenticated;
   const { sol: solPrice, zc: zcPrice } = useTokenPrices();
-  const { data: userBalances, refetch: refetchBalances } = useUserBalances(proposalId, walletAddress);
   const [amount, setAmount] = useState('');
   const [sellingToken, setSellingToken] = useState<'sol' | 'zc'>('sol');
   const [isEditingQuickAmounts, setIsEditingQuickAmounts] = useState(false);
@@ -72,7 +73,34 @@ const TradingInterface = memo(({
     const quotePassConditional = parseFloat(userBalances.quote.passConditional || '0');
     const quoteFailConditional = parseFloat(userBalances.quote.failConditional || '0');
 
-    // Check if user has ANY conditional tokens
+    // For finished proposals, only consider winning tokens
+    if (proposalStatus === 'Passed') {
+      // Only Pass tokens are claimable
+      const hasWinningTokens = basePassConditional > 0 || quotePassConditional > 0;
+      if (!hasWinningTokens) return null;
+
+      return {
+        type: 'pass' as const,
+        passZCAmount: basePassConditional,
+        passSolAmount: quotePassConditional,
+        failZCAmount: 0, // Losing tokens don't count
+        failSolAmount: 0
+      };
+    } else if (proposalStatus === 'Failed') {
+      // Only Fail tokens are claimable
+      const hasWinningTokens = baseFailConditional > 0 || quoteFailConditional > 0;
+      if (!hasWinningTokens) return null;
+
+      return {
+        type: 'fail' as const,
+        passZCAmount: 0, // Losing tokens don't count
+        passSolAmount: 0,
+        failZCAmount: baseFailConditional,
+        failSolAmount: quoteFailConditional
+      };
+    }
+
+    // For pending proposals, check if user has ANY conditional tokens
     const hasAnyPassTokens = basePassConditional > 0 || quotePassConditional > 0;
     const hasAnyFailTokens = baseFailConditional > 0 || quoteFailConditional > 0;
 
@@ -96,7 +124,7 @@ const TradingInterface = memo(({
       failZCAmount: baseFailConditional,
       failSolAmount: quoteFailConditional
     };
-  }, [userBalances]);
+  }, [userBalances, proposalStatus]);
 
   const { wallets } = useSolanaWallets();
   const [isTrading, setIsTrading] = useState(false);
@@ -286,9 +314,8 @@ const TradingInterface = memo(({
       // Clear the amount after successful trade
       setAmount('');
 
-      // Refresh user balances (both local and parent)
+      // Refresh user balances
       refetchBalances();
-      onBalanceUpdate?.();
 
     } catch (error) {
       console.error('Trade failed:', error);
@@ -296,7 +323,7 @@ const TradingInterface = memo(({
     } finally {
       setIsTrading(false);
     }
-  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarket, sellingToken, wallets, refetchBalances, onBalanceUpdate]);
+  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarket, sellingToken, wallets, refetchBalances]);
   
   const handleClaim = useCallback(async () => {
     if (!isConnected) {
@@ -330,9 +357,8 @@ const TradingInterface = memo(({
         signTransaction: createTransactionSigner()
       });
 
-      // Refresh user balances after claiming (both local and parent)
+      // Refresh user balances after claiming
       refetchBalances();
-      onBalanceUpdate?.();
 
     } catch (error) {
       console.error('Claim failed:', error);
@@ -340,7 +366,7 @@ const TradingInterface = memo(({
     } finally {
       setIsClaiming(false);
     }
-  }, [isConnected, login, walletAddress, userPosition, proposalStatus, proposalId, wallets, refetchBalances, onBalanceUpdate]);
+  }, [isConnected, login, walletAddress, userPosition, proposalStatus, proposalId, wallets, refetchBalances]);
 
   // Quick amount buttons - depends on selling token
   const quickAmounts = useMemo(() => {

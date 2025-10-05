@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS price_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
-  market VARCHAR(4) NOT NULL CHECK (market IN ('pass', 'fail')),
+  market VARCHAR(4) NOT NULL CHECK (market IN ('pass', 'fail', 'spot')),
   price DECIMAL(20, 10) NOT NULL,
   base_liquidity DECIMAL(20, 10),
   quote_liquidity DECIMAL(20, 10)
@@ -123,7 +123,22 @@ CREATE TRIGGER update_proposals_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_moderator_state_updated_at 
+CREATE TRIGGER update_moderator_state_updated_at
   BEFORE UPDATE ON moderator_state
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to notify WebSocket clients of new prices
+CREATE OR REPLACE FUNCTION notify_new_price()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM pg_notify('new_price', row_to_json(NEW)::text);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger on price_history inserts for real-time WebSocket updates
+CREATE TRIGGER price_notification_trigger
+  AFTER INSERT ON price_history
+  FOR EACH ROW
+  EXECUTE FUNCTION notify_new_price();

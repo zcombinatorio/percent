@@ -438,10 +438,11 @@ class PriceWebSocketServer {
 
       this.pgClient = new Client({ connectionString: dbUrl });
       await this.pgClient.connect();
-      console.log('Connected to PostgreSQL for trade notifications');
+      console.log('Connected to PostgreSQL for trade and price notifications');
 
-      // Listen for new_trade notifications
+      // Listen for both trade and price notifications
       await this.pgClient.query('LISTEN new_trade');
+      await this.pgClient.query('LISTEN new_price');
 
       this.pgClient.on('notification', (msg) => {
         console.log('PostgreSQL notification received:', msg.channel, msg.payload);
@@ -452,6 +453,14 @@ class PriceWebSocketServer {
             this.handleNewTrade(tradeData);
           } catch (error) {
             console.error('Error parsing trade notification:', error);
+          }
+        } else if (msg.channel === 'new_price' && msg.payload) {
+          try {
+            const priceData = JSON.parse(msg.payload);
+            console.log('Parsed price data:', priceData);
+            this.handleNewPrice(priceData);
+          } catch (error) {
+            console.error('Error parsing price notification:', error);
           }
         }
       });
@@ -519,6 +528,20 @@ class PriceWebSocketServer {
     this.broadcastTrade(trade);
   }
 
+  private handleNewPrice(priceData: any) {
+    // Broadcast price update to all clients subscribed to this proposal
+    const priceUpdate = {
+      type: 'PRICE_UPDATE',
+      proposalId: priceData.proposalId || priceData.proposal_id,
+      market: priceData.market,
+      price: parseFloat(priceData.price),
+      timestamp: priceData.timestamp || new Date().toISOString()
+    };
+
+    console.log(`Price update received: proposal ${priceUpdate.proposalId}, market ${priceUpdate.market}, price ${priceUpdate.price}`);
+    this.broadcastPrice(priceUpdate);
+  }
+
   private broadcastTrade(trade: TradeEvent) {
     this.clients.forEach((subscription, ws) => {
       if (subscription.proposals.has(trade.proposalId) && ws.readyState === 1) {
@@ -526,6 +549,15 @@ class PriceWebSocketServer {
       }
     });
     console.log(`Trade broadcast for proposal ${trade.proposalId}: ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
+  }
+
+  private broadcastPrice(priceUpdate: any) {
+    this.clients.forEach((subscription, ws) => {
+      if (subscription.proposals.has(priceUpdate.proposalId) && ws.readyState === 1) {
+        ws.send(JSON.stringify(priceUpdate));
+      }
+    });
+    console.log(`Price broadcast for proposal ${priceUpdate.proposalId}: ${priceUpdate.market} @ ${priceUpdate.price}`);
   }
 
   private async fetchSolPrice() {

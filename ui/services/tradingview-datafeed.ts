@@ -7,7 +7,7 @@ import {
   SubscribeBarsCallback,
   PeriodParams,
 } from '@/types/charting-library';
-import { getPriceStreamService, TradeUpdate } from './price-stream.service';
+import { getPriceStreamService, TradeUpdate, ChartPriceUpdate } from './price-stream.service';
 import { BarAggregator } from '@/lib/bar-aggregator';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -224,20 +224,21 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     console.log(`[${marketType}] Subscribers count after add: ${this.subscribers.size}`);
 
-    // Only subscribe to trade updates for pass/fail markets
-    // Spot market updates come from periodic backend recording
+    // Subscribe to both trade and price updates via WebSocket
+    const priceService = getPriceStreamService();
+
     if (!isSpotMarket) {
       // Fetch SOL price for market cap calculation
       this.fetchSolPrice();
 
-      // Subscribe to trade updates via WebSocket
-      const priceService = getPriceStreamService();
+      // Subscribe to trade updates for pass/fail markets
       priceService.subscribeToTrades(this.proposalId, this.handleTradeUpdate.bind(this));
-
       console.log(`[${marketType}] Subscribed to real-time trade updates for proposal ${this.proposalId}`);
-    } else {
-      console.log(`[${marketType}] Spot market - using periodic backend updates (no WebSocket subscription)`);
     }
+
+    // Subscribe to chart price updates for all markets (pass, fail, and spot)
+    priceService.subscribeToChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
+    console.log(`[${marketType}] Subscribed to real-time price updates for proposal ${this.proposalId}`);
   }
 
   /**
@@ -376,16 +377,69 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   }
 
   /**
+   * Handle incoming price updates from scheduler
+   */
+  private handlePriceUpdate(priceUpdate: ChartPriceUpdate): void {
+    console.log(`[${this.market}] Price update received for ${priceUpdate.market}:`, priceUpdate);
+
+    // Update all subscribers that match this market
+    for (const [listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
+      // Match spot market subscribers to spot prices, pass/fail subscribers to their respective prices
+      const marketMatches = isSpotMarket
+        ? priceUpdate.market === 'spot'
+        : priceUpdate.market === this.market;
+
+      if (!marketMatches) {
+        continue;
+      }
+
+      try {
+        // Convert price to market cap USD
+        // For pass/fail: price is in SOL, convert to USD market cap
+        // For spot: price is already in USD market cap
+        const priceUSD = priceUpdate.market === 'spot'
+          ? priceUpdate.price
+          : priceUpdate.price * TOTAL_SUPPLY * this.solPrice;
+
+        console.log(`[${this.market}] Processing ${priceUpdate.market} price update: $${priceUSD.toFixed(2)}`);
+
+        // Update bar with new price (volume = 0 for price updates)
+        const updatedBar = aggregator.updateBar(
+          priceUSD,
+          0, // No volume for scheduled price updates
+          priceUpdate.timestamp
+        );
+
+        // Send updated bar to TradingView
+        callback(updatedBar);
+
+        console.log(`[${this.market}] Updated bar for ${listenerGuid} from price update:`, {
+          time: new Date(updatedBar.time).toISOString(),
+          timeMs: updatedBar.time,
+          price: priceUSD,
+          open: updatedBar.open,
+          high: updatedBar.high,
+          low: updatedBar.low,
+          close: updatedBar.close,
+        });
+      } catch (error) {
+        console.error(`[${this.market}] Error updating bar from price for ${listenerGuid}:`, error);
+      }
+    }
+  }
+
+  /**
    * Unsubscribe from real-time updates
    */
   unsubscribeBars(listenerGuid: string): void {
     this.subscribers.delete(listenerGuid);
 
-    // If no more subscribers, unsubscribe from trades
+    // If no more subscribers, unsubscribe from trades and prices
     if (this.subscribers.size === 0) {
       const priceService = getPriceStreamService();
       priceService.unsubscribeFromTrades(this.proposalId, this.handleTradeUpdate.bind(this));
-      console.log(`[${this.market}] Unsubscribed from trade updates`);
+      priceService.unsubscribeFromChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
+      console.log(`[${this.market}] Unsubscribed from trade and price updates`);
     }
   }
 }
