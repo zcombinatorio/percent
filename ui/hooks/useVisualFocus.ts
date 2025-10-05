@@ -24,13 +24,37 @@ export interface VisualFocusState {
  *
  * @param hasPosition - Whether user has any position in the market
  * @param selectedMarket - Currently selected market ('pass' or 'fail')
+ * @param proposalStatus - Current status of the proposal
  * @returns Object with className and state for each UI section
  */
 export function useVisualFocus(
   hasPosition: boolean,
-  selectedMarket: 'pass' | 'fail'
+  selectedMarket: 'pass' | 'fail',
+  proposalStatus?: 'Pending' | 'Passed' | 'Failed' | 'Executed'
 ): VisualFocusState {
   return useMemo(() => {
+    // State 3: Proposal has ended - No blur on anything
+    if (proposalStatus && proposalStatus !== 'Pending') {
+      return {
+        entryControls: {
+          isHighlighted: false,
+          className: 'transition-all duration-300'
+        },
+        tradingInterface: {
+          isHighlighted: false,
+          className: 'transition-all duration-300'
+        },
+        passMarket: {
+          isHighlighted: false,
+          className: 'transition-all duration-300'
+        },
+        failMarket: {
+          isHighlighted: false,
+          className: 'transition-all duration-300'
+        }
+      };
+    }
+
     // State 1: No Position - Highlight entry controls, dim everything else
     if (!hasPosition) {
       return {
@@ -76,5 +100,5 @@ export function useVisualFocus(
           : 'opacity-40 blur-[1px] transition-all duration-300'
       }
     };
-  }, [hasPosition, selectedMarket]);
+  }, [hasPosition, selectedMarket, proposalStatus]);
 }

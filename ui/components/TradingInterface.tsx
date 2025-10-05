@@ -21,6 +21,7 @@ interface TradingInterfaceProps {
   failPrice: number;
   proposalStatus?: 'Pending' | 'Passed' | 'Failed';
   onBalanceUpdate?: () => void;
+  visualFocusClassName?: string;
 }
 
 const TradingInterface = memo(({
@@ -30,7 +31,8 @@ const TradingInterface = memo(({
   passPrice,
   failPrice,
   proposalStatus = 'Pending',
-  onBalanceUpdate
+  onBalanceUpdate,
+  visualFocusClassName = ''
 }: TradingInterfaceProps) => {
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const isConnected = authenticated;
@@ -396,12 +398,11 @@ const TradingInterface = memo(({
     }
   }, [sellingToken, tempSolAmounts, tempZCAmounts]);
 
-  // Show frosted glass effect when not authenticated
+  // Show login button when not authenticated
   if (!authenticated) {
     return (
       <div className="h-[calc(100vh-8rem)] relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/30 backdrop-blur-xl rounded-lg" />
-        <div className="relative z-10 pt-12 flex justify-center px-8">
+        <div className="pt-12 flex justify-center px-8">
           <button
             onClick={login}
             className="w-full max-w-xs px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-lg transition-all transform hover:scale-105 cursor-pointer shadow-lg"
@@ -508,7 +509,7 @@ const TradingInterface = memo(({
 
       {/* Only show betting interface for pending proposals */}
       {proposalStatus === 'Pending' && (
-        <>
+        <div className={visualFocusClassName}>
       {/* Market Selection (which AMM to trade on) */}
       <div className="mb-2">
         <div className="text-xs text-gray-400">
@@ -742,7 +743,7 @@ const TradingInterface = memo(({
           )}
         </span>
       </button>
-        </>
+        </div>
       )}
     </div>
   );

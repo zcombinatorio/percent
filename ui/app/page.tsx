@@ -126,7 +126,7 @@ export default function HomePage() {
   }, [userBalances]);
 
   // Visual focus states for highlighting/dimming UI elements
-  const visualFocus = useVisualFocus(hasPosition, selectedMarket);
+  const visualFocus = useVisualFocus(hasPosition, selectedMarket, proposal?.status as 'Pending' | 'Passed' | 'Failed' | 'Executed');
 
   // Handle MAX button click
   const handleMaxClick = useCallback(() => {
@@ -568,20 +568,19 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className={visualFocus.tradingInterface.className}>
-                <TradingInterface
-                proposalId={proposal.id}
-                selectedMarket={selectedMarket}
-                onMarketChange={handleMarketChange}
-                passPrice={0.5}
-                failPrice={0.5}
-                proposalStatus={
-                  proposal.status === 'Executed' ? 'Passed' :
-                  proposal.status as 'Pending' | 'Passed' | 'Failed'
-                }
-                onBalanceUpdate={refetchBalances}
-                />
-              </div>
+              <TradingInterface
+              proposalId={proposal.id}
+              selectedMarket={selectedMarket}
+              onMarketChange={handleMarketChange}
+              passPrice={0.5}
+              failPrice={0.5}
+              proposalStatus={
+                proposal.status === 'Executed' ? 'Passed' :
+                proposal.status as 'Pending' | 'Passed' | 'Failed'
+              }
+              onBalanceUpdate={refetchBalances}
+              visualFocusClassName={visualFocus.tradingInterface.className}
+              />
             </div>
           </div>
         </div>
