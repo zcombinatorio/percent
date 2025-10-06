@@ -43,6 +43,51 @@ export const proposalContentMap: Record<number, ProposalContent> = {
       </div>
     )
   },
+  2: {
+    id: 2,
+    title: "ZC-1: Update Staking Vault Rewards & Parameters",
+    content: (
+      <div className="space-y-4 text-gray-300">
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-2">Summary</h3>
+          <p>
+            Adjust the $ZC staking vault to align incentives with longer-term staking and simplify user operations.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-2">Changes Proposed</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Epoch length:</strong> increase from 14 days to 30 days (monthly withdrawal period)</li>
+            <li><strong>Emissions:</strong> increase from 14M $ZC / 14 days to 60M $ZC / 30 days</li>
+            <li><strong>One-time early exit window:</strong> upon execution, open withdrawals for 36 hours, then close until the first monthly epoch end</li>
+            <li><strong>Passing criterion:</strong> proposal passes only if the pass–fail gap TWAP &gt; 0% over the voting period</li>
+            <li><strong>Reward pause during window:</strong> pause reward emissions (no accrual) during the 36-hour withdrawal window</li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-2">Motivation</h3>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>Longer commitment, clearer cadence:</strong> monthly epochs reduce operational churn vs biweekly</li>
+            <li><strong>Strengthen incentives:</strong> doubles daily emissions to reward long-term participation and increase the staked share</li>
+            <li><strong>Graceful transition:</strong> an early withdrawal window plus an emissions pause prevents "trapped" liquidity and removes timing edge cases</li>
+          </ul>
+        </div>
+
+        <p>
+          The proposal passes if pass-fail gap &gt; 0%. Pass-fail gap is calculated using TWAP.
+        </p>
+
+        <div>
+          <h3 className="text-lg font-semibold text-white mb-2">I need help - who can I talk to?</h3>
+          <p>
+            Come join our telegram: <a href="https://t.me/oogwayexperimentportal" className="text-blue-400 hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer">https://t.me/oogwayexperimentportal</a>
+          </p>
+        </div>
+      </div>
+    )
+  },
   6: {
     id: 6,
     title: "What is the price of $ZC after OOG-1 settles?",

@@ -20,7 +20,7 @@ async function createProposal() {
   
   // Raw token amounts (smallest units)
   // Current_spot = ~0.010 SOL per ZC
-  const initialBaseAmount = '7400000000';  // 7.4k ZC (6 decimals)
+  const initialBaseAmount = '7300000000';  // 7.3k ZC (6 decimals)
   const initialQuoteAmount = '100000000'; // 0.1 Sol (9 decimals)
   
   // Calculate decimal-adjusted price (same as AMM will return)
