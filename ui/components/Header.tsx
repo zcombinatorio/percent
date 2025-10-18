@@ -8,9 +8,10 @@ interface HeaderProps {
   solBalance: number;
   zcBalance: number;
   hasWalletBalance?: boolean;
+  login?: () => void;
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, zcBalance }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login }: HeaderProps) {
   const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
 
   return (
@@ -23,20 +24,38 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
           className="h-8"
         />
         <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
+        {!authenticated && login && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center border border-[#191919]" style={{ backgroundColor: '#121212' }}>
+              <Wallet className="w-3 h-3" style={{ color: '#EF6300' }} />
+            </div>
+            <span
+              onClick={login}
+              className="text-sm font-mono font-medium cursor-pointer transition-colors"
+              style={{ color: '#EF6300' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#C56125'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#EF6300'}
+            >
+              Click to login
+            </span>
+          </div>
+        )}
         {authenticated && walletAddress && (
           <>
             <div className="flex items-center gap-1.5">
-              <Wallet className="w-4 h-4 text-white" />
+              <div className="w-5 h-5 rounded-full flex items-center justify-center border border-[#191919]" style={{ backgroundColor: '#121212' }}>
+                <Wallet className="w-3 h-3 text-white" />
+              </div>
               <span className="text-white text-sm font-mono font-medium">{walletPrefix}</span>
             </div>
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
             <div className="flex items-center gap-1.5">
-              <img src="/solana-logo.jpg" alt="SOL" className="w-5 h-5 rounded-full" />
+              <img src="/solana-logo.jpg" alt="SOL" className="w-5 h-5 rounded-full border border-[#191919]" />
               <span className="text-white text-sm font-mono font-medium">{solBalance.toFixed(3)}</span>
             </div>
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
             <div className="flex items-center gap-1.5">
-              <img src="/zc-logo.jpg" alt="ZC" className="w-5 h-5 rounded-full" />
+              <img src="/zc-logo.jpg" alt="ZC" className="w-5 h-5 rounded-full border border-[#191919]" />
               <span className="text-white text-sm font-mono font-medium">{zcBalance.toFixed(0)}</span>
             </div>
           </>

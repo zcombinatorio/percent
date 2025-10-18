@@ -37,7 +37,7 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 });
 
 export default function HomePage() {
-  const { ready, authenticated, user, walletAddress } = usePrivyWallet();
+  const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals();
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
@@ -378,6 +378,7 @@ export default function HomePage() {
             solBalance={solBalance}
             zcBalance={zcBalance}
             hasWalletBalance={hasWalletBalance}
+            login={login}
           />
 
           {/* Tab Navigation */}
@@ -448,6 +449,7 @@ export default function HomePage() {
           solBalance={solBalance}
           zcBalance={zcBalance}
           hasWalletBalance={hasWalletBalance}
+          login={login}
         />
 
         {/* Tab Navigation */}
