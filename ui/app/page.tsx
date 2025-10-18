@@ -42,6 +42,7 @@ export default function HomePage() {
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   const [activeTab, setActiveTab] = useState<'trade' | 'description'>('trade');
+  const [navTab, setNavTab] = useState<'live' | 'history' | 'launch'>('live');
   const [marketMode, setMarketMode] = useState<'enter' | 'exit'>('enter');
   const [amount, setAmount] = useState<string>('');
   const [selectedToken, setSelectedToken] = useState<'sol' | 'zc'>('sol');
@@ -379,6 +380,51 @@ export default function HomePage() {
             hasWalletBalance={hasWalletBalance}
           />
 
+          {/* Tab Navigation */}
+          <div className="px-8">
+            <div className="flex pt-1">
+              <button
+                onClick={() => setNavTab('live')}
+                className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                  navTab === 'live'
+                    ? 'text-white'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                {navTab === 'live' && (
+                  <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+                )}
+                Live
+              </button>
+              <button
+                onClick={() => setNavTab('history')}
+                className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                  navTab === 'history'
+                    ? 'text-white'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                {navTab === 'history' && (
+                  <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+                )}
+                History
+              </button>
+              <button
+                onClick={() => setNavTab('launch')}
+                className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                  navTab === 'launch'
+                    ? 'text-white'
+                    : 'text-gray-400 hover:text-gray-300'
+                }`}
+              >
+                {navTab === 'launch' && (
+                  <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+                )}
+                Launch
+              </button>
+            </div>
+          </div>
+
           {/* Empty state */}
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -403,7 +449,52 @@ export default function HomePage() {
           zcBalance={zcBalance}
           hasWalletBalance={hasWalletBalance}
         />
-        
+
+        {/* Tab Navigation */}
+        <div className="px-8">
+          <div className="flex pt-1">
+            <button
+              onClick={() => setNavTab('live')}
+              className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                navTab === 'live'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {navTab === 'live' && (
+                <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+              )}
+              Live
+            </button>
+            <button
+              onClick={() => setNavTab('history')}
+              className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                navTab === 'history'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {navTab === 'history' && (
+                <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+              )}
+              History
+            </button>
+            <button
+              onClick={() => setNavTab('launch')}
+              className={`text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative ${
+                navTab === 'launch'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {navTab === 'launch' && (
+                <div className="absolute -top-[7px] left-0 right-0 h-[2px] bg-white z-10" />
+              )}
+              Launch
+            </button>
+          </div>
+        </div>
+
         {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 p-8 pr-10 overflow-y-auto border-r border-[#2A2A2A]">
