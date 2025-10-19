@@ -18,6 +18,21 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
   const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
 
+  // Format ZC balance with K, M, B abbreviations
+  const formatZcBalance = (balance: number): string => {
+    const absBalance = Math.abs(balance);
+
+    if (absBalance >= 1e9) {
+      return (balance / 1e9).toFixed(3) + 'B';
+    } else if (absBalance >= 1e6) {
+      return (balance / 1e6).toFixed(3) + 'M';
+    } else if (absBalance >= 1e3) {
+      return (balance / 1e3).toFixed(3) + 'K';
+    } else {
+      return balance.toFixed(3);
+    }
+  };
+
   return (
     <div className="h-14 flex items-center justify-between px-8 bg-[#0a0a0a] border-b border-[#494949]">
       {/* Left side: Logo / wallet / balances */}
@@ -70,7 +85,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
             <div className="flex items-center gap-1.5">
               <img src="/zc-logo.jpg" alt="ZC" className="w-5 h-5 rounded-full border border-[#191919]" />
-              <span className="text-white text-sm font-mono font-medium">{zcBalance.toFixed(0)}</span>
+              <span className="text-white text-sm font-mono font-medium">{formatZcBalance(zcBalance)}</span>
             </div>
           </>
         )}
