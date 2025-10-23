@@ -2,7 +2,6 @@ import {
   Connection,
   Keypair,
   Transaction,
-  Commitment,
   ComputeBudgetProgram,
   TransactionInstruction,
   PublicKey
@@ -14,8 +13,10 @@ import {
   IExecutionConfig,
   ExecutionStatus,
   IExecutionLog,
-  PriorityFeeMode
+  PriorityFeeMode,
+  Commitment
 } from '../types/execution.interface';
+import { LoggerService } from '../../src/services/logger.service';
 
 /**
  * Service for handling Solana transaction execution
@@ -23,22 +24,24 @@ import {
  */
 export class ExecutionService implements IExecutionService {
   readonly connection: Connection;
-  private config: IExecutionConfig;
+  public config: IExecutionConfig;
+  private logger: LoggerService;
 
-  constructor(config: IExecutionConfig, connection?: Connection) {
+  constructor(config: IExecutionConfig, logger: LoggerService) {
     this.config = {
       ...config,
-      commitment: config.commitment || 'confirmed',
+      commitment: config.commitment || Commitment.Confirmed,
       maxRetries: config.maxRetries ?? 3,
       skipPreflight: config.skipPreflight ?? false,
       priorityFeeMode: config.priorityFeeMode || PriorityFeeMode.Medium,
       maxPriorityFeeLamports: config.maxPriorityFeeLamports ?? 25000
     };
     // Use provided connection or create a new one
-    this.connection = connection || new Connection(
+    this.connection = new Connection(
       this.config.rpcEndpoint,
       this.config.commitment
     );
+    this.logger = logger;
   }
 
   /**
@@ -96,7 +99,7 @@ export class ExecutionService implements IExecutionService {
         // Cap at max configured fee
         return Math.min(suggestedFee, this.config.maxPriorityFeeLamports || 25000);
       } catch (error) {
-        console.warn('Failed to get dynamic priority fee, using medium:', error);
+        this.logger.warn('Failed to get dynamic priority fee, using medium', { error });
         return 5000; // Default to medium
       }
     }
@@ -135,7 +138,7 @@ export class ExecutionService implements IExecutionService {
       const simulation = await this.connection.simulateTransaction(simulationTx);
 
       if (simulation.value.err) {
-        console.warn('Simulation failed, using default compute units');
+        this.logger.warn('Simulation failed, using default compute units', { error: simulation.value.err });
         return 200000;
       }
 
@@ -143,7 +146,7 @@ export class ExecutionService implements IExecutionService {
       // Add 20% buffer for safety
       return Math.min(Math.ceil(unitsConsumed * 1.2), 1400000);
     } catch (error) {
-      console.warn('Failed to estimate compute units, using default:', error);
+      this.logger.warn('Failed to estimate compute units, using default', { error });
       return 200000;
     }
   }
@@ -200,7 +203,7 @@ export class ExecutionService implements IExecutionService {
     transaction.instructions.unshift(...computeBudgetInstructions);
 
     // Log the compute budget settings
-    console.log('Compute budget settings:', {
+    this.logger.debug('Compute budget settings', {
       computeUnits,
       priorityFee,
       mode: this.config.priorityFeeMode,
@@ -264,7 +267,7 @@ export class ExecutionService implements IExecutionService {
       // Log success
       this.logExecution({
         signature,
-        status: 'success',
+        status: ExecutionStatus.Success,
         timestamp: result.timestamp
       });
 
@@ -284,7 +287,7 @@ export class ExecutionService implements IExecutionService {
       // Log failure
       this.logExecution({
         signature: '',
-        status: 'failed',
+        status: ExecutionStatus.Failed,
         timestamp: result.timestamp,
         error: errorMessage
       });
@@ -307,10 +310,17 @@ export class ExecutionService implements IExecutionService {
    * @param log - Execution log data
    */
   private logExecution(log: IExecutionLog): void {
-    const output = {
+    const metadata = {
       ...log,
       ...(log.signature && { solscan: ExecutionService.getSolscanLink(log.signature) })
     };
-    console.log(JSON.stringify(output, null, 2));
+
+    if (log.status === ExecutionStatus.Success) {
+      this.logger.info('Transaction executed successfully', metadata);
+    } else if (log.status === ExecutionStatus.Failed) {
+      this.logger.error('Transaction execution failed', metadata);
+    } else {
+      this.logger.info('Transaction status update', metadata);
+    }
   }
 }
