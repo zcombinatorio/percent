@@ -1,6 +1,6 @@
 import { Keypair, Connection } from '@solana/web3.js';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
-import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment } from './types/execution.interface';
+import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment, ExecutionStatus } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { Proposal } from './proposal';
 import { SchedulerService } from './services/scheduler.service';
@@ -19,7 +19,6 @@ export class Moderator implements IModerator {
   public protocolName?: string;                            // Protocol name (optional)
   public config: IModeratorConfig;                         // Configuration parameters for the moderator
   public scheduler: SchedulerService;                     // Scheduler for automatic tasks
-  private connection: Connection;                          // Solana connection
   private persistenceService: PersistenceService;          // Database persistence service
   private executionService: ExecutionService;              // Execution service for transactions
   private logger: LoggerService;                           // Logger service for this moderator
@@ -38,7 +37,6 @@ export class Moderator implements IModerator {
 
     // Create connection from config
     const commitment: Commitment = config.commitment || Commitment.Confirmed;
-    this.connection = new Connection(config.rpcEndpoint, commitment);
 
     this.scheduler = SchedulerService.getInstance();
     this.scheduler.setModerator(this);
@@ -52,7 +50,6 @@ export class Moderator implements IModerator {
       skipPreflight: false,
       priorityFeeMode: PriorityFeeMode.Dynamic
     };
-    this.executionService = new ExecutionService(executionConfig, this.connection);
 
     // Initialize logger with a category based on protocol name and moderator ID
     const loggerCategory = protocolName ? `moderator-${protocolName}-${id}` : `moderator-${id}`;
@@ -61,6 +58,8 @@ export class Moderator implements IModerator {
       moderatorId: id,
       protocolName: protocolName || 'default',
     });
+
+    this.executionService = new ExecutionService(executionConfig, this.logger);
 
     /** @deprecated */
     // if (this.config.jitoUuid) {
@@ -88,7 +87,7 @@ export class Moderator implements IModerator {
       authority: this.config.authority.publicKey.toBase58(),
       network: {
         rpcEndpoint: this.config.rpcEndpoint,
-        type: getNetworkFromConnection(this.connection)
+        type: getNetworkFromConnection(this.executionService.connection)
       }
     };
 
@@ -185,6 +184,7 @@ export class Moderator implements IModerator {
         proposalId: proposal.id,
         finalizedAt: proposal.finalizedAt
       });
+
       return proposal;
     } catch (error) {
       this.logger.error('Failed to create proposal', {
@@ -232,28 +232,45 @@ export class Moderator implements IModerator {
     id: number,
     signer: Keypair
   ): Promise<IExecutionResult> {
-    // Get proposal from cache or database
     this.logger.info('Executing proposal', { proposalId: id });
-    const proposal = await this.getProposal(id);
-    if (!proposal) {
-      throw new Error(`Proposal with ID ${id} does not exist`);
+
+    try {
+      // Get proposal from cache or database
+      const proposal = await this.getProposal(id);
+      if (!proposal) {
+        throw new Error(`Proposal with ID ${id} does not exist`);
+      }
+
+      // Only Passed status can be executed
+      if (proposal.status !== ProposalStatus.Passed) {
+        throw new Error(`Cannot execute proposal #${id}: status is ${proposal.status}`);
+      }
+
+      const result = await proposal.execute(signer);
+
+      // Always save state to database
+      await this.saveProposal(proposal);
+
+      if (result.status === ExecutionStatus.Failed) {
+        this.logger.error('Proposal execution failed', {
+          proposalId: id,
+          result
+        });
+        throw new Error(`Failed to execute proposal #${id}: ${result.error}`);
+      }
+
+      this.logger.info('Proposal executed successfully', {
+        proposalId: id,
+        result
+      });
+
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to execute proposal', {
+        proposalId: id,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
     }
-
-    // Only Passed status can be executed
-    if (proposal.status !== ProposalStatus.Passed) {
-      throw new Error(`Failed to execute proposal #${id}: status is ${proposal.status}`);
-    }
-
-    const result = await proposal.execute(signer);
-
-    // Save updated state to database (database is source of truth)
-    await this.saveProposal(proposal);
-
-    this.logger.info('Proposal executed', {
-      proposalId: id,
-      signature: result.signature
-    });
-
-    return result;
   }
 }
