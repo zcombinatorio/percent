@@ -19,7 +19,7 @@ import { ISPLTokenService } from './types/spl-token.interface';
 import { IExecutionService } from './types/execution.interface';
 import { createMemoIx } from './utils/memo';
 import { getNetworkFromConnection, Network } from './utils/network';
-import { LoggerService } from '@src/services/logger.service';
+import { LoggerService } from '@app/services/logger.service';
 
 /**
  * Vault implementation for managing conditional tokens in prediction markets

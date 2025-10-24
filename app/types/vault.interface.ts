@@ -1,7 +1,7 @@
 import { PublicKey, Keypair, Transaction } from '@solana/web3.js';
 import { ProposalStatus } from './moderator.interface';
 import { IExecutionService } from './execution.interface';
-import { LoggerService } from '@src/services/logger.service';
+import { LoggerService } from '@app/services/logger.service';
 
 /**
  * Vault type indicating whether this vault manages base or quote tokens

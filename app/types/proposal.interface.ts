@@ -6,7 +6,7 @@ import { ITWAPOracle, ITWAPConfig } from './twap-oracle.interface';
 import { ProposalStatus } from './moderator.interface';
 import { IExecutionResult, IExecutionService } from './execution.interface';
 import { JitoService } from '@slateos/jito';
-import { LoggerService } from '../../src/services/logger.service';
+import { LoggerService } from '../services/logger.service';
 
 /**
  * Configuration for creating a new proposal

@@ -1,11 +1,13 @@
 import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
+import { ILoggerService } from '../types/logger.interface';
 
 /**
- * Logger service - writes to different files based on category
+ * Service for structured logging with category-based file separation
+ * Provides hierarchical logging with child loggers for sub-components
  */
-export class LoggerService {
+export class LoggerService implements ILoggerService {
   private logger: winston.Logger;
   private category: string;
   private static instances: Map<string, LoggerService> = new Map();
@@ -75,6 +77,9 @@ export class LoggerService {
 
   /**
    * Get or create a logger instance for a specific category
+   * Uses singleton pattern to reuse logger instances
+   * @param category - Logger category name
+   * @returns Logger service instance for the category
    */
   static getInstance(category: string): LoggerService {
     if (!this.instances.has(category)) {
@@ -87,6 +92,8 @@ export class LoggerService {
    * Create a child logger with extended category
    * Useful for sub-components within the same category
    * Example: moderatorLogger.createChild('proposal') -> [moderator.proposal]
+   * @param subCategory - Sub-category to append with dot notation
+   * @returns New logger instance with extended category
    */
   createChild(subCategory: string): LoggerService {
     const child = Object.create(this);
@@ -96,26 +103,46 @@ export class LoggerService {
   }
 
   /**
-   * Core logging methods
+   * Log an error message with optional metadata
+   * @param message - Error message to log
+   * @param meta - Optional metadata object (will be sanitized)
    */
   error(message: string, meta?: any): void {
     this.logger.error(message, this.sanitizeMeta(meta));
   }
 
+  /**
+   * Log a warning message with optional metadata
+   * @param message - Warning message to log
+   * @param meta - Optional metadata object (will be sanitized)
+   */
   warn(message: string, meta?: any): void {
     this.logger.warn(message, this.sanitizeMeta(meta));
   }
 
+  /**
+   * Log an info message with optional metadata
+   * @param message - Info message to log
+   * @param meta - Optional metadata object (will be sanitized)
+   */
   info(message: string, meta?: any): void {
     this.logger.info(message, this.sanitizeMeta(meta));
   }
 
+  /**
+   * Log a debug message with optional metadata
+   * @param message - Debug message to log
+   * @param meta - Optional metadata object (will be sanitized)
+   */
   debug(message: string, meta?: any): void {
     this.logger.debug(message, this.sanitizeMeta(meta));
   }
 
   /**
    * Sanitize metadata to ensure all values are serializable
+   * Handles special cases like Error objects, Solana PublicKeys, and BigNumbers
+   * @param meta - Raw metadata object
+   * @returns Sanitized metadata safe for JSON serialization
    */
   private sanitizeMeta(meta?: any): any {
     if (!meta) return {};

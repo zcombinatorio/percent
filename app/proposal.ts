@@ -8,7 +8,7 @@ import { TWAPOracle } from './twap-oracle';
 import { IExecutionResult, IExecutionService } from './types/execution.interface';
 import { Vault } from './vault';
 import { AMM } from './amm';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from './services/logger.service';
 
 /**
  * Proposal class representing a governance proposal in the protocol

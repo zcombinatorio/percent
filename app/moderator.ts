@@ -6,7 +6,7 @@ import { Proposal } from './proposal';
 import { SchedulerService } from './services/scheduler.service';
 import { PersistenceService } from './services/persistence.service';
 import { ExecutionService } from './services/execution.service';
-import { LoggerService } from '../src/services/logger.service';
+import { LoggerService } from './services/logger.service';
 import { getNetworkFromConnection} from './utils/network';
 //import { BlockEngineUrl, JitoService } from '@slateos/jito';
 
@@ -40,7 +40,7 @@ export class Moderator implements IModerator {
 
     this.scheduler = SchedulerService.getInstance();
     this.scheduler.setModerator(this);
-    this.persistenceService = PersistenceService.getInstance();
+    this.persistenceService = new PersistenceService(id);
 
     // Initialize execution service with default config
     const executionConfig: IExecutionConfig = {

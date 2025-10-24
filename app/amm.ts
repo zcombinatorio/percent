@@ -17,7 +17,7 @@ import { IExecutionService } from './types/execution.interface';
 import { BN } from '@coral-xyz/anchor';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Decimal } from 'decimal.js';
-import { LoggerService } from '@src/services/logger.service';
+import { LoggerService } from '@app/services/logger.service';
 
 /**
  * AMM class implementing automated market maker functionality

@@ -16,7 +16,7 @@ import {
   PriorityFeeMode,
   Commitment
 } from '../types/execution.interface';
-import { LoggerService } from '../../src/services/logger.service';
+import { LoggerService } from './logger.service';
 
 /**
  * Service for handling Solana transaction execution
