@@ -1,4 +1,4 @@
-import { ITWAPOracle, ITWAPConfig, TWAPStatus } from './types/twap-oracle.interface';
+import { ITWAPOracle, ITWAPConfig, TWAPStatus, ITWAPOracleSerializedData, ITWAPOracleDeserializeConfig } from './types/twap-oracle.interface';
 import { IAMM } from './types/amm.interface';
 import { Decimal } from 'decimal.js';
 
@@ -215,5 +215,71 @@ export class TWAPOracle implements ITWAPOracle {
     } else {
       return TWAPStatus.Failing;
     }
+  }
+
+  /**
+   * Serializes the TWAP oracle state for persistence
+   * @returns Serialized TWAP oracle data that can be saved to database
+   */
+  serialize(): ITWAPOracleSerializedData {
+    return {
+      // Core configuration
+      proposalId: this.proposalId,
+      initialTwapValue: this.initialTwapValue,
+      twapMaxObservationChangePerUpdate: this.twapMaxObservationChangePerUpdate,
+      twapStartDelay: this.twapStartDelay,
+      passThresholdBps: this.passThresholdBps,
+      minUpdateInterval: this.minUpdateInterval,
+      createdAt: this.createdAt,
+      finalizedAt: this.finalizedAt,
+
+      // Current state
+      passObservation: this._passObservation,
+      failObservation: this._failObservation,
+      passAggregation: this._passAggregation,
+      failAggregation: this._failAggregation,
+      lastUpdateTime: this._lastUpdateTime,
+
+      // Note: AMMs are not serialized as they need to be set via setAMMs after deserialization
+    };
+  }
+
+  /**
+   * Deserializes TWAP oracle data and restores the oracle state
+   * @param data - Serialized TWAP oracle data from database
+   * @param config - Configuration for reconstructing the oracle (currently unused)
+   * @returns Restored TWAP oracle instance
+   * @note AMMs must be set using setAMMs() after deserialization
+   */
+  static deserialize(data: ITWAPOracleSerializedData, config?: ITWAPOracleDeserializeConfig): TWAPOracle {
+    // Create configuration from serialized data
+    const twapConfig: ITWAPConfig = {
+      initialTwapValue: data.initialTwapValue,
+      twapMaxObservationChangePerUpdate: data.twapMaxObservationChangePerUpdate,
+      twapStartDelay: data.twapStartDelay,
+      passThresholdBps: data.passThresholdBps,
+      minUpdateInterval: data.minUpdateInterval
+    };
+
+    // Create a new TWAPOracle instance with the configuration
+    const oracle = new TWAPOracle(
+      data.proposalId,
+      twapConfig,
+      data.createdAt,
+      data.finalizedAt
+    );
+
+    // Restore the internal state
+    // These are private fields that need to be restored for a fully functional oracle
+    oracle._passObservation = data.passObservation;
+    oracle._failObservation = data.failObservation;
+    oracle._passAggregation = data.passAggregation;
+    oracle._failAggregation = data.failAggregation;
+    oracle._lastUpdateTime = data.lastUpdateTime;
+
+    // AMMs will be set via setAMMs() method after deserialization
+    // since they are references to external objects
+
+    return oracle;
   }
 }

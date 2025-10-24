@@ -72,4 +72,42 @@ export interface ITWAPOracle {
    * @throws Error if AMMs are not set
    */
   fetchStatus(): Promise<TWAPStatus>;
+
+  /**
+   * Serializes the TWAP oracle state for persistence
+   * @returns Serialized TWAP oracle data that can be saved to database
+   */
+  serialize(): ITWAPOracleSerializedData;
+}
+
+/**
+ * Serialized TWAP oracle data structure for persistence
+ */
+export interface ITWAPOracleSerializedData {
+  // Core configuration
+  proposalId: number;
+  initialTwapValue: number;
+  twapMaxObservationChangePerUpdate: number | null;
+  twapStartDelay: number;
+  passThresholdBps: number;
+  minUpdateInterval: number;
+  createdAt: number;
+  finalizedAt: number;
+
+  // Current state
+  passObservation: number;
+  failObservation: number;
+  passAggregation: number;
+  failAggregation: number;
+  lastUpdateTime: number;
+
+  // Note: AMMs are not serialized as they are set via setAMMs method after deserialization
+}
+
+/**
+ * Configuration for deserializing a TWAP oracle
+ */
+export interface ITWAPOracleDeserializeConfig {
+  // No additional config needed as TWAPOracle doesn't require authority or services
+  // AMMs will be set using setAMMs method after deserialization
 }
