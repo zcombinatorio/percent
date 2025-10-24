@@ -1,4 +1,4 @@
-import { PublicKey, Keypair, Connection, Transaction } from '@solana/web3.js';
+import { PublicKey, Keypair, Transaction } from '@solana/web3.js';
 import * as crypto from 'crypto';
 import {
   getAssociatedTokenAddress,
@@ -16,10 +16,10 @@ import {
 import { ProposalStatus } from './types/moderator.interface';
 import { SPLTokenService, NATIVE_MINT } from './services/spl-token.service';
 import { ISPLTokenService } from './types/spl-token.interface';
-import { ExecutionService } from './services/execution.service';
-import { IExecutionService, IExecutionConfig, PriorityFeeMode } from './types/execution.interface';
+import { IExecutionService } from './types/execution.interface';
 import { createMemoIx } from './utils/memo';
 import { getNetworkFromConnection, Network } from './utils/network';
+import { LoggerService } from '@src/services/logger.service';
 
 /**
  * Vault implementation for managing conditional tokens in prediction markets
@@ -51,41 +51,43 @@ export class Vault implements IVault {
   get failConditionalMint(): PublicKey { return this._failConditionalMint; }
   get escrow(): PublicKey { return this._escrow; }
   get state(): VaultState { return this._state; }
-  get proposalStatus(): ProposalStatus { return this._proposalStatus; }
 
-  private connection: Connection;
   private authority: Keypair;
   private escrowKeypair: Keypair;
   private tokenService: ISPLTokenService;
   private executionService: IExecutionService;
+  private passMintKeypair: Keypair | null = null;
+  private failMintKeypair: Keypair | null = null;
+  private logger: LoggerService;
 
   constructor(config: IVaultConfig) {
     this.proposalId = config.proposalId;
     this.vaultType = config.vaultType;
     this.regularMint = config.regularMint;
     this.decimals = config.decimals;
-    this.connection = config.connection;
     this.authority = config.authority;
-    
+    this.executionService = config.executionService;
+
     // Generate deterministic escrow keypair based on proposal ID and vault type
     // This ensures the same keypair is generated when reconstructing from database
     this.escrowKeypair = this.generateDeterministicEscrowKeypair();
+
+    // Generate mint keypairs upfront
+    // Used only for initializing the vault
+    this.passMintKeypair = Keypair.generate();
+    this.failMintKeypair = Keypair.generate();
     
+    // Store public keys
+    this._passConditionalMint = this.passMintKeypair.publicKey;
+    this._failConditionalMint = this.failMintKeypair.publicKey;
+
     // Initialize services with ExecutionService
     this.tokenService = new SPLTokenService(
-      config.connection,
-      config.connection.rpcEndpoint
+      this.executionService.connection,
+      this.executionService.connection.rpcEndpoint
     );
-    
-    const executionConfig: IExecutionConfig = {
-      rpcEndpoint: config.connection.rpcEndpoint,
-      commitment: 'confirmed',
-      maxRetries: 3,
-      skipPreflight: false,
-      priorityFeeMode: PriorityFeeMode.Medium  // Vault operations use medium priority
-    };
-    
-    this.executionService = new ExecutionService(executionConfig);
+
+    this.logger = config.logger;
   }
 
 
@@ -93,7 +95,7 @@ export class Vault implements IVault {
    * Checks if we should handle wrapped SOL (mainnet + quote vault with NATIVE_MINT)
    */
   private shouldHandleWrappedSOL(): boolean {
-    const isMainnet = getNetworkFromConnection(this.connection) === Network.MAINNET;
+    const isMainnet = getNetworkFromConnection(this.executionService.connection) === Network.MAINNET;
     const isQuoteWrappedSol = this.vaultType === VaultType.Quote && this.regularMint.equals(NATIVE_MINT);
     return isMainnet && isQuoteWrappedSol;
   }
@@ -130,20 +132,19 @@ export class Vault implements IVault {
       throw new Error('Vault already initialized');
     }
 
-    // Generate mint keypairs upfront
-    const passMintKeypair = Keypair.generate();
-    const failMintKeypair = Keypair.generate();
-
-    // Store public keys
-    this._passConditionalMint = passMintKeypair.publicKey;
-    this._failConditionalMint = failMintKeypair.publicKey;
+    if (!this.passMintKeypair || !this.failMintKeypair) {
+      this.passMintKeypair = Keypair.generate();
+      this.failMintKeypair = Keypair.generate();
+      this._passConditionalMint = this.passMintKeypair.publicKey;
+      this._failConditionalMint = this.failMintKeypair.publicKey;
+    }
 
     // Build single transaction with all instructions
     const transaction = new Transaction();
 
     // Create and initialize pass conditional mint using token service
     const passMinIxs = await this.tokenService.buildCreateMintIxs(
-      passMintKeypair,
+      this.passMintKeypair,
       this.decimals,
       this.authority.publicKey,
       this.authority.publicKey
@@ -152,7 +153,7 @@ export class Vault implements IVault {
 
     // Create and initialize fail conditional mint using token service
     const failMintIxs = await this.tokenService.buildCreateMintIxs(
-      failMintKeypair,
+      this.failMintKeypair,
       this.decimals,
       this.authority.publicKey,
       this.authority.publicKey
@@ -182,7 +183,7 @@ export class Vault implements IVault {
     transaction.add(createMemoIx(memoMessage));
 
     // Add blockhash and fee payer
-    const { blockhash } = await this.connection.getLatestBlockhash();
+    const { blockhash } = await this.executionService.connection.getLatestBlockhash();
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = this.authority.publicKey;
 
@@ -190,7 +191,7 @@ export class Vault implements IVault {
     await this.executionService.addComputeBudgetInstructions(transaction);
 
     // Pre-sign the transaction with all required signers
-    transaction.partialSign(this.authority, passMintKeypair, failMintKeypair);
+    transaction.partialSign(this.authority, this.passMintKeypair, this.failMintKeypair);
 
     return transaction;
   }
@@ -206,25 +207,17 @@ export class Vault implements IVault {
     const transaction = await this.buildInitializeTx();
 
     // Execute the transaction (already has all signatures)
-    console.log(`Initializing ${this.vaultType} vault for proposal #${this.proposalId}`);
+    this.logger.info(`Initializing ${this.vaultType} vault for proposal #${this.proposalId}`);
     const result = await this.executionService.executeTx(transaction);
 
     if (result.status === 'failed') {
       throw new Error(`${this.vaultType} vault initialization failed: ${result.error}`);
     }
 
-    console.log(`${this.vaultType} vault initialized successfully. Tx: ${result.signature}`);
+    this.logger.info(`${this.vaultType} vault initialized successfully. Tx: ${result.signature}`);
 
     // Update state to Active
-    this.setState(VaultState.Active);
-  }
-
-  /**
-   * Sets the vault state (useful for deserialization or testing)
-   * @param state - The new vault state
-   */
-  setState(state: VaultState): void {
-    this._state = state;
+    this._state = VaultState.Active;
   }
 
   /**
@@ -259,7 +252,7 @@ export class Vault implements IVault {
 
     // Check balance - for wrapped SOL, check native SOL balance instead
     if (shouldHandleSol) {
-      const solBalance = await this.connection.getBalance(user);
+      const solBalance = await this.executionService.connection.getBalance(user);
       const solBalanceBigInt = BigInt(solBalance);
       if (solBalanceBigInt < amount) {
         throw new Error(
@@ -340,11 +333,11 @@ export class Vault implements IVault {
     tx.add(mintFailIx);
 
     // Add memo for transaction identification on Solscan
-    const memoMessage = `%[Split] ${amount} ${this.vaultType} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[Vault/${this.vaultType}] Split ${amount} | Proposal #${this.proposalId} | ${user.toBase58()}`;
     tx.add(createMemoIx(memoMessage));
 
     // Add blockhash and fee payer so transaction can be signed
-    const { blockhash } = await this.connection.getLatestBlockhash();
+    const { blockhash } = await this.executionService.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = user;
 
@@ -472,7 +465,7 @@ export class Vault implements IVault {
     }
 
     // Add memo for transaction identification on Solscan
-    const memoMessage = `%[Merge] ${amount} ${this.vaultType} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[Vault/${this.vaultType}] Merge ${amount} | Proposal #${this.proposalId} | ${user.toBase58()}`;
     tx.add(createMemoIx(memoMessage));
 
     // If handling wrapped SOL, add unwrap instructions at the end
@@ -495,7 +488,7 @@ export class Vault implements IVault {
     }
 
     // Add blockhash and fee payer so transaction can be signed
-    const { blockhash } = await this.connection.getLatestBlockhash();
+    const { blockhash } = await this.executionService.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = user;
 
@@ -527,7 +520,7 @@ export class Vault implements IVault {
     }
 
     // Execute transaction - sign with authority if not pre-signed
-    console.log('Executing transaction to split tokens');
+    this.logger.info('Executing transaction to split tokens');
     const result = presigned
       ? await this.executionService.executeTx(tx)
       : await this.executionService.executeTx(tx, this.authority);
@@ -556,7 +549,7 @@ export class Vault implements IVault {
     }
 
     // Execute transaction - sign with escrow if not pre-signed
-    console.log('Executing transaction to merge tokens');
+    this.logger.info('Executing transaction to merge tokens');
     const result = presigned
       ? await this.executionService.executeTx(tx)
       : await this.executionService.executeTx(tx, this.escrowKeypair);
@@ -665,7 +658,7 @@ export class Vault implements IVault {
       throw new Error(`Cannot finalize vault with status: ${proposalStatus}`);
     }
     
-    this.setState(VaultState.Finalized);
+    this._state = VaultState.Finalized;
     this._proposalStatus = proposalStatus;
   }
 
@@ -749,7 +742,7 @@ export class Vault implements IVault {
 
     // Add memo for transaction identification on Solscan
     const winningType = isPassWinning ? 'pass' : 'fail';
-    const memoMessage = `%[Redeem] ${winningBalance} ${this.vaultType} (${winningType}) | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[Vault/${this.vaultType}] Redeem ${winningBalance} (${winningType}) | Proposal #${this.proposalId} | ${user.toBase58()}`;
     tx.add(createMemoIx(memoMessage));
 
     // If handling wrapped SOL, add unwrap instructions at the end
@@ -772,7 +765,7 @@ export class Vault implements IVault {
     }
 
     // Add blockhash and fee payer so transaction can be signed
-    const { blockhash } = await this.connection.getLatestBlockhash();
+    const { blockhash } = await this.executionService.connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = user;
 
@@ -796,7 +789,7 @@ export class Vault implements IVault {
    */
   async executeRedeemWinningTokensTx(tx: Transaction, presigned: boolean = false): Promise<string> {
     // Execute transaction - sign with escrow if not pre-signed
-    console.log('Executing transaction to redeem winning tokens');
+    this.logger.info('Executing transaction to redeem winning tokens');
     const result = presigned
       ? await this.executionService.executeTx(tx)
       : await this.executionService.executeTx(tx, this.escrowKeypair);

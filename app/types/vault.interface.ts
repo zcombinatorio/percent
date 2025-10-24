@@ -1,5 +1,7 @@
-import { PublicKey, Connection, Keypair, Transaction } from '@solana/web3.js';
+import { PublicKey, Keypair, Transaction } from '@solana/web3.js';
 import { ProposalStatus } from './moderator.interface';
+import { IExecutionService } from './execution.interface';
+import { LoggerService } from '@src/services/logger.service';
 
 /**
  * Vault type indicating whether this vault manages base or quote tokens
@@ -43,8 +45,9 @@ export interface IVaultConfig {
   vaultType: VaultType;      // Base or Quote vault
   regularMint: PublicKey;    // SPL token mint for regular token (base or quote)
   decimals: number;          // Number of decimals for conditional tokens
-  connection: Connection;    // Solana RPC connection
   authority: Keypair;        // Vault authority keypair (payer and mint authority)
+  executionService: IExecutionService; // Execution service (required)
+  logger: LoggerService;
 }
 
 /**
@@ -56,18 +59,27 @@ export interface IVault {
   readonly proposalId: number;              // Associated proposal ID
   readonly vaultType: VaultType;            // Base or Quote vault type
   readonly regularMint: PublicKey;          // Regular token mint (base or quote)
+  readonly decimals: number;                // Number of decimals for conditional tokens
   readonly passConditionalMint: PublicKey;  // Pass conditional token mint (created on init)
   readonly failConditionalMint: PublicKey;  // Fail conditional token mint (created on init)
   readonly escrow: PublicKey;               // Escrow holding regular tokens
   readonly state: VaultState;               // Current operational state of the vault
-  readonly proposalStatus: ProposalStatus;  // Status of the proposal (determines winning tokens)
-  
+
+  /**
+   * Builds a transaction for initializing the vault
+   * Creates both pass and fail conditional token mints and escrow account
+   * Transaction is always pre-signed with authority and mint keypairs
+   * @returns Pre-signed transaction ready for execution
+   * @throws Error if vault is already initialized
+   */
+  buildInitializeTx(): Promise<Transaction>;
+
   /**
    * Initializes vault by creating conditional token mints and escrow accounts
    * Must be called before any other operations
    */
   initialize(): Promise<void>;
-  
+
   /**
    * Builds transaction for splitting regular tokens into BOTH pass and fail conditional tokens
    * User receives equal amounts of both conditional tokens for each regular token
@@ -101,18 +113,22 @@ export interface IVault {
   ): Promise<Transaction>;
   
   /**
-   * Executes a pre-signed split transaction
-   * @param transaction - Transaction already signed by user
+   * Executes a split transaction
+   * @param transaction - Transaction signed by user
+   * @param presigned - Whether the transaction is already pre-signed with authority (default: false)
    * @returns Transaction signature
+   * @throws Error if transaction execution fails
    */
-  executeSplitTx(transaction: Transaction): Promise<string>;
-  
+  executeSplitTx(transaction: Transaction, presigned?: boolean): Promise<string>;
+
   /**
-   * Executes a pre-signed merge transaction
-   * @param transaction - Transaction already signed by user
+   * Executes a merge transaction
+   * @param transaction - Transaction signed by user
+   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
+   * @throws Error if transaction execution fails
    */
-  executeMergeTx(transaction: Transaction): Promise<string>;
+  executeMergeTx(transaction: Transaction, presigned?: boolean): Promise<string>;
   
   /**
    * Gets regular token balance for a user
@@ -179,9 +195,11 @@ export interface IVault {
   buildRedeemWinningTokensTx(user: PublicKey, presign?: boolean): Promise<Transaction>;
   
   /**
-   * Executes a pre-signed redeem winning tokens transaction
-   * @param transaction - Transaction already signed by user
+   * Executes a redeem winning tokens transaction
+   * @param transaction - Transaction signed by user
+   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
+   * @throws Error if transaction execution fails
    */
-  executeRedeemWinningTokensTx(transaction: Transaction): Promise<string>;
+  executeRedeemWinningTokensTx(transaction: Transaction, presigned?: boolean): Promise<string>;
 }

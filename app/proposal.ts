@@ -60,7 +60,8 @@ export class Proposal implements IProposal {
       regularMint: config.baseMint,
       decimals: config.baseDecimals,
       authority: config.authority,
-      executionService: config.executionService
+      executionService: config.executionService,
+      logger: config.logger.createChild('baseVault')
     });
 
     this.quoteVault = new Vault({
@@ -69,7 +70,8 @@ export class Proposal implements IProposal {
       regularMint: config.quoteMint,
       decimals: config.quoteDecimals,
       authority: config.authority,
-      executionService: config.executionService
+      executionService: config.executionService,
+      logger: config.logger.createChild('quoteVault')
     });
 
     // Initialize pass AMM (trades pBase/pQuote tokens)
