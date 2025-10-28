@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import proposalRoutes from './proposals';
-import twapRoutes from './twap';
 import vaultRoutes from './vaults';
 import swapRoutes from './swap';
 import historyRoutes from './history';
@@ -15,7 +14,6 @@ router.get('/health', (_req, res) => {
 });
 
 router.use('/proposals', proposalRoutes);
-router.use('/twap', twapRoutes);
 router.use('/vaults', vaultRoutes);
 router.use('/swap', swapRoutes);
 router.use('/history', historyRoutes);
