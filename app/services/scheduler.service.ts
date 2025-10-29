@@ -310,26 +310,36 @@ export class SchedulerService implements ISchedulerService {
     
     // Record pass market price if AMM is trading
     if (pAMM && pAMM.state === AMMState.Trading) {
-      const passPrice = await pAMM.fetchPrice();
-      await HistoryService.recordPrice({
-        moderatorId,
-        proposalId,
-        market: 'pass',
-        price: passPrice,
-      });
+      try {
+        const passPrice = await pAMM.fetchPrice();
+        await HistoryService.recordPrice({
+          moderatorId,
+          proposalId,
+          market: 'pass',
+          price: passPrice,
+        });
+      } catch (error) {
+        this.logger.error(`Failed to record pass market price for proposal #${proposalId}:`, error);
+        // Continue to try recording fail price even if pass fails
+      }
     }
-    
+
     // Record fail market price if AMM is trading
     if (fAMM && fAMM.state === AMMState.Trading) {
-      const failPrice = await fAMM.fetchPrice();
-      await HistoryService.recordPrice({
-        moderatorId,
-        proposalId,
-        market: 'fail',
-        price: failPrice,
-      });
+      try {
+        const failPrice = await fAMM.fetchPrice();
+        await HistoryService.recordPrice({
+          moderatorId,
+          proposalId,
+          market: 'fail',
+          price: failPrice,
+        });
+      } catch (error) {
+        this.logger.error(`Failed to record fail market price for proposal #${proposalId}:`, error);
+        // Continue even if fail price recording fails
+      }
     }
-    
+
     this.logger.info(`Recorded prices for proposal #${proposalId}`);
   }
 

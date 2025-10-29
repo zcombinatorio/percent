@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS i_price_history (
 
   CONSTRAINT fk_i_price_history_moderator FOREIGN KEY (moderator_id)
     REFERENCES i_moderators(id) ON DELETE CASCADE,
-  CONSTRAINT fk_i_price_history_proposal FOREIGN KEY (proposal_id)
-    REFERENCES i_proposals(id) ON DELETE CASCADE
+  CONSTRAINT fk_i_price_history_proposal FOREIGN KEY (moderator_id, proposal_id)
+    REFERENCES i_proposals(moderator_id, proposal_id) ON DELETE CASCADE
 );
 
 -- Index for price history
@@ -84,8 +84,8 @@ CREATE TABLE IF NOT EXISTS i_twap_history (
 
   CONSTRAINT fk_i_twap_history_moderator FOREIGN KEY (moderator_id)
     REFERENCES i_moderators(id) ON DELETE CASCADE,
-  CONSTRAINT fk_i_twap_history_proposal FOREIGN KEY (proposal_id)
-    REFERENCES i_proposals(id) ON DELETE CASCADE
+  CONSTRAINT fk_i_twap_history_proposal FOREIGN KEY (moderator_id, proposal_id)
+    REFERENCES i_proposals(moderator_id, proposal_id) ON DELETE CASCADE
 );
 
 -- Index for TWAP history
@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS i_trade_history (
 
   CONSTRAINT fk_i_trade_history_moderator FOREIGN KEY (moderator_id)
     REFERENCES i_moderators(id) ON DELETE CASCADE,
-  CONSTRAINT fk_i_trade_history_proposal FOREIGN KEY (proposal_id)
-    REFERENCES i_proposals(id) ON DELETE CASCADE
+  CONSTRAINT fk_i_trade_history_proposal FOREIGN KEY (moderator_id, proposal_id)
+    REFERENCES i_proposals(moderator_id, proposal_id) ON DELETE CASCADE
 );
 
 -- Index for trade history
