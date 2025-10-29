@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "dev:test": "tsx watch src/test/server.test.ts",
     "ws:price": "tsx server/price-websocket-server.ts",
     "build": "tsc",
-    "start": "node dist/src/server.js",
-    "create": "tsx scripts/create-proposal.ts"
+    "start": "node dist/src/server.js"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
