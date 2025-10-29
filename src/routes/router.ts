@@ -4,6 +4,7 @@ import { RouterService } from '../../app/services/router.service';
 import { PublicKey, Keypair } from '@solana/web3.js';
 import { LoggerService } from '../../app/services/logger.service';
 import { decryptKeypair } from '../../app/utils/crypto';
+import { IModeratorInfo } from '../../app/types/moderator.interface';
 
 // Type definition for creating a moderator
 export interface CreateModeratorRequest {
@@ -13,6 +14,12 @@ export interface CreateModeratorRequest {
   quoteDecimals: number;
   authority: string;  // Encrypted keypair
   protocolName?: string;
+}
+
+// Response type for GET /moderators
+export interface ModeratorsResponse {
+  moderators: IModeratorInfo[];
+  count: number;
 }
 
 const router = Router();

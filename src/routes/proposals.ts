@@ -32,6 +32,22 @@ export interface CreateProposalRequest {
   };
 }
 
+// Response types
+export interface ProposalInfo {
+  id: number;
+  title: string;
+  description?: string;
+  status: string;
+  createdAt: number;
+  finalizedAt: number;
+  passThresholdBps: number;
+}
+
+export interface ProposalsResponse {
+  moderatorId: number;
+  proposals: ProposalInfo[];
+}
+
 const router = Router();
 
 // Apply moderator middleware to all routes (default moderator is 1)
