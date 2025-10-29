@@ -56,7 +56,7 @@ router.use(attachModerator);
 router.get('/', async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
 
     logger.info('[GET /] Fetching proposals', { moderatorId });
 
@@ -104,7 +104,7 @@ router.get('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid proposal ID' });
     }
 
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposal = await persistenceService.getProposalForFrontend(id);
 
     if (!proposal) {
@@ -177,7 +177,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     }
 
     // Get the proposal counter for this moderator
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposalCounter = await persistenceService.getProposalIdCounter();
 
     // Create the transaction - use memo program if no transaction provided

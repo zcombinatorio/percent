@@ -16,10 +16,12 @@ import { decryptKeypair, encryptKeypair } from '../utils/crypto';
 export class PersistenceService implements IPersistenceService {
   private pool: Pool;
   private moderatorId: number;
+  private logger: LoggerService;
 
-  constructor(moderatorId: number) {
+  constructor(moderatorId: number, logger: LoggerService) {
     this.pool = getPool();
     this.moderatorId = moderatorId;
+    this.logger = logger;
   }
 
   /**
@@ -41,7 +43,10 @@ export class PersistenceService implements IPersistenceService {
       // Return the counter + 1 for the next proposal ID
       return result.rows[0].proposal_id_counter;
     } catch (error) {
-      console.error('Failed to fetch proposal ID counter:', error);
+      this.logger.error('Failed to fetch proposal ID counter', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -107,7 +112,11 @@ export class PersistenceService implements IPersistenceService {
         serializedData.totalSupply
       ]);
     } catch (error) {
-      console.error('Failed to save proposal:', error);
+      this.logger.error('Failed to save proposal', {
+        proposalId: proposal.config.id,
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -131,7 +140,11 @@ export class PersistenceService implements IPersistenceService {
       const row = result.rows[0];
       return this.deserializeProposal(row);
     } catch (error) {
-      console.error('Failed to load proposal:', error);
+      this.logger.error('Failed to load proposal', {
+        proposalId,
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -156,7 +169,10 @@ export class PersistenceService implements IPersistenceService {
 
       return proposals;
     } catch (error) {
-      console.error('Failed to load proposals:', error);
+      this.logger.error('Failed to load proposals', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -173,7 +189,10 @@ export class PersistenceService implements IPersistenceService {
 
       return result.rows;
     } catch (error) {
-      console.error('Failed to get proposals for frontend:', error);
+      this.logger.error('Failed to get proposals for frontend', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -192,7 +211,11 @@ export class PersistenceService implements IPersistenceService {
 
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
-      console.error('Failed to get proposal for frontend:', error);
+      this.logger.error('Failed to get proposal for frontend', {
+        proposalId,
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -232,7 +255,12 @@ export class PersistenceService implements IPersistenceService {
 
       await this.pool.query(query, [this.moderatorId, proposalCounter, JSON.stringify(configData), protocolName || null]);
     } catch (error) {
-      console.error('Failed to save moderator state:', error);
+      this.logger.error('Failed to save moderator state', {
+        proposalCounter,
+        moderatorId: this.moderatorId,
+        protocolName,
+        error: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     }
   }
@@ -274,7 +302,10 @@ export class PersistenceService implements IPersistenceService {
         protocolName: row.protocol_name || undefined,
       };
     } catch (error) {
-      console.error('Failed to load moderator state:', error);
+      this.logger.error('Failed to load moderator state', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }
@@ -363,8 +394,9 @@ export class PersistenceService implements IPersistenceService {
       return proposal;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to deserialize proposal #${row.id}:`, {
+      this.logger.error(`Failed to deserialize proposal #${row.id}`, {
         proposalId: row.id,
+        moderatorId: this.moderatorId,
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });

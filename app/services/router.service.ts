@@ -70,7 +70,7 @@ export class RouterService implements IRouterService {
    * @returns true if successful, false otherwise
    */
   private async loadModeratorFromDB(moderatorId: number): Promise<boolean> {
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, this.logger.createChild('persistence'));
     const savedState = await persistenceService.loadModeratorState();
 
     if (savedState) {
@@ -172,7 +172,7 @@ export class RouterService implements IRouterService {
   private async recoverModeratorProposals(moderator: Moderator): Promise<void> {
     const moderatorId = moderator.id;
     const scheduler = SchedulerService.getInstance();
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, this.logger.createChild('persistence'));
 
     try {
       this.logger.info(`Recovering pending proposals for moderator ${moderatorId}...`);

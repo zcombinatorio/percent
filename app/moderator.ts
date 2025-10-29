@@ -39,7 +39,12 @@ export class Moderator implements IModerator {
     const commitment: Commitment = config.commitment || Commitment.Confirmed;
 
     this.scheduler = SchedulerService.getInstance();
-    this.persistenceService = new PersistenceService(id);
+
+    // Initialize logger with a category based on moderator ID
+    this.logger = new LoggerService(`moderator-${id}`);
+
+    // Initialize persistence service with logger
+    this.persistenceService = new PersistenceService(id, this.logger.createChild('persistence'));
 
     // Initialize execution service with default config
     const executionConfig: IExecutionConfig = {
@@ -50,8 +55,6 @@ export class Moderator implements IModerator {
       priorityFeeMode: PriorityFeeMode.Dynamic
     };
 
-    // Initialize logger with a category based on moderator ID
-    this.logger = new LoggerService(`moderator-${id}`);
     this.logger.info('Moderator initialized', {
       moderatorId: id,
       protocolName: protocolName,

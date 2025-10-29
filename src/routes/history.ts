@@ -253,7 +253,7 @@ router.get('/:id/chart', async (req, res, next) => {
     );
 
     // Get proposal to access totalSupply
-    const persistenceService = new PersistenceService(moderatorId);
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposal = await persistenceService.getProposalForFrontend(proposalId);
     const totalSupply = proposal?.total_supply || 1000000000;
 
