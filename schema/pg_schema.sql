@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS moderator_state (
 CREATE TABLE IF NOT EXISTS price_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  moderator_id INTEGER NOT NULL,
   proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   market VARCHAR(4) NOT NULL CHECK (market IN ('pass', 'fail', 'spot')),
   price DECIMAL(20, 10) NOT NULL,
@@ -82,15 +83,16 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 
 -- Create indexes for price history queries
-CREATE INDEX IF NOT EXISTS idx_price_history_proposal_timestamp 
-  ON price_history(proposal_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_price_history_timestamp 
+CREATE INDEX IF NOT EXISTS idx_price_history_moderator_proposal_timestamp
+  ON price_history(moderator_id, proposal_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_price_history_timestamp
   ON price_history(timestamp DESC);
 
 -- Create TWAP history table
 CREATE TABLE IF NOT EXISTS twap_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  moderator_id INTEGER NOT NULL,
   proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   pass_twap DECIMAL(20, 10) NOT NULL,
   fail_twap DECIMAL(20, 10) NOT NULL,
@@ -99,15 +101,16 @@ CREATE TABLE IF NOT EXISTS twap_history (
 );
 
 -- Create indexes for TWAP history queries
-CREATE INDEX IF NOT EXISTS idx_twap_history_proposal_timestamp 
-  ON twap_history(proposal_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_twap_history_timestamp 
+CREATE INDEX IF NOT EXISTS idx_twap_history_moderator_proposal_timestamp
+  ON twap_history(moderator_id, proposal_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_twap_history_timestamp
   ON twap_history(timestamp DESC);
 
 -- Create trade history table
 CREATE TABLE IF NOT EXISTS trade_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  moderator_id INTEGER NOT NULL,
   proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
   market VARCHAR(4) NOT NULL CHECK (market IN ('pass', 'fail')),
   user_address VARCHAR(64) NOT NULL,
@@ -119,11 +122,11 @@ CREATE TABLE IF NOT EXISTS trade_history (
 );
 
 -- Create indexes for trade history queries
-CREATE INDEX IF NOT EXISTS idx_trade_history_proposal_timestamp 
-  ON trade_history(proposal_id, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_trade_history_user 
+CREATE INDEX IF NOT EXISTS idx_trade_history_moderator_proposal_timestamp
+  ON trade_history(moderator_id, proposal_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_trade_history_user
   ON trade_history(user_address);
-CREATE INDEX IF NOT EXISTS idx_trade_history_timestamp 
+CREATE INDEX IF NOT EXISTS idx_trade_history_timestamp
   ON trade_history(timestamp DESC);
 
 -- Add update trigger for proposals updated_at
