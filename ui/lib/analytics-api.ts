@@ -1,3 +1,5 @@
+import { buildApiUrl } from './api-utils';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /**
@@ -6,7 +8,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 class AnalyticsAPI {
   async getAnalytics(id: number): Promise<any> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/analytics/${id}`);
+      const url = buildApiUrl(API_BASE_URL, `/api/analytics/${id}`);
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch analytics');
       return await response.json();
     } catch (error) {

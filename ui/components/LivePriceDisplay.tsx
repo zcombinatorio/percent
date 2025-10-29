@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { TokenPriceBox } from './TokenPriceBox';
 import { getPriceStreamService, PriceUpdate } from '../services/price-stream.service';
 import { api } from '../lib/api';
+import { buildApiUrl } from '@/lib/api-utils';
 
 interface LivePriceDisplayProps {
   proposalId: number;
@@ -101,7 +102,8 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     const fetchTwap = async () => {
       try {
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_BASE_URL}/api/history/${proposalId}/twap`);
+        const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/twap`);
+        const response = await fetch(url);
         console.log(response);
         if (response.ok) {
           const data = await response.json();

@@ -7,6 +7,7 @@ import {
   SubscribeBarsCallback,
   PeriodParams,
 } from '@/types/charting-library';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 

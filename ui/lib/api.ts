@@ -1,5 +1,6 @@
 import { Connection } from '@solana/web3.js';
 import type { ProposalListResponse, ProposalListItem, ProposalDetailResponse, UserBalancesResponse } from '@/types/api';
+import { buildApiUrl } from './api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com';
@@ -13,7 +14,8 @@ class GovernanceAPI {
 
   async getProposals(): Promise<ProposalListItem[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/proposals`);
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals');
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       const data: ProposalListResponse = await response.json();
       return data.proposals;
@@ -25,7 +27,8 @@ class GovernanceAPI {
 
   async getProposal(id: number): Promise<ProposalDetailResponse | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/proposals/${id}`);
+      const url = buildApiUrl(API_BASE_URL, `/api/proposals/${id}`);
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposal');
       return await response.json();
     } catch (error) {
@@ -36,7 +39,8 @@ class GovernanceAPI {
 
   async getUserBalances(proposalId: number, userAddress: string): Promise<UserBalancesResponse | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/getUserBalances?user=${userAddress}`);
+      const url = buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress });
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch user balances');
       return await response.json();
     } catch (error) {
@@ -47,7 +51,8 @@ class GovernanceAPI {
 
   async getTWAP(proposalId: number): Promise<{ passTwap: number; failTwap: number } | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history/${proposalId}/twap`);
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/twap`);
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch TWAP');
       }
@@ -75,15 +80,15 @@ class GovernanceAPI {
     to?: Date
   ): Promise<any> {
     try {
-      let url = `${API_BASE_URL}/api/history/${proposalId}/chart?interval=${interval}`;
-
+      const params: Record<string, any> = { interval };
       if (from) {
-        url += `&from=${from.toISOString()}`;
+        params.from = from.toISOString();
       }
       if (to) {
-        url += `&to=${to.toISOString()}`;
+        params.to = to.toISOString();
       }
 
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/chart`, params);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch chart data');
@@ -113,7 +118,12 @@ class GovernanceAPI {
     outputMint: string;
   } | null> {
     try {
-      const url = `${API_BASE_URL}/api/swap/${proposalId}/${market}/quote?isBaseToQuote=${isBaseToQuote}&amountIn=${amountIn}&slippageBps=${slippageBps}`;
+      const params = {
+        isBaseToQuote,
+        amountIn,
+        slippageBps
+      };
+      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${market}/quote`, params);
 
       const response = await fetch(url);
       if (!response.ok) {

@@ -20,6 +20,7 @@ import { formatNumber, formatVolume, formatCurrency } from '@/lib/formatters';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
   ssr: false,
@@ -198,7 +199,7 @@ export default function HomePage() {
 
       // Build split transaction
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const buildResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposal.id}/${vaultType}/buildSplitTx`, {
+      const buildResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposal.id}/${vaultType}/buildSplitTx`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,7 +222,7 @@ export default function HomePage() {
       const signedTx = await wallet.signTransaction(splitTx);
 
       // Execute split transaction
-      const executeResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposal.id}/${vaultType}/executeSplitTx`, {
+      const executeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposal.id}/${vaultType}/executeSplitTx`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -286,7 +287,7 @@ export default function HomePage() {
 
       // Build merge transaction
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const buildResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposal.id}/${vaultType}/buildMergeTx`, {
+      const buildResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposal.id}/${vaultType}/buildMergeTx`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -309,7 +310,7 @@ export default function HomePage() {
       const signedTx = await wallet.signTransaction(mergeTx);
 
       // Execute merge transaction
-      const executeResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposal.id}/${vaultType}/executeMergeTx`, {
+      const executeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposal.id}/${vaultType}/executeMergeTx`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

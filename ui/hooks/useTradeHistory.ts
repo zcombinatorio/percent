@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTokenPrices } from './useTokenPrices';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const WS_URL = process.env.NEXT_PUBLIC_WS_PRICE_URL || 'ws://localhost:9091';
@@ -45,7 +46,8 @@ export function useTradeHistory(proposalId: number | null) {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/history/${proposalId}/trades?limit=100`);
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/trades`, { limit: 100 });
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch trades');
       }

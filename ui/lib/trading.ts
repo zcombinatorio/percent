@@ -1,5 +1,6 @@
 import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
+import { buildApiUrl, withModeratorId } from './api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -282,7 +283,7 @@ async function mergeTokens(
     amount: amount
   };
   
-  const mergeResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/buildMergeTx`, {
+  const mergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -302,7 +303,7 @@ async function mergeTokens(
   const signedMergeTx = await signTransaction(mergeTx);
   
   // Execute the signed merge transaction
-  const executeMergeResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/executeMergeTx`, {
+  const executeMergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -323,7 +324,7 @@ async function mergeTokens(
  */
 async function getUserBalances(proposalId: number, userAddress: string): Promise<any> {
   const balancesResponse = await fetch(
-    `${API_BASE_URL}/api/vaults/${proposalId}/getUserBalances?user=${userAddress}`
+    buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress })
   );
   
   if (balancesResponse.ok) {
@@ -350,7 +351,7 @@ async function splitTokens(
     amount: amount
   };
   
-  const splitResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, {
+  const splitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -370,7 +371,7 @@ async function splitTokens(
   const signedTx = await signTransaction(splitTx);
   
   // Execute the signed split transaction
-  const executeSplitResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, {
+  const executeSplitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -442,7 +443,7 @@ export async function claimWinnings(config: {
     for (const vaultType of vaultsToRedeem) {
       // Build redeem transaction
       const redeemResponse = await fetch(
-        `${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/buildRedeemWinningTokensTx`,
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildRedeemWinningTokensTx`),
         {
           method: 'POST',
           headers: {
@@ -467,7 +468,7 @@ export async function claimWinnings(config: {
 
       // Execute the signed redeem transaction
       const executeRedeemResponse = await fetch(
-        `${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/executeRedeemWinningTokensTx`,
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeRedeemWinningTokensTx`),
         {
           method: 'POST',
           headers: {
@@ -523,7 +524,7 @@ async function executeMarketSwap(
     slippageBps: 2000 // 20% slippage for large swaps
   };
   
-  const buildSwapResponse = await fetch(`${API_BASE_URL}/api/swap/${proposalId}/buildSwapTx`, {
+  const buildSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/buildSwapTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -543,7 +544,7 @@ async function executeMarketSwap(
   const signedSwapTx = await signTransaction(swapTx);
 
   // Execute the signed swap transaction
-  const executeSwapResponse = await fetch(`${API_BASE_URL}/api/swap/${proposalId}/executeSwapTx`, {
+  const executeSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/executeSwapTx`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

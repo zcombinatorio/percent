@@ -8,6 +8,7 @@ import {
   PeriodParams,
 } from '@/types/charting-library';
 import { getPriceStreamService, PriceUpdate } from './price-stream.service';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -126,7 +127,11 @@ export class SpotPriceDatafeed implements IBasicDataFeed {
       const toDate = new Date(to * 1000).toISOString();
 
       // Fetch spot price data from the history API
-      const url = `${API_BASE_URL}/api/history/${this.proposalId}/chart?interval=${interval}&from=${fromDate}&to=${toDate}`;
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
+        interval,
+        from: fromDate,
+        to: toDate
+      });
       const response = await fetch(url);
 
       if (!response.ok) {

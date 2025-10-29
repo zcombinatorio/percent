@@ -9,6 +9,7 @@ import {
 } from '@/types/charting-library';
 import { getPriceStreamService, TradeUpdate, ChartPriceUpdate } from './price-stream.service';
 import { BarAggregator } from '@/lib/bar-aggregator';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const TOTAL_SUPPLY = 1_000_000_000; // 1 billion tokens
@@ -148,7 +149,11 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const fromDate = new Date(from * 1000).toISOString();
       const toDate = new Date(to * 1000).toISOString();
 
-      const url = `${API_BASE_URL}/api/history/${this.proposalId}/chart?interval=${interval}&from=${fromDate}&to=${toDate}`;
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
+        interval,
+        from: fromDate,
+        to: toDate
+      });
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -263,7 +268,11 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const toDate = new Date().toISOString();
       const fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // Last 24 hours
 
-      const url = `${API_BASE_URL}/api/history/${this.proposalId}/chart?interval=${interval}&from=${fromDate}&to=${toDate}`;
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
+        interval,
+        from: fromDate,
+        to: toDate
+      });
       const response = await fetch(url);
 
       if (!response.ok) {
