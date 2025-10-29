@@ -30,8 +30,8 @@ export interface IRouterService {
     quoteMint: PublicKey,
     baseDecimals: number,
     quoteDecimals: number,
-    protocolName?: string,
-    authority?: Keypair
+    authority: Keypair,
+    protocolName?: string
   ): Promise<{ moderator: Moderator; id: number }>;
 
   /**

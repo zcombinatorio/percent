@@ -250,10 +250,10 @@ export class SchedulerService implements ISchedulerService {
     this.logger.info('TWAP cranked successfully', { moderatorId, proposalId });
     
     // Record TWAP data to history
-    const historyService = HistoryService.getInstance();
     const twapData = await twapOracle.fetchTWAP();
     
-    await historyService.recordTWAP({
+    await HistoryService.recordTWAP({
+      moderatorId,
       proposalId,
       passTwap: new Decimal(twapData.passTwap.toString()),
       failTwap: new Decimal(twapData.failTwap.toString()),
@@ -306,13 +306,13 @@ export class SchedulerService implements ISchedulerService {
       return;
     }
 
-    const historyService = HistoryService.getInstance();
     const [pAMM, fAMM] = proposal.getAMMs();
     
     // Record pass market price if AMM is trading
     if (pAMM && pAMM.state === AMMState.Trading) {
       const passPrice = await pAMM.fetchPrice();
-      await historyService.recordPrice({
+      await HistoryService.recordPrice({
+        moderatorId,
         proposalId,
         market: 'pass',
         price: passPrice,
@@ -322,7 +322,8 @@ export class SchedulerService implements ISchedulerService {
     // Record fail market price if AMM is trading
     if (fAMM && fAMM.state === AMMState.Trading) {
       const failPrice = await fAMM.fetchPrice();
-      await historyService.recordPrice({
+      await HistoryService.recordPrice({
+        moderatorId,
         proposalId,
         market: 'fail',
         price: failPrice,
@@ -403,8 +404,8 @@ export class SchedulerService implements ISchedulerService {
       const marketCapUSD = spotPriceInSol * totalSupply * solPrice;
 
       // Record to database
-      const historyService = HistoryService.getInstance();
-      await historyService.recordPrice({
+      await HistoryService.recordPrice({
+        moderatorId,
         proposalId,
         market: 'spot',
         price: new Decimal(marketCapUSD),

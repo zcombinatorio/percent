@@ -41,7 +41,7 @@ export class RouterService implements IRouterService {
       this.logger.info('Loading moderators from database...');
 
       // Query for all moderator IDs
-      const result = await pool.query<{ id: number }>('SELECT id FROM moderator_state');
+      const result = await pool.query<{ id: number }>('SELECT id FROM i_moderators');
 
       // Load each moderator
       for (const row of result.rows) {
@@ -90,8 +90,8 @@ export class RouterService implements IRouterService {
    * @param quoteMint - The quote token mint address
    * @param baseDecimals - Decimals for base token
    * @param quoteDecimals - Decimals for quote token
+   * @param authority - Authority keypair
    * @param protocolName - Optional protocol name
-   * @param authority - Optional authority keypair (will load from env if not provided)
    * @returns The newly created moderator and its ID
    */
   public async createModerator(
@@ -99,30 +99,19 @@ export class RouterService implements IRouterService {
     quoteMint: PublicKey,
     baseDecimals: number,
     quoteDecimals: number,
-    protocolName?: string,
-    authority?: Keypair
+    authority: Keypair,
+    protocolName?: string
   ): Promise<{ moderator: Moderator; id: number }> {
     const pool = getPool();
 
     try {
-      // Get the next available ID
+      // Get the next available ID from i_moderators table
       const idResult = await pool.query<{ max: number }>(
-        'SELECT COALESCE(MAX(id), 0) as max FROM moderator_state'
+        'SELECT COALESCE(MAX(id), 0) as max FROM i_moderators'
       );
       const nextId = (idResult.rows[0]?.max || 0) + 1;
 
       this.logger.info(`Creating new moderator with ID ${nextId}`);
-
-      // Load authority if not provided
-      if (!authority) {
-        const keypairPath = process.env.SOLANA_KEYPAIR_PATH || './wallet.json';
-        if (!fs.existsSync(keypairPath)) {
-          throw new Error(`Keypair file not found at ${keypairPath}`);
-        }
-
-        const keypairData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-        authority = Keypair.fromSecretKey(new Uint8Array(keypairData));
-      }
 
       // Create config
       const rpcUrl = process.env.SOLANA_RPC_URL || 'https://bernie-zo3q7f-fast-mainnet.helius-rpc.com';

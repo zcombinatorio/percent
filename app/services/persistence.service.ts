@@ -3,12 +3,12 @@ import { IPersistenceService, IProposalDB, IModeratorStateDB } from '../types/pe
 import { IProposal, IProposalSerializedData } from '../types/proposal.interface';
 import { IModeratorConfig } from '../types/moderator.interface';
 import { Proposal } from '../proposal';
-import { PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { Pool } from 'pg';
-import fs from 'fs';
 import { ExecutionService } from './execution.service';
 import { LoggerService } from './logger.service';
 import { Commitment } from '@app/types/execution.interface';
+import { decryptKeypair, encryptKeypair } from '../utils/crypto';
 
 /**
  * Service for persisting and loading state from PostgreSQL database
@@ -29,7 +29,7 @@ export class PersistenceService implements IPersistenceService {
   async getProposalIdCounter(): Promise<number> {
     try {
       const result = await this.pool.query<{ proposal_id_counter: number }>(
-        'SELECT proposal_id_counter FROM moderator_state WHERE id = $1',
+        'SELECT proposal_id_counter FROM i_moderators WHERE id = $1',
         [this.moderatorId]
       );
 
@@ -48,70 +48,61 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Save a proposal to the database (backward compatible)
+   * @param proposal - The proposal to save
+   * @returns A promise that resolves when the proposal is saved
    */
   async saveProposal(proposal: IProposal): Promise<void> {
     try {
       // Use the proposal's serialize method
       const serializedData = proposal.serialize();
 
-      // Create old format transaction_data for backward compatibility
-      const transactionData = {
-        instructions: serializedData.transactionInstructions,
-        feePayer: serializedData.transactionFeePayer || null
-      };
-
-      // Use old column names for backward compatibility
+      // Use new i_proposals table (id is auto-generated, not inserted)
       const query = `
-        INSERT INTO proposals (
-          id, moderator_id, proposal_id, title, description, status,
+        INSERT INTO i_proposals (
+          moderator_id, proposal_id, title, description, status,
           created_at, finalized_at, proposal_length,
-          transaction_data, transaction_fee_payer,
-          base_mint, quote_mint, base_decimals, quote_decimals, authority,
+          transaction_instructions, transaction_fee_payer,
+          base_mint, quote_mint, base_decimals, quote_decimals,
           amm_config, twap_config,
-          pass_amm_state, fail_amm_state,
-          base_vault_state, quote_vault_state,
-          twap_oracle_state,
+          pass_amm_data, fail_amm_data,
+          base_vault_data, quote_vault_data,
+          twap_oracle_data,
           spot_pool_address, total_supply
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
         ON CONFLICT (moderator_id, proposal_id) DO UPDATE SET
           status = EXCLUDED.status,
-          pass_amm_state = EXCLUDED.pass_amm_state,
-          fail_amm_state = EXCLUDED.fail_amm_state,
-          base_vault_state = EXCLUDED.base_vault_state,
-          quote_vault_state = EXCLUDED.quote_vault_state,
-          twap_oracle_state = EXCLUDED.twap_oracle_state,
+          pass_amm_data = EXCLUDED.pass_amm_data,
+          fail_amm_data = EXCLUDED.fail_amm_data,
+          base_vault_data = EXCLUDED.base_vault_data,
+          quote_vault_data = EXCLUDED.quote_vault_data,
+          twap_oracle_data = EXCLUDED.twap_oracle_data,
           twap_config = EXCLUDED.twap_config,
           transaction_fee_payer = EXCLUDED.transaction_fee_payer,
           updated_at = NOW()
       `;
 
-      // Get authority from serialized data (we can extract from any vault or AMM)
-      const authority = serializedData.baseMint; // Use baseMint as placeholder for authority
-
       await this.pool.query(query, [
-        serializedData.id,
         serializedData.moderatorId,
-        serializedData.id,  // proposal_id is same as id for now
+        serializedData.id,  // This is the proposal_id (per-moderator sequential ID)
         serializedData.title,
         serializedData.description || null,
         serializedData.status,
         new Date(serializedData.createdAt),
         new Date(serializedData.finalizedAt),
         serializedData.proposalLength,
-        JSON.stringify(transactionData), // Old format transaction_data
+        JSON.stringify(serializedData.transactionInstructions), // New format
         serializedData.transactionFeePayer || null,
         serializedData.baseMint,
         serializedData.quoteMint,
         serializedData.baseDecimals,
         serializedData.quoteDecimals,
-        authority, // Placeholder for authority column
         JSON.stringify(serializedData.ammConfig),
         JSON.stringify(serializedData.twapConfig || {}),
-        JSON.stringify(serializedData.pAMMData),     // Store in old column name
-        JSON.stringify(serializedData.fAMMData),     // Store in old column name
-        JSON.stringify(serializedData.baseVaultData), // Store in old column name
-        JSON.stringify(serializedData.quoteVaultData),// Store in old column name
-        JSON.stringify(serializedData.twapOracleData),// Store in old column name
+        JSON.stringify(serializedData.pAMMData),
+        JSON.stringify(serializedData.fAMMData),
+        JSON.stringify(serializedData.baseVaultData),
+        JSON.stringify(serializedData.quoteVaultData),
+        JSON.stringify(serializedData.twapOracleData),
         serializedData.spotPoolAddress || null,
         serializedData.totalSupply
       ]);
@@ -122,13 +113,15 @@ export class PersistenceService implements IPersistenceService {
   }
 
   /**
-   * Load a proposal from the database
+   * Load a proposal from the database by proposal_id
+   * @param proposalId - The proposal ID
+   * @returns The proposal or null if not found
    */
-  async loadProposal(id: number): Promise<IProposal | null> {
+  async loadProposal(proposalId: number): Promise<IProposal | null> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM proposals WHERE id = $1',
-        [id]
+        'SELECT * FROM i_proposals WHERE moderator_id = $1 AND proposal_id = $2',
+        [this.moderatorId, proposalId]
       );
 
       if (result.rows.length === 0) {
@@ -145,11 +138,12 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Load all proposals from the database
+   * @returns An array of proposals
    */
   async loadAllProposals(): Promise<IProposal[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM proposals ORDER BY id'
+        'SELECT * FROM i_proposals ORDER BY id'
       );
 
       const proposals: IProposal[] = [];
@@ -169,11 +163,12 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Get proposals for frontend (simplified data)
+   * @returns An array of proposals
    */
   async getProposalsForFrontend(): Promise<IProposalDB[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM proposals ORDER BY created_at DESC'
+        'SELECT * FROM i_proposals ORDER BY created_at DESC'
       );
 
       return result.rows;
@@ -184,13 +179,15 @@ export class PersistenceService implements IPersistenceService {
   }
 
   /**
-   * Get a single proposal for frontend
+   * Get a single proposal for frontend by proposal_id
+   * @param proposalId - The proposal ID
+   * @returns The proposal or null if not found
    */
-  async getProposalForFrontend(id: number): Promise<IProposalDB | null> {
+  async getProposalForFrontend(proposalId: number): Promise<IProposalDB | null> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM proposals WHERE id = $1',
-        [id]
+        'SELECT * FROM i_proposals WHERE moderator_id = $1 AND proposal_id = $2',
+        [this.moderatorId, proposalId]
       );
 
       return result.rows.length > 0 ? result.rows[0] : null;
@@ -202,20 +199,29 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Save moderator state to the database
+   * @param proposalCounter - The proposal counter
+   * @param config - The moderator config
+   * @param protocolName - The protocol name
+   * @returns A promise that resolves when the moderator state is saved
    */
   async saveModeratorState(proposalCounter: number, config: IModeratorConfig, protocolName?: string): Promise<void> {
     try {
+      const encryptionKey = process.env.ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        throw new Error('ENCRYPTION_KEY environment variable is not set');
+      }
+
       const configData = {
         baseMint: config.baseMint.toBase58(),
         quoteMint: config.quoteMint.toBase58(),
         baseDecimals: config.baseDecimals,
         quoteDecimals: config.quoteDecimals,
-        authority: config.authority.publicKey.toBase58(),
+        authority: encryptKeypair(config.authority, encryptionKey),
         rpcUrl: config.rpcEndpoint,
       };
 
       const query = `
-        INSERT INTO moderator_state (id, proposal_id_counter, config, protocol_name)
+        INSERT INTO i_moderators (id, proposal_id_counter, config, protocol_name)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (id) DO UPDATE SET
           proposal_id_counter = EXCLUDED.proposal_id_counter,
@@ -233,11 +239,12 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Load moderator state from the database
+   * @returns The moderator state or null if not found
    */
   async loadModeratorState(): Promise<{ proposalCounter: number; config: IModeratorConfig; protocolName?: string } | null> {
     try {
       const result = await this.pool.query<IModeratorStateDB>(
-        'SELECT * FROM moderator_state WHERE id = $1',
+        'SELECT * FROM i_moderators WHERE id = $1',
         [this.moderatorId]
       );
 
@@ -247,27 +254,9 @@ export class PersistenceService implements IPersistenceService {
 
       const row = result.rows[0];
 
-      // Load authority keypair - use test authority if in test mode
-      let authority: Keypair;
-
-      // Check if we're in test mode by checking if test moderator service is available
-      try {
-        const TestModeratorService = (await import('../../src/test/test-moderator.service')).default;
-        const testInfo = TestModeratorService.getTestInfo();
-
-        if (testInfo) {
-          // We're in test mode - use the test authority that was used to create the mints
-          const { getTestModeConfig } = await import('../../src/test/config');
-          const testConfig = getTestModeConfig();
-          authority = testConfig.wallets.authority;
-        } else {
-          throw new Error('Not in test mode');
-        }
-      } catch {
-        // We're in production mode - load from filesystem
-        const keypairPath = process.env.SOLANA_KEYPAIR_PATH || './wallet.json';
-        const keypairData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
-        authority = Keypair.fromSecretKey(new Uint8Array(keypairData));
+      const encryptionKey = process.env.ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        throw new Error('ENCRYPTION_KEY environment variable is not set');
       }
 
       const config: IModeratorConfig = {
@@ -275,7 +264,7 @@ export class PersistenceService implements IPersistenceService {
         quoteMint: new PublicKey(row.config.quoteMint),
         baseDecimals: row.config.baseDecimals,
         quoteDecimals: row.config.quoteDecimals,
-        authority,
+        authority: decryptKeypair(row.config.authority, encryptionKey),
         rpcEndpoint: row.config.rpcUrl,
       };
 
@@ -292,40 +281,24 @@ export class PersistenceService implements IPersistenceService {
 
   /**
    * Helper method to deserialize a Proposal object from database row
+   * @param row - The database row
+   * @returns The proposal or null if not found
    */
   private async deserializeProposal(row: IProposalDB): Promise<IProposal | null> {
     try {
       // Load authority keypair - use test authority if in test mode
-      let authority: Keypair;
-
-      // Check if we're in test mode by checking if test moderator service is available
-      try {
-        const TestModeratorService = (await import('../../src/test/test-moderator.service')).default;
-        const testInfo = TestModeratorService.getTestInfo();
-
-        if (testInfo) {
-          // We're in test mode - use the test authority that was used to create the mints
-          const { getTestModeConfig } = await import('../../src/test/config');
-          const testConfig = getTestModeConfig();
-          authority = testConfig.wallets.authority;
-        } else {
-          throw new Error('Not in test mode');
-        }
-      } catch {
-        // We're in production mode - load from filesystem
-        const keypairPath = process.env.SOLANA_KEYPAIR_PATH || './wallet.json';
-        const fileContent = fs.readFileSync(keypairPath, 'utf-8');
-        const keypairData = JSON.parse(fileContent);
-        authority = Keypair.fromSecretKey(new Uint8Array(keypairData));
+      const moderatorState = await this.loadModeratorState();
+      if (!moderatorState) {
+        throw new Error('Moderator state not found');
       }
+      const authority = moderatorState.config.authority;
 
       // Create logger first
-      const logger = new LoggerService('Proposal');
+      const logger = new LoggerService(`moderator-${row.moderator_id}`).createChild(`proposal-${row.proposal_id}`);
 
       // Create execution service with logger
-      const rpcUrl = process.env.SOLANA_RPC_URL || 'https://bernie-zo3q7f-fast-mainnet.helius-rpc.com';
       const executionService = new ExecutionService({
-        rpcEndpoint: rpcUrl,
+        rpcEndpoint: moderatorState.config.rpcEndpoint,
         commitment: Commitment.Confirmed,
         maxRetries: 3,
         skipPreflight: false

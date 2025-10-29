@@ -482,7 +482,7 @@ class PriceWebSocketServer {
       if (this.subscribedProposals.size > 0) {
         const proposalIds = Array.from(this.subscribedProposals).join(',');
         const query = `
-          SELECT * FROM trade_history
+          SELECT * FROM i_trade_history
           WHERE proposal_id IN (${proposalIds})
           AND timestamp > NOW() - INTERVAL '5 seconds'
           ORDER BY timestamp DESC

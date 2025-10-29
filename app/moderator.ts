@@ -50,8 +50,8 @@ export class Moderator implements IModerator {
       priorityFeeMode: PriorityFeeMode.Dynamic
     };
 
-    // Initialize logger with a category based on protocol name and moderator ID
-    this.logger = new LoggerService(`moderator-${protocolName || id}`);
+    // Initialize logger with a category based on moderator ID
+    this.logger = new LoggerService(`moderator-${id}`);
     this.logger.info('Moderator initialized', {
       moderatorId: id,
       protocolName: protocolName,
