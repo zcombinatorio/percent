@@ -1,15 +1,38 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
 import { attachModerator, requireModeratorId, getModerator } from '../middleware/validation';
-import { CreateProposalRequest, CreateProposalResponse } from '../types/api';
 import { Transaction, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { ExecutionStatus } from '../../app/types/execution.interface';
 import { PersistenceService } from '../../app/services/persistence.service';
+import { RouterService } from '@app/services/router.service';
+
+const routerService = RouterService.getInstance();
+
+// Type definition for creating a proposal
+export interface CreateProposalRequest {
+  title: string;
+  description?: string;
+  proposalLength: number;
+  transaction?: string; // Base64-encoded serialized transaction
+  spotPoolAddress?: string; // Optional Meteora pool address for spot market
+  totalSupply?: number; // Total supply of conditional tokens (defaults to 1 billion)
+  twap: {
+    initialTwapValue: number;
+    twapMaxObservationChangePerUpdate: number | null;
+    twapStartDelay: number;
+    passThresholdBps: number;
+    minUpdateInterval: number;
+  };
+  amm: {
+    initialBaseAmount: string;
+    initialQuoteAmount: string;
+  };
+}
 
 const router = Router();
 
-// Apply moderator middleware to all routes
+// Apply moderator middleware to all routes (default moderator is 1)
 router.use(attachModerator);
 
 router.get('/', async (req, res, next) => {
@@ -20,11 +43,14 @@ router.get('/', async (req, res, next) => {
 
     const publicProposals = proposals.map(p => ({
       id: p.id,
+      title: p.title,
       description: p.description,
       status: p.status,
       createdAt: new Date(p.created_at).getTime(),
       finalizedAt: new Date(p.finalized_at).getTime(),
-      passThresholdBps: p.twap_oracle_state?.passThresholdBps ?? 5000, // Default to 50% if not set
+      passThresholdBps: typeof p.twap_config === 'string'
+        ? JSON.parse(p.twap_config).passThresholdBps
+        : p.twap_config.passThresholdBps,
     }));
 
     res.json({
@@ -63,15 +89,14 @@ router.get('/:id', async (req, res, next) => {
       proposalLength: parseInt(proposal.proposal_length),
       baseMint: proposal.base_mint,
       quoteMint: proposal.quote_mint,
-      authority: proposal.authority,
       spotPoolAddress: proposal.spot_pool_address,
       totalSupply: proposal.total_supply,
       ammConfig: proposal.amm_config,
-      passAmmState: proposal.pass_amm_state,
-      failAmmState: proposal.fail_amm_state,
-      baseVaultState: proposal.base_vault_state,
-      quoteVaultState: proposal.quote_vault_state,
-      twapOracleState: proposal.twap_oracle_state,
+      passAmmState: proposal.pass_amm_data,
+      failAmmState: proposal.fail_amm_data,
+      baseVaultState: proposal.base_vault_data,
+      quoteVaultState: proposal.quote_vault_data,
+      twapOracleState: proposal.twap_oracle_data,
     };
 
     res.json(response);
@@ -85,8 +110,11 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;
-    const moderator = getModerator(moderatorId);
     const body = req.body as CreateProposalRequest;
+    const moderator = routerService.getModerator(moderatorId);
+    if (!moderator) {
+      return res.status(404).json({ error: 'Moderator not found' });
+    }
 
     // Validate required fields
     if (!body.description || !body.proposalLength || !body.twap || !body.amm) {
@@ -111,16 +139,17 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       transaction = new Transaction().add({
         programId: new PublicKey(MEMO_PROGRAM_ID),
         keys: [],
-        data: Buffer.from(`Moderator ${moderatorId} Proposal #${proposalCounter}: ${body.description}`)
+        data: Buffer.from(`Moderator ${moderatorId} Proposal #${proposalCounter}: ${body.title}`)
       });
     }
 
     // Create the proposal
     const proposal = await moderator.createProposal({
+      title: body.title,
       description: body.description,
       transaction,
       proposalLength: body.proposalLength,
-      spotPoolAddress: body.spotPoolAddress, // Optional spot pool for charts
+      spotPoolAddress: body.spotPoolAddress, 
       totalSupply: body.totalSupply || 1000000000, // Default to 1 billion tokens
       twap: {
         initialTwapValue: body.twap.initialTwapValue,
@@ -135,16 +164,15 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       }
     });
     
-    const response: CreateProposalResponse = {
+    res.status(201).json({
       moderatorId,
-      id: proposal.id,
-      description: proposal.description,
+      id: proposal.config.id,
+      title: proposal.config.title,
+      description: proposal.config.description,
       status: proposal.status,
-      createdAt: proposal.createdAt,
+      createdAt: proposal.config.createdAt,
       finalizedAt: proposal.finalizedAt
-    };
-
-    res.status(201).json(response);
+    });
   } catch (error) {
     next(error);
   }

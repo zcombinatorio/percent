@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { requireModeratorId, getModerator } from '../middleware/validation';
-import { getProposalId } from '../utils';
+import { requireModeratorId, getProposalId, getModerator } from '../middleware/validation';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import { IAMM } from '../../app/types/amm.interface';
@@ -191,8 +190,6 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
     
     // Log trade to history (required parameters are now validated above)
     try {
-      const historyService = HistoryService.getInstance();
-      
       // Get current price for the trade
       let currentPrice: Decimal;
       try {
@@ -220,7 +217,8 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
       const amountInDecimal = new Decimal(amountIn).div(Math.pow(10, inputDecimals));
       const amountOutDecimal = amountOut ? new Decimal(amountOut).div(Math.pow(10, outputDecimals)) : new Decimal(0);
       
-      await historyService.recordTrade({
+      await HistoryService.recordTrade({
+        moderatorId,
         proposalId,
         market: market as 'pass' | 'fail',
         userAddress: user,

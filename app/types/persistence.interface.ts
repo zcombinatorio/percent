@@ -22,7 +22,7 @@ export interface IProposalDB {
   id: number;                          // Global unique ID
   moderator_id: number;                 // Reference to moderator
   proposal_id: number;                  // Per-moderator proposal ID
-  title?: string;                       // Proposal title (optional)
+  title: string;                       // Proposal title
   description?: string;                 // Proposal description (optional)
   status: ProposalStatus;               // Proposal status enum
   created_at: Date;
