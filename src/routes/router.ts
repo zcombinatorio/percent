@@ -5,8 +5,18 @@ import { PublicKey, Keypair } from '@solana/web3.js';
 import { LoggerService } from '../../app/services/logger.service';
 import { decryptKeypair } from '../../app/utils/crypto';
 
+// Type definition for creating a moderator
+export interface CreateModeratorRequest {
+  baseMint: string;
+  quoteMint: string;
+  baseDecimals: number;
+  quoteDecimals: number;
+  authority: string;  // Encrypted keypair
+  protocolName?: string;
+}
+
 const router = Router();
-const logger = new LoggerService('router');
+const logger = new LoggerService('api').createChild('router');
 
 /**
  * Get all moderators info (public endpoint)

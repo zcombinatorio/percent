@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { HistoryService } from '../../app/services/history.service';
 import { requireModeratorId, getProposalId } from '@src/middleware/validation';
 import { PersistenceService } from '@app/services/persistence.service';
+import { LoggerService } from '../../app/services/logger.service';
 
 const router = Router();
+const logger = new LoggerService('api').createChild('history');
 router.use(requireModeratorId); // require moderatorId for all history routes
 
 /**
@@ -20,31 +22,47 @@ router.get('/:id/twap', async (req, res, next) => {
     const proposalId = getProposalId(req);
 
     const { from, to } = req.query;
-    
+
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
-    
+
     if (from && typeof from === 'string') {
       fromDate = new Date(from);
       if (isNaN(fromDate.getTime())) {
+        logger.warn('[GET /:id/twap] Invalid from date format', {
+          proposalId,
+          from
+        });
         return res.status(400).json({ error: 'Invalid from date format' });
       }
     }
-    
+
     if (to && typeof to === 'string') {
       toDate = new Date(to);
       if (isNaN(toDate.getTime())) {
+        logger.warn('[GET /:id/twap] Invalid to date format', {
+          proposalId,
+          to
+        });
         return res.status(400).json({ error: 'Invalid to date format' });
       }
     }
-    
+
     const twapData = await HistoryService.getTWAPHistory(
       moderatorId,
       proposalId,
       fromDate,
       toDate
     );
-    
+
+    logger.info('[GET /:id/twap] TWAP history retrieved', {
+      proposalId,
+      moderatorId,
+      count: twapData.length,
+      from: fromDate?.toISOString(),
+      to: toDate?.toISOString()
+    });
+
     res.json({
       moderatorId,
       proposalId,
@@ -59,6 +77,10 @@ router.get('/:id/twap', async (req, res, next) => {
       }))
     });
   } catch (error) {
+    logger.error('[GET /:id/twap] Failed to get TWAP history', {
+      error: error instanceof Error ? error.message : String(error),
+      proposalId: req.params.id
+    });
     next(error);
   }
 });
@@ -78,32 +100,44 @@ router.get('/:id/trades', async (req, res, next) => {
     const moderatorId = req.moderatorId;
 
     const { from, to, limit } = req.query;
-    
+
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
     let limitNum: number | undefined;
-    
+
     if (from && typeof from === 'string') {
       fromDate = new Date(from);
       if (isNaN(fromDate.getTime())) {
+        logger.warn('[GET /:id/trades] Invalid from date format', {
+          proposalId,
+          from
+        });
         return res.status(400).json({ error: 'Invalid from date format' });
       }
     }
-    
+
     if (to && typeof to === 'string') {
       toDate = new Date(to);
       if (isNaN(toDate.getTime())) {
+        logger.warn('[GET /:id/trades] Invalid to date format', {
+          proposalId,
+          to
+        });
         return res.status(400).json({ error: 'Invalid to date format' });
       }
     }
-    
+
     if (limit && typeof limit === 'string') {
       limitNum = parseInt(limit);
       if (isNaN(limitNum) || limitNum <= 0) {
+        logger.warn('[GET /:id/trades] Invalid limit value', {
+          proposalId,
+          limit
+        });
         return res.status(400).json({ error: 'Invalid limit - must be a positive number' });
       }
     }
-    
+
     const trades = await HistoryService.getTradeHistory(
       moderatorId,
       proposalId,
@@ -111,7 +145,16 @@ router.get('/:id/trades', async (req, res, next) => {
       toDate,
       limitNum || 100
     );
-    
+
+    logger.info('[GET /:id/trades] Trade history retrieved', {
+      proposalId,
+      moderatorId,
+      count: trades.length,
+      limit: limitNum || 100,
+      from: fromDate?.toISOString(),
+      to: toDate?.toISOString()
+    });
+
     res.json({
       moderatorId,
       proposalId,
@@ -129,6 +172,10 @@ router.get('/:id/trades', async (req, res, next) => {
       }))
     });
   } catch (error) {
+    logger.error('[GET /:id/trades] Failed to get trade history', {
+      error: error instanceof Error ? error.message : String(error),
+      proposalId: req.params.id
+    });
     next(error);
   }
 });
@@ -146,41 +193,57 @@ router.get('/:id/chart', async (req, res, next) => {
   try {
     const proposalId = getProposalId(req);
     const moderatorId = req.moderatorId;
-    
+
     const { interval, from, to } = req.query;
-    
+
     if (!interval || typeof interval !== 'string') {
-      return res.status(400).json({ 
+      logger.warn('[GET /:id/chart] Missing required interval parameter', {
+        proposalId,
+        receivedParams: Object.keys(req.query)
+      });
+      return res.status(400).json({
         error: 'Missing required interval parameter',
         validIntervals: ['1m', '5m', '15m', '1h', '4h', '1d']
       });
     }
-    
+
     const validIntervals = ['1m', '5m', '15m', '1h', '4h', '1d'];
     if (!validIntervals.includes(interval)) {
-      return res.status(400).json({ 
+      logger.warn('[GET /:id/chart] Invalid interval', {
+        proposalId,
+        interval
+      });
+      return res.status(400).json({
         error: 'Invalid interval',
         validIntervals
       });
     }
-    
+
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
-    
+
     if (from && typeof from === 'string') {
       fromDate = new Date(from);
       if (isNaN(fromDate.getTime())) {
+        logger.warn('[GET /:id/chart] Invalid from date format', {
+          proposalId,
+          from
+        });
         return res.status(400).json({ error: 'Invalid from date format' });
       }
     }
-    
+
     if (to && typeof to === 'string') {
       toDate = new Date(to);
       if (isNaN(toDate.getTime())) {
+        logger.warn('[GET /:id/chart] Invalid to date format', {
+          proposalId,
+          to
+        });
         return res.status(400).json({ error: 'Invalid to date format' });
       }
     }
-    
+
     const chartData = await HistoryService.getChartData(
       moderatorId,
       proposalId,
@@ -216,6 +279,15 @@ router.get('/:id/chart', async (req, res, next) => {
       };
     });
 
+    logger.info('[GET /:id/chart] Chart data retrieved', {
+      proposalId,
+      moderatorId,
+      interval,
+      count: formattedData.length,
+      from: fromDate?.toISOString(),
+      to: toDate?.toISOString()
+    });
+
     res.json({
       moderatorId,
       proposalId,
@@ -224,6 +296,11 @@ router.get('/:id/chart', async (req, res, next) => {
       data: formattedData
     });
   } catch (error) {
+    logger.error('[GET /:id/chart] Failed to get chart data', {
+      error: error instanceof Error ? error.message : String(error),
+      proposalId: req.params.id,
+      interval: req.query.interval
+    });
     next(error);
   }
 });

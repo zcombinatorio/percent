@@ -6,8 +6,10 @@ import BN from 'bn.js';
 import { ExecutionStatus } from '../../app/types/execution.interface';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
+import { LoggerService } from '../../app/services/logger.service';
 
 const routerService = RouterService.getInstance();
+const logger = new LoggerService('api').createChild('proposals');
 
 // Type definition for creating a proposal
 export interface CreateProposalRequest {
@@ -39,6 +41,9 @@ router.get('/', async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;
     const persistenceService = new PersistenceService(moderatorId);
+
+    logger.info('[GET /] Fetching proposals', { moderatorId });
+
     const proposals = await persistenceService.getProposalsForFrontend();
 
     const publicProposals = proposals.map(p => ({
@@ -53,11 +58,20 @@ router.get('/', async (req, res, next) => {
         : p.twap_config.passThresholdBps,
     }));
 
+    logger.info('[GET /] Fetched proposals successfully', {
+      moderatorId,
+      count: publicProposals.length
+    });
+
     res.json({
       moderatorId,
       proposals: publicProposals,
     });
   } catch (error) {
+    logger.error('[GET /] Failed to fetch proposals', {
+      error: error instanceof Error ? error.message : String(error),
+      moderatorId: req.moderatorId
+    });
     next(error);
   }
 });
@@ -68,6 +82,9 @@ router.get('/:id', async (req, res, next) => {
     const moderatorId = req.moderatorId;
 
     if (isNaN(id) || id < 0) {
+      logger.warn('[GET /:id] Invalid proposal ID', {
+        providedId: req.params.id
+      });
       return res.status(400).json({ error: 'Invalid proposal ID' });
     }
 
@@ -75,6 +92,10 @@ router.get('/:id', async (req, res, next) => {
     const proposal = await persistenceService.getProposalForFrontend(id);
 
     if (!proposal) {
+      logger.warn('[GET /:id] Proposal not found', {
+        proposalId: id,
+        moderatorId
+      });
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
@@ -99,8 +120,18 @@ router.get('/:id', async (req, res, next) => {
       twapOracleState: proposal.twap_oracle_data,
     };
 
+    logger.info('[GET /:id] Fetched proposal details', {
+      proposalId: id,
+      moderatorId,
+      status: proposal.status
+    });
+
     res.json(response);
   } catch (error) {
+    logger.error('[GET /:id] Failed to fetch proposal', {
+      proposalId: req.params.id,
+      error: error instanceof Error ? error.message : String(error)
+    });
     next(error);
   }
 });
@@ -113,11 +144,16 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     const body = req.body as CreateProposalRequest;
     const moderator = routerService.getModerator(moderatorId);
     if (!moderator) {
+      logger.warn('[POST /] Moderator not found', { moderatorId });
       return res.status(404).json({ error: 'Moderator not found' });
     }
 
     // Validate required fields
     if (!body.description || !body.proposalLength || !body.twap || !body.amm) {
+      logger.warn('[POST /] Missing required fields', {
+        receivedFields: Object.keys(req.body),
+        moderatorId
+      });
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['description', 'proposalLength', 'twap', 'amm']
@@ -149,7 +185,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       description: body.description,
       transaction,
       proposalLength: body.proposalLength,
-      spotPoolAddress: body.spotPoolAddress, 
+      spotPoolAddress: body.spotPoolAddress,
       totalSupply: body.totalSupply || 1000000000, // Default to 1 billion tokens
       twap: {
         initialTwapValue: body.twap.initialTwapValue,
@@ -163,7 +199,15 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
         initialQuoteAmount: new BN(body.amm.initialQuoteAmount)
       }
     });
-    
+
+    logger.info('[POST /] Created new proposal', {
+      proposalId: proposal.config.id,
+      moderatorId,
+      title: body.title,
+      proposalLength: body.proposalLength,
+      totalSupply: body.totalSupply || 1000000000
+    });
+
     res.status(201).json({
       moderatorId,
       id: proposal.config.id,
@@ -174,6 +218,11 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       finalizedAt: proposal.finalizedAt
     });
   } catch (error) {
+    logger.error('[POST /] Failed to create proposal', {
+      error: error instanceof Error ? error.message : String(error),
+      moderatorId: req.moderatorId,
+      body: req.body
+    });
     next(error);
   }
 });
@@ -185,6 +234,9 @@ router.post('/:id/finalize', async (req, res, next) => {
     const id = parseInt(req.params.id);
 
     if (isNaN(id) || id < 0) {
+      logger.warn('[POST /:id/finalize] Invalid proposal ID', {
+        providedId: req.params.id
+      });
       return res.status(400).json({ error: 'Invalid proposal ID' });
     }
 
@@ -192,11 +244,21 @@ router.post('/:id/finalize', async (req, res, next) => {
     const proposal = await moderator.getProposal(id);
 
     if (!proposal) {
+      logger.warn('[POST /:id/finalize] Proposal not found', {
+        proposalId: id,
+        moderatorId
+      });
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
     // Finalize the proposal
     const status = await moderator.finalizeProposal(id);
+
+    logger.info('[POST /:id/finalize] Proposal finalized', {
+      proposalId: id,
+      moderatorId,
+      status
+    });
 
     res.json({
       moderatorId,
@@ -205,6 +267,10 @@ router.post('/:id/finalize', async (req, res, next) => {
       message: `Proposal #${id} finalized with status: ${status}`
     });
   } catch (error) {
+    logger.error('[POST /:id/finalize] Failed to finalize proposal', {
+      proposalId: req.params.id,
+      error: error instanceof Error ? error.message : String(error)
+    });
     next(error);
   }
 });
@@ -216,6 +282,9 @@ router.post('/:id/execute', async (req, res, next) => {
     const id = parseInt(req.params.id);
 
     if (isNaN(id) || id < 0) {
+      logger.warn('[POST /:id/execute] Invalid proposal ID', {
+        providedId: req.params.id
+      });
       return res.status(400).json({ error: 'Invalid proposal ID' });
     }
 
@@ -223,11 +292,23 @@ router.post('/:id/execute', async (req, res, next) => {
     const proposal = await moderator.getProposal(id);
 
     if (!proposal) {
+      logger.warn('[POST /:id/execute] Proposal not found', {
+        proposalId: id,
+        moderatorId
+      });
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
     // Execute the proposal using the moderator's authority
     const result = await moderator.executeProposal(id, moderator.config.authority);
+
+    logger.info('[POST /:id/execute] Proposal execution completed', {
+      proposalId: id,
+      moderatorId,
+      status: proposal.status,
+      executed: result.status === ExecutionStatus.Success,
+      signature: result.signature
+    });
 
     res.json({
       moderatorId,
@@ -238,6 +319,10 @@ router.post('/:id/execute', async (req, res, next) => {
       error: result.error
     });
   } catch (error) {
+    logger.error('[POST /:id/execute] Failed to execute proposal', {
+      proposalId: req.params.id,
+      error: error instanceof Error ? error.message : String(error)
+    });
     next(error);
   }
 });

@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { CpAmm, getPriceFromSqrtPrice } from '@meteora-ag/cp-amm-sdk';
+import { LoggerService } from '../../app/services/logger.service';
 
 const router = Router();
+const logger = new LoggerService('api').createChild('pools');
 
 // Get Solana connection
 const getRpcUrl = () => {
@@ -25,6 +27,7 @@ router.get('/:poolAddress/price', async (req, res, next) => {
     const { poolAddress } = req.params;
 
     if (!poolAddress) {
+      logger.warn('[GET /:poolAddress/price] Missing pool address');
       return res.status(400).json({ error: 'Pool address is required' });
     }
 
@@ -33,8 +36,15 @@ router.get('/:poolAddress/price', async (req, res, next) => {
     try {
       poolPubkey = new PublicKey(poolAddress);
     } catch (error) {
+      logger.warn('[GET /:poolAddress/price] Invalid pool address format', {
+        poolAddress
+      });
       return res.status(400).json({ error: 'Invalid pool address' });
     }
+
+    logger.info('[GET /:poolAddress/price] Fetching pool price', {
+      poolAddress
+    });
 
     // Initialize connection and CP-AMM SDK
     const connection = new Connection(getRpcUrl(), 'confirmed');
@@ -46,6 +56,9 @@ router.get('/:poolAddress/price', async (req, res, next) => {
       poolState = await cpAmm.fetchPoolState(poolPubkey);
     } catch (error: any) {
       if (error.message?.includes('not found') || error.message?.includes('Invariant Violation')) {
+        logger.warn('[GET /:poolAddress/price] Pool not found', {
+          poolAddress
+        });
         return res.status(404).json({
           error: 'Pool not found',
           poolAddress
@@ -71,7 +84,7 @@ router.get('/:poolAddress/price', async (req, res, next) => {
     const baseReserve = (poolState as any).tokenAAmount?.toString() || '0';
     const quoteReserve = (poolState as any).tokenBAmount?.toString() || '0';
 
-    res.json({
+    const responseData = {
       poolAddress,
       price,
       timestamp: Date.now(),
@@ -84,8 +97,20 @@ router.get('/:poolAddress/price', async (req, res, next) => {
         base: poolState.tokenAMint.toBase58(),
         quote: poolState.tokenBMint.toBase58(),
       }
+    };
+
+    logger.info('[GET /:poolAddress/price] Pool price fetched successfully', {
+      poolAddress,
+      price,
+      liquidity: poolState.liquidity.toString()
     });
+
+    res.json(responseData);
   } catch (error) {
+    logger.error('[GET /:poolAddress/price] Failed to fetch pool price', {
+      error: error instanceof Error ? error.message : String(error),
+      poolAddress: req.params.poolAddress
+    });
     next(error);
   }
 });
