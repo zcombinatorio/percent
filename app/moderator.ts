@@ -73,7 +73,7 @@ export class Moderator implements IModerator {
     const info: IModeratorInfo = {
       id: this.id,
       protocolName: this.protocolName,
-      proposalIdCounter: await this.persistenceService.getProposalIdCounter(),
+      proposalIdCounter: await this.getProposalIdCounter(),
       baseToken: {
         mint: this.config.baseMint.toBase58(),
         decimals: this.config.baseDecimals
@@ -119,7 +119,7 @@ export class Moderator implements IModerator {
    * @throws Error if proposal creation fails
    */
   async createProposal(params: ICreateProposalParams): Promise<IProposal> {
-    const proposalIdCounter = await this.getProposalIdCounter();
+    const proposalIdCounter = await this.getProposalIdCounter() + 1;
     try {
       this.logger.info('Creating proposal');
       // Create proposal config from moderator config and params
@@ -152,7 +152,7 @@ export class Moderator implements IModerator {
       
       // Save to database FIRST (database is source of truth)
       await this.saveProposal(proposal);
-      await this.persistenceService.saveModeratorState(proposalIdCounter + 1, this.config);
+      await this.persistenceService.saveModeratorState(proposalIdCounter, this.config);
       
       this.logger.info('Proposal initialized and saved');
       

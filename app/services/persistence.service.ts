@@ -35,11 +35,11 @@ export class PersistenceService implements IPersistenceService {
 
       if (result.rows.length === 0) {
         // No moderator state found, return 1 as the starting counter
-        return 1;
+        return 0;
       }
 
       // Return the counter + 1 for the next proposal ID
-      return result.rows[0].proposal_id_counter + 1;
+      return result.rows[0].proposal_id_counter;
     } catch (error) {
       console.error('Failed to fetch proposal ID counter:', error);
       throw error;
