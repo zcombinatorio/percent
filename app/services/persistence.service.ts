@@ -156,7 +156,8 @@ export class PersistenceService implements IPersistenceService {
   async loadAllProposals(): Promise<IProposal[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals ORDER BY id'
+        'SELECT * FROM i_proposals WHERE moderator_id = $1 ORDER BY id',
+        [this.moderatorId]
       );
 
       const proposals: IProposal[] = [];
@@ -184,7 +185,8 @@ export class PersistenceService implements IPersistenceService {
   async getProposalsForFrontend(): Promise<IProposalDB[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals ORDER BY created_at DESC'
+        'SELECT * FROM i_proposals WHERE moderator_id = $1 ORDER BY created_at DESC',
+        [this.moderatorId]
       );
 
       return result.rows;
