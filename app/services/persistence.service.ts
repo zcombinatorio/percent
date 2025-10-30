@@ -353,10 +353,32 @@ export class PersistenceService implements IPersistenceService {
         baseDecimals: row.base_decimals,
         quoteDecimals: row.quote_decimals,
 
-        transactionInstructions: typeof row.transaction_instructions === 'string'
-          ? JSON.parse(row.transaction_instructions)
-          : row.transaction_instructions,
-        transactionFeePayer: row.transaction_fee_payer || undefined,
+        transactionInstructions: (() => {
+          const txData = typeof row.transaction_instructions === 'string'
+            ? JSON.parse(row.transaction_instructions)
+            : row.transaction_instructions;
+
+          // Handle both old format (array) and new format (object with instructions)
+          if (Array.isArray(txData)) {
+            return txData; // Old format: direct array of instructions
+          } else if (txData && typeof txData === 'object' && 'instructions' in txData) {
+            return txData.instructions; // New format: extract instructions array
+          }
+          return []; // Fallback
+        })(),
+        transactionFeePayer: (() => {
+          if (row.transaction_fee_payer) return row.transaction_fee_payer;
+
+          // Check if new format has feePayer
+          const txData = typeof row.transaction_instructions === 'string'
+            ? JSON.parse(row.transaction_instructions)
+            : row.transaction_instructions;
+
+          if (txData && typeof txData === 'object' && 'feePayer' in txData && txData.feePayer) {
+            return txData.feePayer;
+          }
+          return undefined;
+        })(),
 
         ammConfig: typeof row.amm_config === 'string'
           ? JSON.parse(row.amm_config)
@@ -396,13 +418,13 @@ export class PersistenceService implements IPersistenceService {
       return proposal;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to deserialize proposal #${row.id}`, {
+      this.logger.error(`Failed to deserialize proposal #${row.proposal_id}`, {
         proposalId: row.id,
         moderatorId: this.moderatorId,
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
-      throw new Error(`Failed to deserialize proposal #${row.id}: ${errorMessage}`);
+      throw new Error(`Failed to deserialize proposal #${row.proposal_id}: ${errorMessage}`);
     }
   }
 }

@@ -428,13 +428,32 @@ export class Proposal implements IProposal {
     // Only deserialize components if the proposal isn't in Uninitialized state
     if (data.status !== ProposalStatus.Uninitialized) {
       // Deserialize vaults
-      const baseVault = await Vault.deserialize(data.baseVaultData, {
+      // Patch vault data with proposal-level info if missing (for backward compatibility)
+      const baseVaultData = {
+        ...data.baseVaultData,
+        proposalId: data.baseVaultData.proposalId ?? data.id,
+        vaultType: data.baseVaultData.vaultType ?? VaultType.Base,
+        regularMint: data.baseVaultData.regularMint || data.baseMint,
+        decimals: data.baseVaultData.decimals ?? data.baseDecimals,
+        proposalStatus: data.baseVaultData.proposalStatus ?? data.status
+      };
+
+      const quoteVaultData = {
+        ...data.quoteVaultData,
+        proposalId: data.quoteVaultData.proposalId ?? data.id,
+        vaultType: data.quoteVaultData.vaultType ?? VaultType.Quote,
+        regularMint: data.quoteVaultData.regularMint || data.quoteMint,
+        decimals: data.quoteVaultData.decimals ?? data.quoteDecimals,
+        proposalStatus: data.quoteVaultData.proposalStatus ?? data.status
+      };
+
+      const baseVault = await Vault.deserialize(baseVaultData, {
         authority: config.authority,
         executionService: config.executionService,
         logger: config.logger.createChild('baseVault')
       });
 
-      const quoteVault = await Vault.deserialize(data.quoteVaultData, {
+      const quoteVault = await Vault.deserialize(quoteVaultData, {
         authority: config.authority,
         executionService: config.executionService,
         logger: config.logger.createChild('quoteVault')
@@ -445,13 +464,30 @@ export class Proposal implements IProposal {
       proposal.quoteVault = quoteVault;
 
       // Deserialize AMMs
-      const pAMM = AMM.deserialize(data.pAMMData, {
+      // Patch AMM data with proposal-level token info if missing (for backward compatibility)
+      const pAMMData = {
+        ...data.pAMMData,
+        baseMint: data.pAMMData.baseMint || baseVault.passConditionalMint?.toBase58(),
+        quoteMint: data.pAMMData.quoteMint || data.quoteMint,
+        baseDecimals: data.pAMMData.baseDecimals ?? data.baseDecimals,
+        quoteDecimals: data.pAMMData.quoteDecimals ?? data.quoteDecimals
+      };
+
+      const fAMMData = {
+        ...data.fAMMData,
+        baseMint: data.fAMMData.baseMint || baseVault.failConditionalMint?.toBase58(),
+        quoteMint: data.fAMMData.quoteMint || data.quoteMint,
+        baseDecimals: data.fAMMData.baseDecimals ?? data.baseDecimals,
+        quoteDecimals: data.fAMMData.quoteDecimals ?? data.quoteDecimals
+      };
+
+      const pAMM = AMM.deserialize(pAMMData, {
         authority: config.authority,
         executionService: config.executionService,
         logger: config.logger.createChild('pAMM')
       });
 
-      const fAMM = AMM.deserialize(data.fAMMData, {
+      const fAMM = AMM.deserialize(fAMMData, {
         authority: config.authority,
         executionService: config.executionService,
         logger: config.logger.createChild('fAMM')
