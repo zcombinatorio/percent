@@ -244,11 +244,25 @@ router.get('/:id/chart', async (req, res, next) => {
       }
     }
 
+    // For sparse data (like predictions markets with few trades),
+    // expand the lookback window to at least 24 hours to ensure we catch data points
+    const minLookbackMs = 24 * 60 * 60 * 1000; // 24 hours
+    let effectiveFromDate = fromDate;
+
+    if (fromDate) {
+      const requestedLookback = Date.now() - fromDate.getTime();
+      if (requestedLookback < minLookbackMs) {
+        effectiveFromDate = new Date(Date.now() - minLookbackMs);
+      }
+    } else {
+      effectiveFromDate = new Date(Date.now() - minLookbackMs);
+    }
+
     const chartData = await HistoryService.getChartData(
       moderatorId,
       proposalId,
       interval as '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
-      fromDate,
+      effectiveFromDate,
       toDate
     );
 
