@@ -27,6 +27,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { claimWinnings } from '@/lib/trading';
 import { buildApiUrl } from '@/lib/api-utils';
+import Masonry from 'react-masonry-css';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
   ssr: false,
@@ -699,7 +700,12 @@ export default function HomePage() {
                 <div className="text-white mb-6">
                   <h2 className="text-2xl font-medium">History</h2>
                 </div>
-                <div className="grid grid-cols-3 gap-4 auto-rows-auto items-start pb-8">
+                <Masonry
+                  breakpointCols={3}
+                  className="flex w-auto pb-8"
+                  columnClassName="bg-clip-padding"
+                  style={{ marginLeft: '-16px' }}
+                >
                   {sortedProposals.map((proposal) => {
                     const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description);
                     const isHovered = hoveredProposalId === proposal.id;
@@ -754,7 +760,7 @@ export default function HomePage() {
                             );
                           }
                         }}
-                        className={`bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300 ${
+                        className={`bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300 ml-4 mb-4 ${
                           hasClaimableRewards ? 'cursor-pointer' : ''
                         } ${isCurrentlyClaiming ? 'opacity-60 pointer-events-none' : ''}`}
                       >
@@ -833,7 +839,7 @@ export default function HomePage() {
                       </div>
                     );
                   })}
-                </div>
+                </Masonry>
               </div>
             </div>
           )}
