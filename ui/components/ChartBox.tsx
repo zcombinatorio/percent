@@ -6,26 +6,9 @@ interface ChartBoxProps {
 }
 
 export function ChartBox({ proposalId, selectedMarket }: ChartBoxProps) {
-  const borderColor = selectedMarket === 'pass'
-    ? 'rgba(110, 204, 148, 0.1)'
-    : 'rgba(255, 111, 148, 0.1)';
-
-  const hoverBorderColor = selectedMarket === 'pass'
-    ? 'rgba(110, 204, 148, 0.3)'
-    : 'rgba(255, 111, 148, 0.3)';
-
   return (
-    <div
-      className="bg-theme-card border rounded-[9px] p-3 transition-all duration-300"
-      style={{ borderColor }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = hoverBorderColor;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = borderColor;
-      }}
-    >
-      <div className="bg-[#1A1A1A] overflow-hidden rounded-lg">
+    <div className="bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300">
+      <div className="bg-[#181818] overflow-hidden rounded-lg">
         <MarketChart proposalId={proposalId} market={selectedMarket} height={512} />
       </div>
     </div>

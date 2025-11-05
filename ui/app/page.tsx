@@ -52,6 +52,7 @@ export default function HomePage() {
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
+  const [isPassMode, setIsPassMode] = useState(true);
 
   // Fetch wallet balances
   const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
@@ -443,7 +444,7 @@ export default function HomePage() {
 
   if (!proposal || proposals.length === 0) {
     return (
-      <div className="flex h-screen bg-[#0a0a0a]">
+      <div className="flex h-screen" style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Header */}
@@ -456,6 +457,7 @@ export default function HomePage() {
             login={login}
             navTab={navTab}
             onNavTabChange={setNavTab}
+            isPassMode={isPassMode}
           />
 
           {/* Empty state */}
@@ -471,7 +473,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex h-screen bg-[#0a0a0a]">
+    <div className="flex h-screen" style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
@@ -484,6 +486,7 @@ export default function HomePage() {
           login={login}
           navTab={navTab}
           onNavTabChange={setNavTab}
+          isPassMode={isPassMode}
         />
 
         {/* Content Area */}
@@ -491,89 +494,74 @@ export default function HomePage() {
           {navTab === 'live' && (
             <div className="flex-1 flex justify-center overflow-y-auto">
               <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8 pb-8">
-                <div className="text-white mb-6">
-                  <h2 className="text-2xl font-medium">Live Proposal</h2>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-medium" style={{ color: '#E9E9E3' }}>Live Proposal</h2>
                 </div>
 
                 {/* 2-column layout: 2/3 left, 1/3 right */}
                 <div className="grid grid-cols-3 gap-4">
                   {/* Left Column (2/3 width) */}
                   <div className="col-span-2 flex flex-col gap-4 pb-12">
-                    {/* Title and Description */}
-                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
-                      <div className="flex flex-col">
-                        <h1 className="text-sm font-semibold text-white mb-6 uppercase">
-                          {getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID).title}
-                        </h1>
-                        <div className="text-sm text-gray-300">
-                          {getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID).content || proposal.description}
-                        </div>
-                      </div>
-                    </div>
+                    {/* Top Row: Title/Description and Time Left */}
+                    <div className="flex gap-4 items-stretch">
+                      {/* Title and Description */}
+                      {(() => {
+                        const content = getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID);
+                        const rawContent = content.content || proposal.description || '';
 
-                    {/* Top Row: Started, Time Left, Pass Price, Fail Price, PFG */}
-                    <div className="flex gap-4">
-                      {/* Start Date */}
-                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
-                        <div className="text-white flex flex-col">
-                          <span className="text-sm text-white font-semibold uppercase mb-6">Started</span>
-                          <span className="text-sm text-gray-300">
-                            {new Date(proposal.createdAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric'
-                            })} {new Date(proposal.createdAt).toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                        </div>
-                      </div>
+                        // Try to extract GitHub URL from original proposal.description string
+                        let githubUrl = null;
+                        const descriptionStr = typeof proposal.description === 'string'
+                          ? proposal.description
+                          : '';
+
+                        if (descriptionStr) {
+                          const githubMatch = descriptionStr.match(/(https?:\/\/github\.com\/[^\s\)\],]+)/i);
+                          githubUrl = githubMatch ? githubMatch[1] : null;
+                        }
+
+                        // Also try from rawContent if it's a string and we haven't found a URL yet
+                        if (!githubUrl && typeof rawContent === 'string') {
+                          const githubMatch = rawContent.match(/(https?:\/\/github\.com\/[^\s\)\],]+)/i);
+                          githubUrl = githubMatch ? githubMatch[1] : null;
+                        }
+
+                        const cardInner = (
+                          <div className="flex flex-col justify-between h-full">
+                            <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#E9E9E3' }}>
+                              {content.title}
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </h1>
+                            <div className="text-sm" style={{ color: '#DDDDD7' }}>
+                              {rawContent}
+                            </div>
+                          </div>
+                        );
+
+                        return githubUrl ? (
+                          <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="flex-[4] h-full">
+                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
+                              {cardInner}
+                            </div>
+                          </a>
+                        ) : (
+                          <div className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer">
+                            {cardInner}
+                          </div>
+                        );
+                      })()}
 
                       {/* Time Remaining */}
-                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
-                        <div className="text-white flex flex-col">
-                          <span className="text-sm text-white font-semibold uppercase mb-6">Time Left</span>
-                          <span className="text-sm text-gray-300 font-mono">
-                            <CountdownTimer
-                              endsAt={proposal.finalizedAt}
-                              onTimerEnd={handleTimerEnd}
-                              isPending={proposal.status === 'Pending'}
-                            />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Pass Price */}
-                      <div
-                        className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
-                      >
-                        <div className="text-white flex flex-col">
-                          <span className="text-sm text-white font-semibold uppercase mb-6">Pass Price</span>
-                          <span className="text-sm font-mono font-semibold" style={{ color: '#6ECC94' }}>
-                            {livePrices.pass !== null ? formatCurrency(livePrices.pass, 4) : '--'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Fail Price */}
-                      <div
-                        className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
-                      >
-                        <div className="text-white flex flex-col">
-                          <span className="text-sm text-white font-semibold uppercase mb-6">Fail Price</span>
-                          <span className="text-sm font-mono font-semibold" style={{ color: '#FF6F94' }}>
-                            {livePrices.fail !== null ? formatCurrency(livePrices.fail, 4) : '--'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* TWAP Pass-Fail Gap */}
-                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
-                        <div className="text-white flex flex-col">
-                          <span className="text-sm text-white font-semibold uppercase mb-6">PFG</span>
-                          <span className="text-sm font-mono font-semibold">
-                            {pfgPercentage !== null ? `${pfgPercentage.toFixed(2)}%` : '--'}
-                          </span>
+                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300">
+                        <div className="text-white flex flex-col items-center">
+                          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>Time Left</span>
+                          <CountdownTimer
+                            endsAt={proposal.finalizedAt}
+                            onTimerEnd={handleTimerEnd}
+                            isPending={proposal.status === 'Pending'}
+                          />
                         </div>
                       </div>
                     </div>
@@ -587,9 +575,23 @@ export default function HomePage() {
 
                   {/* Right Column (1/3 width) */}
                   <div className="col-span-1 flex flex-col gap-4 pb-12">
-                    {/* Mode Toggle - Centered */}
-                    <div className="flex justify-center">
-                      <ModeToggle />
+                    {/* Mode Toggle */}
+                    <ModeToggle isPassMode={isPassMode} onToggle={setIsPassMode} pfgPercentage={pfgPercentage} />
+
+                    {/* Trading Interface */}
+                    <div
+                      className="bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300"
+                    >
+                      <TradingInterface
+                        proposalId={proposal.id}
+                        selectedMarket={selectedMarket}
+                        onMarketChange={handleMarketChange}
+                        passPrice={livePrices.pass || 0.5}
+                        failPrice={livePrices.fail || 0.5}
+                        proposalStatus="Pending"
+                        userBalances={userBalances}
+                        refetchBalances={refetchBalances}
+                      />
                     </div>
 
                     {/* User Balances - Side by Side */}
@@ -600,8 +602,8 @@ export default function HomePage() {
                           className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
                         >
                           <div className="text-white flex flex-col">
-                            <span className="text-sm text-white font-semibold uppercase mb-6">If Pass</span>
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                            <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>If Pass</span>
+                            <div className="flex items-center gap-2 text-sm" style={{ color: '#DDDDD7' }}>
                               <span
                                 className="group relative cursor-default"
                                 title={zcPrice ? formatCurrency((parseFloat(userBalances.base.passConditional || '0') / 1e6) * zcPrice, 2) : 'Price unavailable'}
@@ -634,8 +636,8 @@ export default function HomePage() {
                           className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
                         >
                           <div className="text-white flex flex-col">
-                            <span className="text-sm text-white font-semibold uppercase mb-6">If Fail</span>
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                            <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>If Fail</span>
+                            <div className="flex items-center gap-2 text-sm" style={{ color: '#DDDDD7' }}>
                               <span
                                 className="group relative cursor-default"
                                 title={zcPrice ? formatCurrency((parseFloat(userBalances.base.failConditional || '0') / 1e6) * zcPrice, 2) : 'Price unavailable'}
@@ -665,22 +667,6 @@ export default function HomePage() {
                       </div>
                     )}
 
-                    {/* Trading Interface */}
-                    <div
-                      className="bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300"
-                    >
-                      <TradingInterface
-                        proposalId={proposal.id}
-                        selectedMarket={selectedMarket}
-                        onMarketChange={handleMarketChange}
-                        passPrice={livePrices.pass || 0.5}
-                        failPrice={livePrices.fail || 0.5}
-                        proposalStatus="Pending"
-                        userBalances={userBalances}
-                        refetchBalances={refetchBalances}
-                      />
-                    </div>
-
                     {/* Trade History */}
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
                       <TradeHistoryTable
@@ -709,8 +695,8 @@ export default function HomePage() {
           {navTab === 'history' && (
             <div className="flex-1 flex justify-center overflow-y-auto">
               <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8">
-                <div className="text-white mb-6">
-                  <h2 className="text-2xl font-medium">History</h2>
+                <div className="mb-6">
+                  <h2 className="text-2xl font-medium" style={{ color: '#E9E9E3' }}>History</h2>
                 </div>
                 <Masonry
                   breakpointCols={3}
@@ -782,7 +768,7 @@ export default function HomePage() {
                         <div className="text-white flex flex-col">
                           <div className="flex items-center justify-between gap-2 mb-6">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <div className="text-sm text-[#B0AFAB] font-semibold">ZC-{proposal.id}</div>
+                              <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>ZC-{proposal.id}</div>
                               {proposal.status === 'Passed' && (
                                 <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#6ECC9433', color: '#6ECC94' }}>
                                   Pass
@@ -801,7 +787,7 @@ export default function HomePage() {
                                 </span>
                               )}
                             </div>
-                            <div className="text-sm text-[#B0AFAB] font-semibold">
+                            <div className="text-sm text-[#B0AFAB]">
                               {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
@@ -810,10 +796,10 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          <div className="text-lg font-normal mb-2">{proposalContent.title}</div>
+                          <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>{proposalContent.title}</div>
 
                           {/* Show summary or full content based on hover */}
-                          <div className={`text-sm text-gray-300 ${proposalRewards.length > 0 ? 'mb-6' : ''}`}>
+                          <div className={`text-sm ${proposalRewards.length > 0 ? 'mb-6' : ''}`} style={{ color: '#DDDDD7' }}>
                             {isHovered ? (
                               proposalContent.content || <p>{proposal.description}</p>
                             ) : (
@@ -829,7 +815,7 @@ export default function HomePage() {
                                   <div className="w-2 h-2 rounded-full absolute" style={{ backgroundColor: '#EF6300', opacity: 0.75, animation: 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite' }}></div>
                                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#EF6300' }}></div>
                                 </div>
-                                <span className="text-sm font-semibold" style={{ color: '#EF6300' }}>Click to claim</span>
+                                <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#EF6300' }}>Click to claim</span>
                               </div>
 
                               {/* Rewards display */}
@@ -839,7 +825,7 @@ export default function HomePage() {
                                     {idx > 0 && (
                                       <div className="w-px h-4 bg-[#2A2A2A]"></div>
                                     )}
-                                    <span className="font-semibold">
+                                    <span className="font-semibold font-ibm-plex-mono tracking-[0.2em]">
                                       {reward.claimableToken === 'zc'
                                         ? formatNumber(reward.claimableAmount, 0)
                                         : reward.claimableAmount.toFixed(4)

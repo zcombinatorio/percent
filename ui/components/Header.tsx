@@ -13,9 +13,10 @@ interface HeaderProps {
   login?: () => void;
   navTab: 'live' | 'history';
   onNavTabChange: (tab: 'live' | 'history') => void;
+  isPassMode?: boolean;
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login, navTab, onNavTabChange }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login, navTab, onNavTabChange, isPassMode = true }: HeaderProps) {
   const { exportWallet } = useSolanaWallets();
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
   const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
@@ -36,7 +37,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
   };
 
   return (
-    <div className="bg-[#0a0a0a]">
+    <div style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
       {/* First Row: Logo / wallet / balances / links */}
       <div className="h-14 flex items-center justify-between px-8">
         {/* Left side: Logo / wallet / balances */}

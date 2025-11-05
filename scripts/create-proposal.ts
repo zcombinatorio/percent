@@ -23,8 +23,8 @@ async function createProposal() {
   
   // Raw token amounts (smallest units)
   // Current_spot = ~0.010 SOL per ZC
-  const initialBaseAmount = '7048982000000';  // ZC (6 decimals)
-  const initialQuoteAmount = '23875850000'; // (9 decimals)
+  const initialBaseAmount = '7397005000000';  // ZC (6 decimals)
+  const initialQuoteAmount = '22807540000'; // (9 decimals)
   
   // Calculate decimal-adjusted price (same as AMM will return)
   // Convert to actual token amounts: raw / 10^decimals
@@ -34,9 +34,9 @@ async function createProposal() {
   console.log(ammPrice);
   
   const request: CreateProposalRequest = {
-    title: 'StreamVC Token Launch Spec',
-    description: 'Should ZC execute on the proposal in PR #27? https://github.com/zcombinatorio/zcombinator/pull/27',
-    proposalLength: 86400, // 3 hours
+    title: 'Infinite Supply Mitigation',
+    description: 'Should ZC merge PR #29 into main? https://github.com/zcombinatorio/zcombinator/pull/29',
+    proposalLength: 86400, // 24 hours
     spotPoolAddress: 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad', // ZC/SOL spot pool
     totalSupply: 1120710405, // 1 billion tokens for market cap calculation
     twap: {
