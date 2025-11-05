@@ -184,6 +184,14 @@ export default function HomePage() {
   
   const handleMarketChange = useCallback((market: 'pass' | 'fail') => {
     setSelectedMarket(market);
+    // Also sync the mode toggle
+    setIsPassMode(market === 'pass');
+  }, []);
+
+  const handleModeToggle = useCallback((newIsPassMode: boolean) => {
+    setIsPassMode(newIsPassMode);
+    // Also sync the selected market
+    setSelectedMarket(newIsPassMode ? 'pass' : 'fail');
   }, []);
 
   const handleTimerEnd = useCallback(() => {
@@ -444,7 +452,7 @@ export default function HomePage() {
 
   if (!proposal || proposals.length === 0) {
     return (
-      <div className="flex h-screen" style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
+      <div className="flex h-screen" style={{ backgroundColor: '#0a0a0a' }}>
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Header */}
@@ -473,7 +481,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex h-screen" style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
+    <div className="flex h-screen" style={{ backgroundColor: '#0a0a0a' }}>
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
@@ -534,7 +542,7 @@ export default function HomePage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>
                             </h1>
-                            <div className="text-sm" style={{ color: '#DDDDD7' }}>
+                            <div className="text-sm description-links" style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
                           </div>
@@ -547,14 +555,14 @@ export default function HomePage() {
                             </div>
                           </a>
                         ) : (
-                          <div className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer">
+                          <div className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
                             {cardInner}
                           </div>
                         );
                       })()}
 
                       {/* Time Remaining */}
-                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300">
+                      <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
                         <div className="text-white flex flex-col items-center">
                           <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>Time Left</span>
                           <CountdownTimer
@@ -576,11 +584,11 @@ export default function HomePage() {
                   {/* Right Column (1/3 width) */}
                   <div className="col-span-1 flex flex-col gap-4 pb-12">
                     {/* Mode Toggle */}
-                    <ModeToggle isPassMode={isPassMode} onToggle={setIsPassMode} pfgPercentage={pfgPercentage} />
+                    <ModeToggle isPassMode={isPassMode} onToggle={handleModeToggle} pfgPercentage={pfgPercentage} />
 
                     {/* Trading Interface */}
                     <div
-                      className="bg-[#121212] border border-[#191919] rounded-[9px] p-3 hover:border-[#2A2A2A] transition-all duration-300"
+                      className="bg-[#121212] border border-[#191919] rounded-[9px] p-3 transition-all duration-300"
                     >
                       <TradingInterface
                         proposalId={proposal.id}
@@ -599,7 +607,7 @@ export default function HomePage() {
                       <div className="flex gap-4">
                         {/* Pass Balances */}
                         <div
-                          className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
+                          className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300"
                         >
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>If Pass</span>
@@ -633,7 +641,7 @@ export default function HomePage() {
 
                         {/* Fail Balances */}
                         <div
-                          className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300"
+                          className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300"
                         >
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6" style={{ color: '#DDDDD7' }}>If Fail</span>
@@ -668,7 +676,7 @@ export default function HomePage() {
                     )}
 
                     {/* Trade History */}
-                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 hover:border-[#2A2A2A] transition-all duration-300">
+                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                       <TradeHistoryTable
                         trades={trades}
                         loading={tradesLoading}
@@ -758,12 +766,9 @@ export default function HomePage() {
                             );
                           }
                         }}
-                        className={`bg-[#121212] border rounded-[9px] py-3 px-5 transition-all duration-300 ml-4 mb-4 ${
-                          hasClaimableRewards ? 'cursor-pointer' : 'border-[#191919] hover:border-[#2A2A2A]'
+                        className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 ml-4 mb-4 ${
+                          hasClaimableRewards ? 'cursor-pointer hover:border-[#2A2A2A]' : ''
                         } ${isCurrentlyClaiming ? 'opacity-60 pointer-events-none' : ''}`}
-                        style={hasClaimableRewards ? {
-                          borderColor: isHovered ? 'rgba(239, 99, 0, 0.3)' : 'rgba(239, 99, 0, 0.1)'
-                        } : undefined}
                       >
                         <div className="text-white flex flex-col">
                           <div className="flex items-center justify-between gap-2 mb-6">
@@ -815,7 +820,7 @@ export default function HomePage() {
                                   <div className="w-2 h-2 rounded-full absolute" style={{ backgroundColor: '#EF6300', opacity: 0.75, animation: 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite' }}></div>
                                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#EF6300' }}></div>
                                 </div>
-                                <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#EF6300' }}>Click to claim</span>
+                                <span className="text-sm" style={{ color: '#EF6300' }}>Click to claim</span>
                               </div>
 
                               {/* Rewards display */}
@@ -825,7 +830,7 @@ export default function HomePage() {
                                     {idx > 0 && (
                                       <div className="w-px h-4 bg-[#2A2A2A]"></div>
                                     )}
-                                    <span className="font-semibold font-ibm-plex-mono tracking-[0.2em]">
+                                    <span>
                                       {reward.claimableToken === 'zc'
                                         ? formatNumber(reward.claimableAmount, 0)
                                         : reward.claimableAmount.toFixed(4)

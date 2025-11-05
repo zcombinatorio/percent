@@ -37,7 +37,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
   };
 
   return (
-    <div style={{ backgroundColor: isPassMode ? '#0a0a0a' : '#F8F8F8' }}>
+    <div style={{ backgroundColor: '#0a0a0a' }}>
       {/* First Row: Logo / wallet / balances / links */}
       <div className="h-14 flex items-center justify-between px-8">
         {/* Left side: Logo / wallet / balances */}

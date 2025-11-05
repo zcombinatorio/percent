@@ -20,12 +20,13 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage }: ModeTogglePr
   };
 
   return (
-    <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-6 px-5 hover:border-[#2A2A2A] transition-all duration-300">
+    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-4">
-        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4" style={{ color: '#DDDDD7' }}>
+        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2" style={{ color: '#DDDDD7' }}>
           Toggle Market
         </span>
-        <div className="inline-flex flex-row items-center select-none">
+        <div className="border border-[#191919] rounded-[6px] p-4 flex flex-col items-center gap-4">
+        <div className="inline-flex flex-row items-center select-none py-2">
         {/* Dark Label */}
         <h6
           className={`text-md uppercase pr-6 py-3 min-w-[48px] cursor-pointer transition-colors duration-200 flex items-center gap-2.5 ${
@@ -48,19 +49,7 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage }: ModeTogglePr
           onClick={handleToggleClick}
           className="relative w-[72px] h-[42px] border-none outline-none overflow-hidden rounded-[21px] transition-all duration-200 cursor-pointer"
           style={{
-            background: isPassMode ? '#F8F8F8' : '#404346',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = isPassMode ? '#FCFEFE' : '#2D2F31';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = isPassMode ? '#F8F8F8' : '#404346';
-          }}
-          onMouseDown={(e) => {
-            e.currentTarget.style.background = isPassMode ? '#E8E8E8' : '#141516';
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.background = isPassMode ? '#FCFEFE' : '#2D2F31';
+            background: '#404346',
           }}
         >
           {/* Circle */}
@@ -69,41 +58,32 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage }: ModeTogglePr
             style={{
               top: '6px',
               left: isPassMode ? '6px' : '36px',
-              background: isPassMode ? '#2D2F31' : '#DCE0E3',
+              background: '#DCE0E3',
             }}
           />
 
-          {/* Decorative Element (after pseudo) */}
-          <div
-            className="absolute rounded-full transition-all duration-200"
-            style={
-              isPassMode
-                ? {
-                    top: '-3px',
-                    right: '3px',
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '24px',
-                    background: '#F8F8F8',
-                  }
-                : {
-                    top: '21px',
-                    right: '3px',
-                    width: '1.5px',
-                    height: '1.5px',
-                    borderRadius: '0.75px',
-                    background: '#404346',
-                  }
-            }
-          />
+          {/* Decorative Element (after pseudo) - Only show in Fail mode */}
+          {!isPassMode && (
+            <div
+              className="absolute rounded-full transition-all duration-200"
+              style={{
+                top: '21px',
+                right: '3px',
+                width: '1.5px',
+                height: '1.5px',
+                borderRadius: '0.75px',
+                background: '#404346',
+              }}
+            />
+          )}
         </button>
 
         {/* Light Label */}
         <h6
           className={`text-md uppercase pl-6 py-3 min-w-[48px] cursor-pointer transition-colors duration-200 flex items-center gap-2.5 ${
             isPassMode
-              ? 'text-[#B9BDC1] hover:text-[#FCFEFE] active:text-[#CDD1D5]'
-              : 'text-[#5B5E62] pointer-events-none'
+              ? 'text-[#6B6E71] hover:text-[#9B9E9F] active:text-[#8B8E8F]'
+              : 'text-[#FFFFFF] pointer-events-none'
           }`}
           onClick={handleLightClick}
           style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
@@ -118,14 +98,15 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage }: ModeTogglePr
 
       {/* PFG Value */}
       <div
-        className="text-md py-2"
+        className="text-md pb-2"
         style={{
           fontFamily: 'IBM Plex Mono, monospace',
           letterSpacing: '0em',
-          color: isPassMode ? '#FFFFFF' : '#5B5E62',
+          color: '#FFFFFF',
         }}
       >
         PFG {pfgPercentage !== null ? pfgPercentage.toFixed(2) : '0.00'}%
+      </div>
       </div>
       </div>
     </div>

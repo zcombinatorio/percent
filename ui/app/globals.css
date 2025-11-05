@@ -145,3 +145,13 @@ body {
     opacity: 1;
   }
 }
+
+/* Description link styling */
+.description-links a {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+.description-links a:hover {
+  text-decoration: underline !important;
+}
