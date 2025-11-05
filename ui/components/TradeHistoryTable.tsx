@@ -1,4 +1,3 @@
-import { formatNumber, formatVolume } from '@/lib/formatters';
 
 interface Trade {
   id: number;
@@ -18,8 +17,6 @@ interface TradeHistoryTableProps {
   getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail') => string;
 }
 
-const GRID_COLUMNS = '1.5fr 0.7fr 0.7fr 1.5fr 1.5fr 0.7fr';
-
 export function TradeHistoryTable({
   trades,
   loading,
@@ -28,49 +25,68 @@ export function TradeHistoryTable({
   getTokenUsed
 }: TradeHistoryTableProps) {
   return (
-    <div className="border-b border-l border-r border-[#282828]">
-      {/* Table Header */}
-      <div
-        className="grid gap-4 px-4 py-3 text-xs text-[#9C9D9E] font-medium border-b border-theme-border-hover"
-        style={{ gridTemplateColumns: GRID_COLUMNS }}
-      >
-        <div>Trader</div>
-        <div>Bet</div>
-        <div>Type</div>
-        <div>Amount</div>
-        <div>Tx</div>
-        <div className="text-right">Age</div>
-      </div>
-
-      {/* Table Body - Scrollable */}
-      <div className="max-h-[400px] overflow-y-auto scrollbar-hide">
+    <div className="max-h-[400px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
+      <table className="w-full text-xs">
+        <thead className="text-[#6B6E71] font-medium uppercase">
+          <tr>
+            <th className="py-3 pl-3 text-left font-medium">Trader</th>
+            <th className="py-3 text-left font-medium">Coin</th>
+            <th className="py-3 text-left font-medium">Trade</th>
+            <th className="py-3 text-left font-medium">Amount</th>
+            <th className="py-3 text-left font-medium">Tx</th>
+            <th className="py-3 pr-3 text-right font-medium">Age</th>
+          </tr>
+        </thead>
+        <tbody>
         {loading ? (
-          <div className="px-4 py-8 text-center text-[#9C9D9E] text-xs">
-            Loading trades...
-          </div>
+          <tr>
+            <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+              Loading trades...
+            </td>
+          </tr>
         ) : trades.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[#9C9D9E] text-xs">
-            No trades yet
-          </div>
+          <tr>
+            <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+              No trades yet
+            </td>
+          </tr>
         ) : (
           trades.map((trade) => {
             const tokenUsed = getTokenUsed(trade.isBaseToQuote, trade.market);
             const isBuy = !trade.isBaseToQuote;
             const amount = parseFloat(trade.amountIn);
-            const decimals = tokenUsed === 'SOL' ? 3 : 0;
-            const formattedAmount = formatNumber(amount, decimals);
+
+            // Format amount with K/M/B notation for ZC - remove trailing zeros
+            const removeTrailingZeros = (num: string): string => {
+              return num.replace(/\.?0+$/, '');
+            };
+
+            let formattedAmount;
+            if (tokenUsed === 'SOL') {
+              formattedAmount = removeTrailingZeros(amount.toFixed(3));
+            } else {
+              // ZC formatting with K/M/B notation
+              if (amount >= 1000000000) {
+                formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
+              } else if (amount >= 1000000) {
+                formattedAmount = removeTrailingZeros((amount / 1000000).toFixed(3)) + 'M';
+              } else if (amount >= 1000) {
+                formattedAmount = removeTrailingZeros((amount / 1000).toFixed(3)) + 'K';
+              } else {
+                formattedAmount = removeTrailingZeros(amount.toFixed(3));
+              }
+            }
 
             return (
-              <div
+              <tr
                 key={trade.id}
-                className="grid gap-4 px-4 py-3 text-xs hover:bg-[#272A2D]/30 transition-colors"
-                style={{ gridTemplateColumns: GRID_COLUMNS }}
+                className="hover:bg-[#272A2D]/30 transition-colors"
               >
-                <div className="text-theme-text flex items-center gap-1">
-                  <span>{formatAddress(trade.userAddress)}</span>
+                <td className="py-3 pl-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
+                  {formatAddress(trade.userAddress)}
                   <button
                     onClick={() => navigator.clipboard.writeText(trade.userAddress)}
-                    className="text-[#9C9D9E] hover:text-theme-text transition-colors"
+                    className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
                     title="Copy address"
                   >
                     <svg
@@ -82,6 +98,7 @@ export function TradeHistoryTable({
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
+                      className="inline"
                     >
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -91,7 +108,7 @@ export function TradeHistoryTable({
                     href={`https://solscan.io/account/${trade.userAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#9C9D9E] hover:text-theme-text transition-colors"
+                    className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
                     title="View on Solscan"
                   >
                     <svg
@@ -103,30 +120,31 @@ export function TradeHistoryTable({
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
+                      className="inline"
                     >
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                       <polyline points="15 3 21 3 21 9"></polyline>
                       <line x1="10" y1="14" x2="21" y2="3"></line>
                     </svg>
                   </a>
-                </div>
-                <div style={{ color: trade.market === 'pass' ? '#6ECC94' : '#FF6F94' }}>
+                </td>
+                <td className="py-3 uppercase" style={{ color: '#DDDDD7' }}>
                   {trade.market === 'pass' ? 'Pass' : 'Fail'}
-                </div>
-                <div style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
+                </td>
+                <td className="py-3" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
                   {isBuy ? 'Buy' : 'Sell'}
-                </div>
-                <div className="text-theme-text">
-                  {formattedAmount} {tokenUsed}
-                </div>
-                <div className="text-theme-text flex items-center gap-1">
-                  <span>{trade.txSignature ? `${trade.txSignature.slice(0, 4)}...${trade.txSignature.slice(-4)}` : '—'}</span>
+                </td>
+                <td className="py-3" style={{ color: '#DDDDD7' }}>
+                  {formattedAmount} {tokenUsed.replace('$', '')}
+                </td>
+                <td className="py-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
+                  {trade.txSignature ? trade.txSignature.slice(0, 6) : '—'}
                   {trade.txSignature && (
                     <a
                       href={`https://solscan.io/tx/${trade.txSignature}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#9C9D9E] hover:text-theme-text transition-colors"
+                      className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
                     >
                       <svg
                         width="12"
@@ -137,6 +155,7 @@ export function TradeHistoryTable({
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
+                        className="inline"
                       >
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                         <polyline points="15 3 21 3 21 9"></polyline>
@@ -144,13 +163,14 @@ export function TradeHistoryTable({
                       </svg>
                     </a>
                   )}
-                </div>
-                <div className="text-[#9C9D9E] text-right">{getTimeAgo(trade.timestamp)}</div>
-              </div>
+                </td>
+                <td className="py-3 pr-3 text-right text-[#6B6E71]">{getTimeAgo(trade.timestamp)}</td>
+              </tr>
             );
           })
         )}
-      </div>
+        </tbody>
+      </table>
     </div>
   );
 }

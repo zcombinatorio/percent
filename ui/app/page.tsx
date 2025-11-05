@@ -514,11 +514,10 @@ export default function HomePage() {
                     <div className="flex gap-4 items-stretch">
                       {/* Title and Description */}
                       {(() => {
-                        const content = getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID);
-                        const rawContent = content.content || proposal.description || '';
-
-                        // Try to extract GitHub URL from original proposal.description string
+                        // Clean description first - remove GitHub URLs
+                        let cleanedDescription = proposal.description;
                         let githubUrl = null;
+
                         const descriptionStr = typeof proposal.description === 'string'
                           ? proposal.description
                           : '';
@@ -526,22 +525,25 @@ export default function HomePage() {
                         if (descriptionStr) {
                           const githubMatch = descriptionStr.match(/(https?:\/\/github\.com\/[^\s\)\],]+)/i);
                           githubUrl = githubMatch ? githubMatch[1] : null;
+
+                          // Remove GitHub URL from description
+                          cleanedDescription = descriptionStr.replace(/(https?:\/\/github\.com\/[^\s\)\],]+)/gi, '').trim();
                         }
 
-                        // Also try from rawContent if it's a string and we haven't found a URL yet
-                        if (!githubUrl && typeof rawContent === 'string') {
-                          const githubMatch = rawContent.match(/(https?:\/\/github\.com\/[^\s\)\],]+)/i);
-                          githubUrl = githubMatch ? githubMatch[1] : null;
-                        }
+                        const content = getProposalContent(proposal.id, proposal.title, cleanedDescription, process.env.NEXT_PUBLIC_MODERATOR_ID);
+                        const rawContent = content.content || cleanedDescription || '';
 
                         const cardInner = (
                           <div className="flex flex-col justify-between h-full">
-                            <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#E9E9E3' }}>
-                              {content.title}
+                            <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
+                              PROPOSAL
                               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>
                             </h1>
+                            <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>
+                              {content.title}
+                            </div>
                             <div className="text-sm description-links" style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
@@ -676,9 +678,12 @@ export default function HomePage() {
                     )}
 
                     {/* Trade History */}
-                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
+                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
+                      <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block" style={{ color: '#DDDDD7' }}>
+                        {selectedMarket === 'pass' ? 'Trade History: Pass Coin' : 'Trade History: Fail Coin'}
+                      </span>
                       <TradeHistoryTable
-                        trades={trades}
+                        trades={trades.filter(trade => trade.market === selectedMarket)}
                         loading={tradesLoading}
                         getTimeAgo={getTimeAgo}
                         formatAddress={formatAddress}
