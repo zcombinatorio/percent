@@ -48,7 +48,6 @@ export default function HomePage() {
   const { proposals, loading, refetch } = useProposals();
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
-  const [marketCaps, setMarketCaps] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [navTab, setNavTab] = useState<'live' | 'history'>('live');
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
@@ -177,7 +176,19 @@ export default function HomePage() {
     getTimeAgo,
     getTokenUsed
   } = useTradeHistory(proposal?.id || null);
-  
+
+  // Calculate market caps based on live prices and SOL price
+  const marketCaps = useMemo(() => {
+    const TOTAL_SUPPLY = proposal?.totalSupply || 1_000_000_000;
+    if (!solPrice) {
+      return { pass: null, fail: null };
+    }
+    return {
+      pass: livePrices.pass ? livePrices.pass * TOTAL_SUPPLY * solPrice : null,
+      fail: livePrices.fail ? livePrices.fail * TOTAL_SUPPLY * solPrice : null,
+    };
+  }, [livePrices.pass, livePrices.fail, solPrice, proposal?.totalSupply]);
+
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
   }, []);
@@ -203,16 +214,7 @@ export default function HomePage() {
 
   const handlePricesUpdate = useCallback((prices: { pass: number | null; fail: number | null }) => {
     setLivePrices(prices);
-
-    // Calculate market caps: price * total supply * SOL price
-    const TOTAL_SUPPLY = 1_000_000_000;
-    if (solPrice) {
-      setMarketCaps({
-        pass: prices.pass ? prices.pass * TOTAL_SUPPLY * solPrice : null,
-        fail: prices.fail ? prices.fail * TOTAL_SUPPLY * solPrice : null,
-      });
-    }
-  }, [solPrice]);
+  }, []);
 
   const handleTwapUpdate = useCallback((twap: { passTwap: number | null; failTwap: number | null }) => {
     console.log('TWAP update from LivePriceDisplay:', twap);

@@ -8,6 +8,7 @@ export interface ProposalListItem {
   createdAt: number;
   finalizedAt: number;
   passThresholdBps: number;
+  totalSupply?: number;
 }
 
 export interface ProposalListResponse {

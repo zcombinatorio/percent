@@ -32,12 +32,16 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage, passMarketCap,
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col items-center gap-4">
         <div className="inline-flex flex-row items-center select-none">
         {/* Dark Label */}
-        <div className="pl-2 pr-10 py-3 min-w-[48px] cursor-pointer" onClick={handleDarkClick}>
+        <div className={`pl-2 pr-10 py-3 min-w-[48px] cursor-pointer ${
+          isPassMode
+            ? ''
+            : 'hover:[&>*]:text-[#404346] active:[&>*]:text-[#010101]'
+        }`} onClick={handleDarkClick}>
           <h6
             className={`text-md uppercase transition-colors duration-200 text-center ${
               isPassMode
                 ? 'text-[#FFFFFF] pointer-events-none'
-                : 'text-[#5B5E62] hover:text-[#404346] active:text-[#010101]'
+                : 'text-[#5B5E62]'
             }`}
             style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
           >
@@ -90,11 +94,15 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage, passMarketCap,
         </button>
 
         {/* Light Label */}
-        <div className="pl-10 pr-2 py-3 min-w-[48px] cursor-pointer" onClick={handleLightClick}>
+        <div className={`pl-10 pr-2 py-3 min-w-[48px] cursor-pointer ${
+          isPassMode
+            ? 'hover:[&>*]:text-[#9B9E9F] active:[&>*]:text-[#8B8E8F]'
+            : ''
+        }`} onClick={handleLightClick}>
           <h6
             className={`text-md uppercase transition-colors duration-200 text-center ${
               isPassMode
-                ? 'text-[#6B6E71] hover:text-[#9B9E9F] active:text-[#8B8E8F]'
+                ? 'text-[#6B6E71]'
                 : 'text-[#FFFFFF] pointer-events-none'
             }`}
             style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}

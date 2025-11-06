@@ -72,6 +72,7 @@ router.get('/', async (req, res, next) => {
       passThresholdBps: typeof p.twap_config === 'string'
         ? JSON.parse(p.twap_config).passThresholdBps
         : p.twap_config.passThresholdBps,
+      totalSupply: p.total_supply,
     }));
 
     logger.info('[GET /] Fetched proposals successfully', {
