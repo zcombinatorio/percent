@@ -22,6 +22,7 @@ interface TradingInterfaceProps {
   proposalStatus?: 'Pending' | 'Passed' | 'Failed';
   userBalances: UserBalancesResponse | null;
   refetchBalances: () => void;
+  onTradeSuccess?: () => void;
   visualFocusClassName?: string;
 }
 
@@ -34,6 +35,7 @@ const TradingInterface = memo(({
   proposalStatus = 'Pending',
   userBalances,
   refetchBalances,
+  onTradeSuccess,
   visualFocusClassName = ''
 }: TradingInterfaceProps) => {
   const { authenticated, walletAddress, login } = usePrivyWallet();
@@ -338,9 +340,13 @@ const TradingInterface = memo(({
 
       // Clear the amount after successful trade
       setAmount('');
+      setPercentage('');
 
       // Refresh user balances
       refetchBalances();
+
+      // Refresh trade history
+      onTradeSuccess?.();
 
     } catch (error) {
       console.error('Trade failed:', error);
@@ -348,7 +354,7 @@ const TradingInterface = memo(({
     } finally {
       setIsTrading(false);
     }
-  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarket, sellingToken, wallets, refetchBalances]);
+  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarket, sellingToken, wallets, refetchBalances, onTradeSuccess]);
   
   const handleClaim = useCallback(async () => {
     if (!isConnected) {

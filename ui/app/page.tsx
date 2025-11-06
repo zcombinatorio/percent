@@ -173,6 +173,7 @@ export default function HomePage() {
   const {
     trades,
     loading: tradesLoading,
+    refetch: refetchTrades,
     getTimeAgo,
     getTokenUsed
   } = useTradeHistory(proposal?.id || null);
@@ -635,6 +636,7 @@ export default function HomePage() {
                             proposalStatus="Pending"
                             userBalances={userBalances}
                             refetchBalances={refetchBalances}
+                            onTradeSuccess={refetchTrades}
                           />
                         </div>
                       </div>
