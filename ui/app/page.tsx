@@ -745,7 +745,9 @@ export default function HomePage() {
                   columnClassName="bg-clip-padding"
                   style={{ marginLeft: '-16px' }}
                 >
-                  {sortedProposals.map((proposal) => {
+                  {sortedProposals
+                    .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed')
+                    .map((proposal) => {
                     const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID);
                     const isHovered = hoveredProposalId === proposal.id;
 

@@ -135,6 +135,21 @@ const TradingInterface = memo(({
     };
   }, [userBalances, proposalStatus]);
 
+  // Check if user has zero balances across all conditional tokens
+  const hasZeroBalances = useMemo(() => {
+    if (!userBalances) return true;
+
+    const basePassConditional = parseFloat(userBalances.base.passConditional || '0');
+    const baseFailConditional = parseFloat(userBalances.base.failConditional || '0');
+    const quotePassConditional = parseFloat(userBalances.quote.passConditional || '0');
+    const quoteFailConditional = parseFloat(userBalances.quote.failConditional || '0');
+
+    return basePassConditional === 0 &&
+           baseFailConditional === 0 &&
+           quotePassConditional === 0 &&
+           quoteFailConditional === 0;
+  }, [userBalances]);
+
   const { wallets } = useSolanaWallets();
   const [isTrading, setIsTrading] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -458,6 +473,35 @@ const TradingInterface = memo(({
     }
   }, [userBalances, selectedMarket]);
 
+  // Handle SOL quick amount click (with auto-cap to max balance)
+  const handleSolQuickAmountClick = useCallback((quickValue: string) => {
+    if (!userBalances) return;
+
+    // Get the SOL balance based on selectedMarket
+    let balance: string;
+    if (selectedMarket === 'pass') {
+      balance = userBalances.quote.passConditional;
+    } else {
+      balance = userBalances.quote.failConditional;
+    }
+
+    // Convert from smallest units to decimal
+    const maxAmount = toDecimal(parseFloat(balance), 'sol');
+
+    // Parse the quick value
+    const requestedAmount = parseFloat(quickValue);
+
+    // Cap to max balance if requested amount exceeds it
+    const cappedAmount = Math.min(requestedAmount, maxAmount);
+
+    // Set the capped amount
+    if (cappedAmount > 0) {
+      setAmount(cappedAmount.toString());
+    } else {
+      setAmount(quickValue); // If no balance, still allow setting the value
+    }
+  }, [userBalances, selectedMarket]);
+
   // Don't show login button in trading interface when not authenticated
   if (!authenticated) {
     return null;
@@ -573,7 +617,9 @@ const TradingInterface = memo(({
           }`}
           style={sellingToken === 'sol' ? { backgroundColor: '#6ECC94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
-          <span className="text-[12px] leading-[16px]">BUY</span>
+          <span className="text-[12px] leading-[16px]">
+            {selectedMarket === 'pass' ? 'BUY (BULLISH)' : 'BUY (BEARISH)'}
+          </span>
         </button>
         <button
           onClick={() => {
@@ -587,7 +633,9 @@ const TradingInterface = memo(({
           }`}
           style={sellingToken === 'zc' ? { backgroundColor: '#FF6F94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
-          <span className="text-[12px] leading-[16px]">SELL</span>
+          <span className="text-[12px] leading-[16px]">
+            {selectedMarket === 'pass' ? 'SELL (BEARISH)' : 'SELL (BULLISH)'}
+          </span>
         </button>
       </div>
 
@@ -605,8 +653,11 @@ const TradingInterface = memo(({
                 setAmount(value);
               }
             }}
-            placeholder="0.0"
-            className="w-full h-[56px] px-3 pr-16 bg-[#2a2a2a] rounded-t-[6px] text-white placeholder-gray-600 focus:outline-none border-t border-l border-r border-[#191919] text-2xl font-ibm-plex-mono"
+            placeholder={hasZeroBalances ? "DEPOSIT FUNDS" : "0.0"}
+            disabled={hasZeroBalances}
+            className={`w-full h-[56px] px-3 pr-16 bg-[#2a2a2a] rounded-t-[6px] text-white placeholder-gray-600 focus:outline-none border-t border-l border-r border-[#191919] text-2xl font-ibm-plex-mono ${
+              hasZeroBalances ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
           />
           {/* Token Label */}
@@ -627,7 +678,7 @@ const TradingInterface = memo(({
               if (sellingToken === 'zc') {
                 handlePercentageClick(val);
               } else {
-                setAmount(val);
+                handleSolQuickAmountClick(val);
               }
             }}
             contentEditable={isEditingQuickAmounts}

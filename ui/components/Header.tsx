@@ -79,7 +79,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
                 className="text-sm font-ibm-plex-mono font-medium transition-colors"
                 style={{ color: isHoveringWallet ? '#EF6300' : '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}
               >
-                {isHoveringWallet ? 'Export PK' : walletPrefix}
+                {isHoveringWallet ? 'Export or Copy' : walletPrefix}
               </span>
             </div>
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
