@@ -148,7 +148,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
   return (
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="text-white flex flex-col items-center">
-        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block" style={{ color: '#DDDDD7' }}>
+        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block text-center" style={{ color: '#DDDDD7' }}>
           I. Deposit Funds
         </span>
 
