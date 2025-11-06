@@ -6,6 +6,7 @@ import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/formatters';
+import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const SOL_DECIMALS = 9;
@@ -95,14 +96,17 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
       const vaultType = selectedToken === 'zc' ? 'base' : 'quote';
 
       // Step 1: Build split transaction
-      const buildResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user: walletAddress,
-          amount: amountInSmallestUnits.toString()
-        })
-      });
+      const buildResponse = await fetch(
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: walletAddress,
+            amount: amountInSmallestUnits.toString()
+          })
+        }
+      );
 
       if (!buildResponse.ok) {
         const error = await buildResponse.json();
@@ -116,13 +120,16 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
       const signedTx = await wallet.signTransaction(splitTx);
 
       // Step 3: Execute split transaction
-      const executeResponse = await fetch(`${API_BASE_URL}/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transaction: Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString('base64')
-        })
-      });
+      const executeResponse = await fetch(
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString('base64')
+          })
+        }
+      );
 
       if (!executeResponse.ok) {
         const error = await executeResponse.json();
