@@ -179,17 +179,17 @@ export default function HomePage() {
     getTokenUsed
   } = useTradeHistory(proposal?.id || null);
 
-  // Calculate market caps based on live prices and SOL price
+  // Market caps are pre-calculated on the backend (price in SOL × total supply × SOL/USD)
+  // WebSocket delivers market cap USD directly - no frontend calculation needed
   const marketCaps = useMemo(() => {
-    const TOTAL_SUPPLY = proposal?.totalSupply || 1_000_000_000;
-    if (!solPrice) {
-      return { pass: null, fail: null };
-    }
-    return {
-      pass: livePrices.pass ? livePrices.pass * TOTAL_SUPPLY * solPrice : null,
-      fail: livePrices.fail ? livePrices.fail * TOTAL_SUPPLY * solPrice : null,
+    console.log('[HomePage] Calculating marketCaps from livePrices:', livePrices);
+    const caps = {
+      pass: livePrices.pass,
+      fail: livePrices.fail,
     };
-  }, [livePrices.pass, livePrices.fail, solPrice, proposal?.totalSupply]);
+    console.log('[HomePage] marketCaps result:', caps);
+    return caps;
+  }, [livePrices.pass, livePrices.fail]);
 
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
@@ -215,7 +215,9 @@ export default function HomePage() {
   }, [refetch]);
 
   const handlePricesUpdate = useCallback((prices: { pass: number | null; fail: number | null }) => {
+    console.log('[HomePage] handlePricesUpdate called with:', prices);
     setLivePrices(prices);
+    console.log('[HomePage] livePrices state will be updated');
   }, []);
 
   const handleTwapUpdate = useCallback((twap: { passTwap: number | null; failTwap: number | null }) => {

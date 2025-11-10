@@ -8,7 +8,7 @@ interface TokenPrices {
 }
 
 const ZC_ADDRESS = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
-const SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function useTokenPrices(): TokenPrices {
   const [prices, setPrices] = useState<TokenPrices>({
@@ -21,9 +21,10 @@ export function useTokenPrices(): TokenPrices {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        // Fetch both SOL and $ZC prices from DexScreener
+        // Fetch SOL price from our backend API (uses cached SolPriceService)
+        // Fetch $ZC price from DexScreener
         const [solResponse, zcResponse] = await Promise.all([
-          fetch(`https://api.dexscreener.com/latest/dex/tokens/${SOL_ADDRESS}`),
+          fetch(`${API_BASE_URL}/api/sol-price`),
           fetch(`https://api.dexscreener.com/latest/dex/tokens/${ZC_ADDRESS}`)
         ]);
 
@@ -34,19 +35,8 @@ export function useTokenPrices(): TokenPrices {
         const solData = await solResponse.json();
         const zcData = await zcResponse.json();
 
-        // Extract SOL price from DexScreener
-        const solPairs = solData.pairs || [];
-        let solPrice = 0;
-        
-        if (solPairs.length > 0) {
-          // Sort by liquidity and take the highest
-          const sortedSolPairs = solPairs.sort((a: any, b: any) => 
-            (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
-          );
-          solPrice = parseFloat(sortedSolPairs[0]?.priceUsd || '0') || 180;
-        } else {
-          solPrice = 180; // Fallback price
-        }
+        // Extract SOL price from API response
+        const solPrice = solData.price || 150;
 
         // Extract $ZC price from DexScreener
         // DexScreener returns pairs, we need to find the most liquid one
@@ -71,7 +61,7 @@ export function useTokenPrices(): TokenPrices {
         console.error('Error fetching token prices:', error);
         // Fallback prices if API fails
         setPrices({
-          sol: 180, // Fallback SOL price
+          sol: 150, // Fallback SOL price
           zc: 0.01, // Fallback $ZC price
           loading: false,
           error: error instanceof Error ? error.message : 'Failed to fetch prices'

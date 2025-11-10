@@ -16,6 +16,7 @@ export interface ProposalListResponse {
 }
 
 export interface ProposalDetailResponse {
+  moderatorId: number;
   id: number;
   title: string;
   description: string;

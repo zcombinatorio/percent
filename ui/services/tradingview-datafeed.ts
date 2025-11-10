@@ -34,8 +34,8 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   private poolAddress: string | null = null;
   private spotPoolAddress: string | null = null;
   private subscribers: Map<string, { callback: SubscribeBarsCallback; aggregator: BarAggregator; isSpotMarket: boolean }> = new Map();
-  private solPrice: number = 0;
-  private totalSupply: number = TOTAL_SUPPLY; // Default to constant, will be updated from proposal
+  // NOTE: solPrice and totalSupply no longer needed - backend calculates market cap USD
+  // All prices (pass, fail, spot) and trade prices are pre-calculated as market cap USD
 
   constructor(proposalId: number, market: 'pass' | 'fail', spotPoolAddress?: string) {
     this.proposalId = proposalId;
@@ -220,24 +220,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     console.log(`[${marketType}] subscribeBars called for resolution ${resolution}, listenerGuid: ${listenerGuid}`);
 
-    // Fetch proposal data to get total supply (only once, on first subscription)
-    if (this.subscribers.size === 0) {
-      try {
-        const url = buildApiUrl(API_BASE_URL, `/api/proposals/${this.proposalId}`);
-        const response = await fetch(url);
-        if (response.ok) {
-          const proposal = await response.json();
-          if (proposal.total_supply) {
-            this.totalSupply = proposal.total_supply;
-            console.log(`[${marketType}] Updated totalSupply from proposal: ${this.totalSupply}`);
-          }
-        }
-      } catch (error) {
-        console.warn(`[${marketType}] Failed to fetch proposal total supply, using default:`, error);
-        // Keep using the default TOTAL_SUPPLY constant
-      }
-    }
-
     // Create bar aggregator for this resolution
     const aggregator = new BarAggregator(resolution);
 
@@ -252,9 +234,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     const priceService = getPriceStreamService();
 
     if (!isSpotMarket) {
-      // Fetch SOL price for market cap calculation
-      this.fetchSolPrice();
-
       // Subscribe to trade updates for pass/fail markets
       priceService.subscribeToTrades(this.proposalId, this.handleTradeUpdate.bind(this));
       console.log(`[${marketType}] Subscribed to real-time trade updates for proposal ${this.proposalId}`);
@@ -330,23 +309,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     }
   }
 
-  /**
-   * Fetch current SOL price for market cap calculation
-   */
-  private async fetchSolPrice(): Promise<void> {
-    try {
-      const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111111111111112');
-      const data = await response.json();
-
-      if (data.pairs && data.pairs.length > 0) {
-        this.solPrice = parseFloat(data.pairs[0].priceUsd);
-        console.log(`[${this.market}] SOL price: $${this.solPrice}`);
-      }
-    } catch (error) {
-      console.error('Error fetching SOL price:', error);
-      this.solPrice = 150; // Fallback price
-    }
-  }
 
   /**
    * Handle incoming trade updates
@@ -363,11 +325,9 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     console.log(`[${this.market}] Processing trade - subscribers: ${this.subscribers.size}`);
     console.log(`[${this.market}] Trade timestamp: ${new Date(trade.timestamp).toISOString()} (${trade.timestamp})`);
 
-    // Convert conditional token price to market cap in USD
-    // price is in quote tokens (SOL) per base token (conditional token)
-    // Market cap = price × totalSupply × solPrice
-    const marketCapUSD = trade.price * this.totalSupply * this.solPrice;
-    console.log(`[${this.market}] Market cap calculated: $${marketCapUSD.toFixed(2)} (price: ${trade.price}, totalSupply: ${this.totalSupply}, SOL: $${this.solPrice})`);
+    // Use marketCapUsd if available (new backend), otherwise price (legacy/old backend)
+    const marketCapUSD = trade.marketCapUsd ?? trade.price;
+    console.log(`[${this.market}] Market cap from trade: $${marketCapUSD.toFixed(2)}`);
 
     // Update all active subscribers (skip spot market subscribers)
     for (const [listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
@@ -391,7 +351,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         console.log(`[${this.market}] Updated bar for ${listenerGuid}:`, {
           time: new Date(updatedBar.time).toISOString(),
           timeMs: updatedBar.time,
-          price: marketCapUSD,
+          marketCapUSD: marketCapUSD,
           open: updatedBar.open,
           high: updatedBar.high,
           low: updatedBar.low,
@@ -430,18 +390,13 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       }
 
       try {
-        // Convert price to market cap USD
-        // For pass/fail: price is in SOL, convert to USD market cap
-        // For spot: price is already in USD market cap
-        const priceUSD = priceUpdate.market === 'spot'
-          ? priceUpdate.price
-          : priceUpdate.price * this.totalSupply * this.solPrice;
-
-        console.log(`[Datafeed ${this.market}] Processing ${priceUpdate.market} price update for ${listenerGuid}: $${priceUSD.toFixed(2)}`);
+        // Use marketCapUsd if available (new backend), otherwise price (legacy/old backend)
+        // New backend sends both: price (SOL) and marketCapUsd (USD)
+        const marketCapUSD = priceUpdate.marketCapUsd ?? priceUpdate.price;
 
         // Update bar with new price (volume = 0 for price updates)
         const updatedBar = aggregator.updateBar(
-          priceUSD,
+          marketCapUSD,
           0, // No volume for scheduled price updates
           priceUpdate.timestamp
         );
@@ -453,7 +408,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         console.log(`[Datafeed ${this.market}] ✅ Bar updated for ${listenerGuid}:`, {
           time: new Date(updatedBar.time).toISOString(),
           timeMs: updatedBar.time,
-          price: priceUSD,
+          marketCapUSD: marketCapUSD,
           open: updatedBar.open,
           high: updatedBar.high,
           low: updatedBar.low,

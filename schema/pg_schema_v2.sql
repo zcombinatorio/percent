@@ -53,13 +53,15 @@ CREATE INDEX IF NOT EXISTS idx_i_proposals_moderator_created ON i_proposals(mode
 CREATE INDEX IF NOT EXISTS idx_i_proposals_moderator_proposal ON i_proposals(moderator_id, proposal_id);
 
 -- Price history table
+-- Stores prices in SOL (for pass/fail) or USD (for spot)
+-- WebSocket enriches pass/fail prices with market cap USD on broadcast
 CREATE TABLE IF NOT EXISTS i_price_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   moderator_id INTEGER NOT NULL,
   proposal_id INTEGER NOT NULL,
   market VARCHAR(4) NOT NULL CHECK (market IN ('pass', 'fail', 'spot')),
-  price DECIMAL(20, 10) NOT NULL,
+  price DECIMAL(20, 10) NOT NULL, -- SOL for pass/fail, USD for spot
 
   CONSTRAINT fk_i_price_history_moderator FOREIGN KEY (moderator_id)
     REFERENCES i_moderators(id) ON DELETE CASCADE,
@@ -93,6 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_i_twap_history_moderator_proposal_timestamp
   ON i_twap_history(moderator_id, proposal_id, timestamp DESC);
 
 -- Trade history table
+-- Stores trade execution details with price in SOL
+-- WebSocket enriches with market cap USD on broadcast
 CREATE TABLE IF NOT EXISTS i_trade_history (
   id SERIAL PRIMARY KEY,
   timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -103,7 +107,7 @@ CREATE TABLE IF NOT EXISTS i_trade_history (
   is_base_to_quote BOOLEAN NOT NULL,
   amount_in DECIMAL(20, 10) NOT NULL,
   amount_out DECIMAL(20, 10) NOT NULL,
-  price DECIMAL(20, 10) NOT NULL,
+  price DECIMAL(20, 10) NOT NULL, -- Price in SOL
   tx_signature VARCHAR(128),
 
   CONSTRAINT fk_i_trade_history_moderator FOREIGN KEY (moderator_id)
