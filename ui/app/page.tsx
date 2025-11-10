@@ -50,6 +50,7 @@ export default function HomePage() {
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   const [navTab, setNavTab] = useState<'live' | 'history'>('live');
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
+  const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
   const [isPassMode, setIsPassMode] = useState(true);
@@ -553,23 +554,34 @@ export default function HomePage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>
                             </h1>
-                            <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>
+                            <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
                               {content.title}
                             </div>
-                            <div className="text-sm description-links" style={{ color: '#DDDDD7' }}>
+                            <div className={`text-sm description-links ${!isLiveProposalHovered ? 'line-clamp-2' : ''}`} style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
                           </div>
                         );
 
                         return githubUrl ? (
-                          <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="flex-[4] h-full">
+                          <a
+                            href={githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-[4] h-full"
+                            onMouseEnter={() => setIsLiveProposalHovered(true)}
+                            onMouseLeave={() => setIsLiveProposalHovered(false)}
+                          >
                             <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
                               {cardInner}
                             </div>
                           </a>
                         ) : (
-                          <div className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
+                          <div
+                            className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300"
+                            onMouseEnter={() => setIsLiveProposalHovered(true)}
+                            onMouseLeave={() => setIsLiveProposalHovered(false)}
+                          >
                             {cardInner}
                           </div>
                         );
