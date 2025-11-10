@@ -104,82 +104,42 @@ export function useClaimablePositions(walletAddress: string | null): ClaimablePo
       // - If proposal failed, fail conditional tokens win (can redeem for SOL)
       const quoteWinningTokens = proposalPassed ? quotePassConditional : quoteFailConditional;
 
-      // Check if user has any winning tokens to claim
+      // Simplified logic: Check if user has ANY winning tokens to claim
+      // Users who have traded may have mixed positions, so we check each token type independently
       if (baseWinningTokens > 0 || quoteWinningTokens > 0) {
-        // Determine user's original position type based on their balances
-        const hasPassPosition = basePassConditional > 0 && quoteFailConditional > 0;
-        const hasFailPosition = quotePassConditional > 0 && baseFailConditional > 0;
+        // Determine position type based on which winning tokens they have
+        const positionType = proposalPassed ? 'pass' : 'fail';
 
-        if (!hasPassPosition && !hasFailPosition) {
-          // User might have partial positions or already claimed some
-          // Check if they have any winning tokens
-          if (baseWinningTokens > 0) {
-            // Can claim ZC
-            const value = (baseWinningTokens / 1e6) * zcPrice;
-            claimableList.push({
-              proposalId,
-              proposalDescription: proposal.description,
-              proposalStatus: proposal.status as 'Passed' | 'Failed',
-              positionType: proposalPassed ? 'pass' : 'fail',
-              isWinner: true,
-              claimableAmount: baseWinningTokens / 1e6,
-              claimableToken: 'zc',
-              claimableValue: value
-            });
-            total += value;
-          }
+        // Check base vault winning tokens (ZC)
+        if (baseWinningTokens > 0) {
+          const value = (baseWinningTokens / 1e6) * zcPrice;
+          claimableList.push({
+            proposalId,
+            proposalDescription: proposal.description,
+            proposalStatus: proposal.status as 'Passed' | 'Failed',
+            positionType,
+            isWinner: true,
+            claimableAmount: baseWinningTokens / 1e6,
+            claimableToken: 'zc',
+            claimableValue: value
+          });
+          total += value;
+        }
 
-          if (quoteWinningTokens > 0) {
-            // Can claim SOL
-            const value = (quoteWinningTokens / 1e9) * solPrice;
-            claimableList.push({
-              proposalId,
-              proposalDescription: proposal.description,
-              proposalStatus: proposal.status as 'Passed' | 'Failed',
-              positionType: proposalPassed ? 'pass' : 'fail',
-              isWinner: true,
-              claimableAmount: quoteWinningTokens / 1e9,
-              claimableToken: 'sol',
-              claimableValue: value
-            });
-            total += value;
-          }
-        } else {
-          // User has a clear position type
-          const positionType = hasPassPosition ? 'pass' : 'fail';
-          const isWinner = (positionType === 'pass' && proposalPassed) ||
-                          (positionType === 'fail' && !proposalPassed);
-
-          if (isWinner) {
-            // Winner gets their collateral back
-            let claimableAmount: number;
-            let claimableToken: 'sol' | 'zc';
-            let value: number;
-
-            if (positionType === 'pass') {
-              // Pass position wins if proposal passed - gets ZC back
-              claimableAmount = basePassConditional / 1e6;
-              claimableToken = 'zc';
-              value = claimableAmount * zcPrice;
-            } else {
-              // Fail position wins if proposal failed - gets ZC back
-              claimableAmount = baseFailConditional / 1e6;
-              claimableToken = 'zc';
-              value = claimableAmount * zcPrice;
-            }
-
-            claimableList.push({
-              proposalId,
-              proposalDescription: proposal.description,
-              proposalStatus: proposal.status as 'Passed' | 'Failed',
-              positionType,
-              isWinner,
-              claimableAmount,
-              claimableToken,
-              claimableValue: value
-            });
-            total += value;
-          }
+        // Check quote vault winning tokens (SOL)
+        if (quoteWinningTokens > 0) {
+          const value = (quoteWinningTokens / 1e9) * solPrice;
+          claimableList.push({
+            proposalId,
+            proposalDescription: proposal.description,
+            proposalStatus: proposal.status as 'Passed' | 'Failed',
+            positionType,
+            isWinner: true,
+            claimableAmount: quoteWinningTokens / 1e9,
+            claimableToken: 'sol',
+            claimableValue: value
+          });
+          total += value;
         }
       }
     });

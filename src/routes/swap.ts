@@ -214,33 +214,34 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
     
     // Log trade to history (required parameters are now validated above)
     try {
-      // Get current price for the trade
-      let currentPrice: Decimal;
+      // Get current price for the trade (in SOL)
+      // WebSocket will enrich with market cap USD for clients
+      let currentPriceInSol: Decimal;
       try {
-        currentPrice = await amm.fetchPrice();
+        currentPriceInSol = await amm.fetchPrice();
       } catch {
         // If we can't fetch price, estimate from amounts
         if (amountOut) {
           const inAmount = new Decimal(amountIn);
           const outAmount = new Decimal(amountOut);
-          currentPrice = isBaseToQuote ? outAmount.div(inAmount) : inAmount.div(outAmount);
+          currentPriceInSol = isBaseToQuote ? outAmount.div(inAmount) : inAmount.div(outAmount);
         } else {
-          currentPrice = new Decimal(0); // fallback
+          currentPriceInSol = new Decimal(0); // fallback
         }
       }
-      
+
       // Convert raw amounts to human-readable amounts using token decimals
       const baseDecimals = amm.baseDecimals;
       const quoteDecimals = amm.quoteDecimals;
-      
+
       // Determine which decimals to use based on trade direction
       const inputDecimals = isBaseToQuote ? baseDecimals : quoteDecimals;
       const outputDecimals = isBaseToQuote ? quoteDecimals : baseDecimals;
-      
+
       // Convert to human-readable amounts
       const amountInDecimal = new Decimal(amountIn).div(Math.pow(10, inputDecimals));
       const amountOutDecimal = amountOut ? new Decimal(amountOut).div(Math.pow(10, outputDecimals)) : new Decimal(0);
-      
+
       await HistoryService.recordTrade({
         moderatorId,
         proposalId,
@@ -249,7 +250,7 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
         isBaseToQuote: isBaseToQuote,
         amountIn: amountInDecimal,
         amountOut: amountOutDecimal,
-        price: currentPrice,
+        price: currentPriceInSol,
         txSignature: signature,
       });
 

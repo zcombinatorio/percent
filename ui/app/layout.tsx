@@ -30,7 +30,7 @@ const rinter = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Percent | ZC",
+  title: "Z Combinator",
   description: "Trade decision markets",
 };
 

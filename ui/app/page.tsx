@@ -52,6 +52,7 @@ export default function HomePage() {
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   const [navTab, setNavTab] = useState<'live' | 'history' | 'leaderboard'>('live');
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
+  const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
   const [isPassMode, setIsPassMode] = useState(true);
@@ -189,17 +190,17 @@ export default function HomePage() {
     getTokenUsed
   } = useTradeHistory(proposal?.id || null);
 
-  // Calculate market caps based on live prices and SOL price
+  // Market caps are pre-calculated on the backend (price in SOL × total supply × SOL/USD)
+  // WebSocket delivers market cap USD directly - no frontend calculation needed
   const marketCaps = useMemo(() => {
-    const TOTAL_SUPPLY = proposal?.totalSupply || 1_000_000_000;
-    if (!solPrice) {
-      return { pass: null, fail: null };
-    }
-    return {
-      pass: livePrices.pass ? livePrices.pass * TOTAL_SUPPLY * solPrice : null,
-      fail: livePrices.fail ? livePrices.fail * TOTAL_SUPPLY * solPrice : null,
+    console.log('[HomePage] Calculating marketCaps from livePrices:', livePrices);
+    const caps = {
+      pass: livePrices.pass,
+      fail: livePrices.fail,
     };
-  }, [livePrices.pass, livePrices.fail, solPrice, proposal?.totalSupply]);
+    console.log('[HomePage] marketCaps result:', caps);
+    return caps;
+  }, [livePrices.pass, livePrices.fail]);
 
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
@@ -225,7 +226,9 @@ export default function HomePage() {
   }, [refetch]);
 
   const handlePricesUpdate = useCallback((prices: { pass: number | null; fail: number | null }) => {
+    console.log('[HomePage] handlePricesUpdate called with:', prices);
     setLivePrices(prices);
+    console.log('[HomePage] livePrices state will be updated');
   }, []);
 
   const handleTwapUpdate = useCallback((twap: { passTwap: number | null; failTwap: number | null }) => {
@@ -564,23 +567,34 @@ export default function HomePage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>
                             </h1>
-                            <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>
+                            <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
                               {content.title}
                             </div>
-                            <div className="text-sm description-links" style={{ color: '#DDDDD7' }}>
+                            <div className={`text-sm description-links ${!isLiveProposalHovered ? 'line-clamp-2' : ''}`} style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
                           </div>
                         );
 
                         return githubUrl ? (
-                          <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="flex-[4] h-full">
+                          <a
+                            href={githubUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-[4] h-full"
+                            onMouseEnter={() => setIsLiveProposalHovered(true)}
+                            onMouseLeave={() => setIsLiveProposalHovered(false)}
+                          >
                             <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
                               {cardInner}
                             </div>
                           </a>
                         ) : (
-                          <div className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
+                          <div
+                            className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300"
+                            onMouseEnter={() => setIsLiveProposalHovered(true)}
+                            onMouseLeave={() => setIsLiveProposalHovered(false)}
+                          >
                             {cardInner}
                           </div>
                         );
@@ -652,38 +666,44 @@ export default function HomePage() {
                     </div>
 
                     {/* User Balances - Separate ZC and SOL cards */}
+                    {(() => {
+                      // Calculate if market expired and which tokens are losing
+                      const isExpired = proposal.status !== 'Pending';
+                      const isShowingLosingTokens = (selectedMarket === 'pass' && proposal.status === 'Failed') ||
+                                                     (selectedMarket === 'fail' && proposal.status === 'Passed');
+
+                      // Calculate actual balances
+                      const zcBalance = userBalances ? parseFloat(
+                        selectedMarket === 'pass' ?
+                          userBalances.base.passConditional :
+                          userBalances.base.failConditional || '0'
+                      ) / 1e6 : 0;
+
+                      const solBalance = userBalances ? parseFloat(
+                        selectedMarket === 'pass' ?
+                          userBalances.quote.passConditional :
+                          userBalances.quote.failConditional || '0'
+                      ) / 1e9 : 0;
+
+                      // Zero out if showing losing tokens on expired market
+                      const displayZCBalance = (isExpired && isShowingLosingTokens) ? 0 : zcBalance;
+                      const displaySOLBalance = (isExpired && isShowingLosingTokens) ? 0 : solBalance;
+
+                      return (
                     <div className="flex gap-4">
                         {/* ZC Balance Card */}
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? (
-                                <>
-                                  IV. BULLISH{' '}
-                                  <svg className="w-4 h-4 inline-block pb-0.5 -ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="1.5">
-                                    <circle cx="10" cy="10" r="8" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 10l2 2 4-4" />
-                                  </svg>
-                                  {' '}PROPOSAL BAL
-                                </>
-                              ) : (
-                                <>
-                                  IV. BEARISH{' '}
-                                  <svg className="w-4 h-4 inline-block pb-0.5 -ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="1.5">
-                                    <circle cx="10" cy="10" r="8" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 7l6 6M13 7l-6 6" />
-                                  </svg>
-                                  {' '}PROPOSAL BAL
-                                </>
-                              )}
+                              {selectedMarket === 'pass' ? 'IV. If Pass ZC Balance' : 'IV. If Fail ZC Balance'}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
-                                {formatNumber(userBalances ? parseFloat(selectedMarket === 'pass' ? userBalances.base.passConditional : userBalances.base.failConditional || '0') / 1e6 : 0, 0)} {selectedMarket === 'pass' ? 'PASS' : 'FAIL'}
+                                {formatNumber(displayZCBalance, 0)} {selectedMarket === 'pass' ? 'PASS' : 'FAIL'}
                               </span>
                               {zcPrice && (
                                 <span className="hidden group-hover:inline">
-                                  {formatCurrency(userBalances ? (parseFloat(selectedMarket === 'pass' ? userBalances.base.passConditional : userBalances.base.failConditional || '0') / 1e6) * zcPrice : 0, 2)}
+                                  {formatCurrency(displayZCBalance * zcPrice, 2)}
                                 </span>
                               )}
                             </div>
@@ -694,39 +714,23 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? (
-                                <>
-                                  IV. BEARISH{' '}
-                                  <svg className="w-4 h-4 inline-block pb-0.5 -ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="1.5">
-                                    <circle cx="10" cy="10" r="8" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 7l6 6M13 7l-6 6" />
-                                  </svg>
-                                  {' '}PROPOSAL BAL
-                                </>
-                              ) : (
-                                <>
-                                  IV. BULLISH{' '}
-                                  <svg className="w-4 h-4 inline-block pb-0.5 -ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 20 20" strokeWidth="1.5">
-                                    <circle cx="10" cy="10" r="8" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 10l2 2 4-4" />
-                                  </svg>
-                                  {' '}PROPOSAL BAL
-                                </>
-                              )}
+                              {selectedMarket === 'pass' ? 'IV. If Pass SOL Balance' : 'IV. If Fail SOL Balance'}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
-                                {formatNumber(userBalances ? parseFloat(selectedMarket === 'pass' ? userBalances.quote.passConditional : userBalances.quote.failConditional || '0') / 1e9 : 0, 6)} SOL
+                                {formatNumber(displaySOLBalance, 6)} SOL
                               </span>
                               {solPrice && (
                                 <span className="hidden group-hover:inline">
-                                  {formatCurrency(userBalances ? (parseFloat(selectedMarket === 'pass' ? userBalances.quote.passConditional : userBalances.quote.failConditional || '0') / 1e9) * solPrice : 0, 2)}
+                                  {formatCurrency(displaySOLBalance * solPrice, 2)}
                                 </span>
                               )}
                             </div>
                           </div>
                         </div>
                     </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -861,14 +865,14 @@ export default function HomePage() {
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5">
                                 <div className="relative flex items-center justify-center">
-                                  <div className="w-2 h-2 rounded-full absolute" style={{ backgroundColor: '#EF6300', opacity: 0.75, animation: 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite' }}></div>
-                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#EF6300' }}></div>
+                                  <div className="w-2 h-2 rounded-full absolute" style={{ backgroundColor: '#BEE8FC', opacity: 0.75, animation: 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite' }}></div>
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#BEE8FC' }}></div>
                                 </div>
-                                <span className="text-sm" style={{ color: '#EF6300' }}>Click to claim</span>
+                                <span className="text-sm" style={{ color: '#BEE8FC' }}>Click to claim</span>
                               </div>
 
                               {/* Rewards display */}
-                              <div className="text-sm" style={{ color: '#EF6300' }}>
+                              <div className="text-sm" style={{ color: '#BEE8FC' }}>
                                 {(() => {
                                   const zcReward = proposalRewards.find(r => r.claimableToken === 'zc');
                                   const solReward = proposalRewards.find(r => r.claimableToken === 'sol');

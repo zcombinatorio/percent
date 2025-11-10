@@ -11,14 +11,16 @@ export interface TradeUpdate {
   userAddress: string;
   amountIn: number;
   amountOut: number;
-  price: number;
+  price: number; // OLD: price in SOL (legacy backend)
+  marketCapUsd?: number; // NEW: pre-calculated market cap USD (updated backend)
   timestamp: number;
 }
 
 export interface ChartPriceUpdate {
   proposalId: number;
   market: 'pass' | 'fail' | 'spot';
-  price: number;
+  price: number; // OLD: price in SOL (legacy backend)
+  marketCapUsd?: number; // NEW: pre-calculated market cap USD (updated backend)
   timestamp: number;
 }
 
@@ -141,9 +143,10 @@ export class PriceStreamService {
         proposalId: message.proposalId,
         market: message.market,
         price: message.price,
+        marketCapUsd: message.marketCapUsd,
         timestamp: message.timestamp
       });
-      const { proposalId, market, price, timestamp } = message;
+      const { proposalId, market, price, marketCapUsd, timestamp } = message;
 
       // Convert timestamp to milliseconds if it's a string
       const timestampMs = typeof timestamp === 'string'
@@ -157,8 +160,8 @@ export class PriceStreamService {
       // Notify all callbacks for this proposal
       callbacks.forEach((callback, index) => {
         try {
-          console.log(`[PriceStreamService] Calling chart price callback #${index + 1}`);
-          callback({ proposalId, market, price, timestamp: timestampMs });
+          console.log(`[PriceStreamService] Calling chart price callback #${index + 1} with marketCapUsd:`, marketCapUsd);
+          callback({ proposalId, market, price, marketCapUsd, timestamp: timestampMs });
         } catch (error) {
           console.error('Error in chart price callback:', error);
         }
@@ -166,7 +169,7 @@ export class PriceStreamService {
     } else if (message.type === 'TRADE') {
       console.log('[PriceStreamService] TRADE message received for proposal', message.proposalId);
       // Handle trade notification
-      const { proposalId, market, userAddress, amountIn, amountOut, price, timestamp } = message;
+      const { proposalId, market, userAddress, amountIn, amountOut, price, marketCapUsd, timestamp } = message;
 
       // Convert timestamp to milliseconds if it's a string
       const timestampMs = typeof timestamp === 'string'
@@ -180,8 +183,8 @@ export class PriceStreamService {
       const callbacks = this.tradeSubscriptions.get(proposalId) || [];
       callbacks.forEach(callback => {
         try {
-          console.log('[PriceStreamService] Calling trade callback');
-          callback({ proposalId, market, userAddress, amountIn, amountOut, price, timestamp: timestampMs });
+          console.log('[PriceStreamService] Calling trade callback with marketCapUsd:', marketCapUsd);
+          callback({ proposalId, market, userAddress, amountIn, amountOut, price, marketCapUsd, timestamp: timestampMs });
         } catch (error) {
           console.error('Error in trade callback:', error);
         }

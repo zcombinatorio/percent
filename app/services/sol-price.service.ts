@@ -6,7 +6,7 @@ export class SolPriceService {
   private priceCache: { price: number; timestamp: number } | null = null;
   private readonly CACHE_DURATION = 30000; // 30 seconds
   private readonly SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
-  private readonly FALLBACK_PRICE = 180;
+  private readonly FALLBACK_PRICE = 150;
 
   private constructor() {}
 

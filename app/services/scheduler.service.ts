@@ -269,6 +269,7 @@ export class SchedulerService implements ISchedulerService {
   
   /**
    * Records prices for a specific proposal
+   * Stores prices in SOL - WebSocket enriches with market cap USD for clients
    * @param moderatorId - The moderator ID that owns the proposal
    * @param proposalId - The proposal ID
    */
@@ -307,17 +308,20 @@ export class SchedulerService implements ISchedulerService {
     }
 
     const [pAMM, fAMM] = proposal.getAMMs();
-    
+
     // Record pass market price if AMM is trading
     if (pAMM && pAMM.state === AMMState.Trading) {
       try {
-        const passPrice = await pAMM.fetchPrice();
+        const passPriceInSol = await pAMM.fetchPrice();
+
         await HistoryService.recordPrice({
           moderatorId,
           proposalId,
           market: 'pass',
-          price: passPrice,
+          price: passPriceInSol,
         });
+
+        this.logger.debug(`Pass price: ${passPriceInSol} SOL`);
       } catch (error) {
         this.logger.error(`Failed to record pass market price for proposal #${proposalId}:`, error);
         // Continue to try recording fail price even if pass fails
@@ -327,13 +331,16 @@ export class SchedulerService implements ISchedulerService {
     // Record fail market price if AMM is trading
     if (fAMM && fAMM.state === AMMState.Trading) {
       try {
-        const failPrice = await fAMM.fetchPrice();
+        const failPriceInSol = await fAMM.fetchPrice();
+
         await HistoryService.recordPrice({
           moderatorId,
           proposalId,
           market: 'fail',
-          price: failPrice,
+          price: failPriceInSol,
         });
+
+        this.logger.debug(`Fail price: ${failPriceInSol} SOL`);
       } catch (error) {
         this.logger.error(`Failed to record fail market price for proposal #${proposalId}:`, error);
         // Continue even if fail price recording fails

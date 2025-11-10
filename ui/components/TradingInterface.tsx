@@ -622,7 +622,7 @@ const TradingInterface = memo(({
           style={sellingToken === 'sol' ? { backgroundColor: '#6ECC94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
           <span className="text-[12px] leading-[16px]">
-            {selectedMarket === 'pass' ? 'BUY (BULLISH)' : 'BUY (BEARISH)'}
+            {selectedMarket === 'pass' ? 'BUY' : 'BUY'}
           </span>
         </button>
         <button
@@ -639,7 +639,7 @@ const TradingInterface = memo(({
           style={sellingToken === 'zc' ? { backgroundColor: '#FF6F94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
           <span className="text-[12px] leading-[16px]">
-            {selectedMarket === 'pass' ? 'SELL (BEARISH)' : 'SELL (BULLISH)'}
+            {selectedMarket === 'pass' ? 'SELL' : 'SELL'}
           </span>
         </button>
       </div>
@@ -806,13 +806,6 @@ const TradingInterface = memo(({
               )}
             </div>
           ) : null}
-        </div>
-      )}
-
-      {/* Balance Error Message */}
-      {balanceError && (
-        <div className="text-xs px-1" style={{ color: '#FF6F94' }}>
-          {balanceError}
         </div>
       )}
 
