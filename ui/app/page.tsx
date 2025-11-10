@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
@@ -44,11 +45,12 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 });
 
 export default function HomePage() {
+  const router = useRouter();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals();
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
-  const [navTab, setNavTab] = useState<'live' | 'history'>('live');
+  const [navTab, setNavTab] = useState<'live' | 'history' | 'leaderboard'>('live');
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
@@ -56,6 +58,15 @@ export default function HomePage() {
 
   // Fetch wallet balances
   const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
+
+  // Handle navigation to leaderboard
+  const handleNavTabChange = useCallback((tab: 'live' | 'history' | 'leaderboard') => {
+    if (tab === 'leaderboard') {
+      router.push('/leaderboard');
+    } else {
+      setNavTab(tab);
+    }
+  }, [router]);
 
   // Fetch token prices for USD conversion
   const { sol: solPrice, zc: zcPrice } = useTokenPrices();
@@ -476,7 +487,7 @@ export default function HomePage() {
             hasWalletBalance={hasWalletBalance}
             login={login}
             navTab={navTab}
-            onNavTabChange={setNavTab}
+            onNavTabChange={handleNavTabChange}
             isPassMode={isPassMode}
           />
 
@@ -505,7 +516,7 @@ export default function HomePage() {
           hasWalletBalance={hasWalletBalance}
           login={login}
           navTab={navTab}
-          onNavTabChange={setNavTab}
+          onNavTabChange={handleNavTabChange}
           isPassMode={isPassMode}
         />
 

@@ -33,6 +33,8 @@ coverage/
 .nyc_output/
 wallet.json
 walletprivy.json
+arb-wallet.json
+arb-wallets/
 
 # Temporary files
 tmp/
