@@ -25,14 +25,14 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage, passMarketCap,
 
   return (
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 transition-all duration-300">
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-col items-center gap-1 md:gap-4">
         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2 text-center" style={{ color: '#DDDDD7' }}>
           II. Select Coin
         </span>
-        <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col items-center gap-4">
+        <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col items-center gap-1 md:gap-4">
         <div className="inline-flex flex-row items-center select-none">
         {/* Dark Label */}
-        <div className={`pl-2 pr-10 py-3 min-w-[48px] cursor-pointer ${
+        <div className={`pl-0 md:pl-2 pr-7.5 md:pr-10 py-3 min-w-[48px] cursor-pointer ${
           isPassMode
             ? ''
             : 'hover:[&>*]:text-[#404346] active:[&>*]:text-[#010101]'
@@ -94,7 +94,7 @@ export function ModeToggle({ isPassMode, onToggle, pfgPercentage, passMarketCap,
         </button>
 
         {/* Light Label */}
-        <div className={`pl-10 pr-2 py-3 min-w-[48px] cursor-pointer ${
+        <div className={`pl-7.5 md:pl-10 pr-0 md:pr-2 py-3 min-w-[48px] cursor-pointer ${
           isPassMode
             ? 'hover:[&>*]:text-[#9B9E9F] active:[&>*]:text-[#8B8E8F]'
             : ''
