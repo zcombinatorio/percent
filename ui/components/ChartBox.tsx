@@ -80,11 +80,11 @@ export function ChartBox({
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>
                 <th className="py-3 pl-3 text-left font-medium w-[240px]">Trader</th>
-                <th className="py-3 text-left font-medium w-[100px]">Coin</th>
+                <th className="hidden md:table-cell py-3 text-left font-medium w-[100px]">Coin</th>
                 <th className="py-3 text-left font-medium w-[100px]">Trade</th>
                 <th className="py-3 text-left font-medium w-[120px]">MCAP</th>
                 <th className="py-3 text-left font-medium w-[140px]">Amount</th>
-                <th className="py-3 text-left font-medium w-[160px]">Tx</th>
+                <th className="hidden md:table-cell py-3 text-left font-medium w-[160px]">Tx</th>
                 <th className="py-3 pr-3 text-right font-medium">Age</th>
               </tr>
             </thead>
@@ -110,14 +110,17 @@ export function ChartBox({
                 >
                   <td className="py-3 pl-3 w-[200px]">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium">{trade.userAddress.slice(0, 6)}...{trade.userAddress.slice(-6)}</span>
+                      {/* Mobile: First 6 only */}
+                      <span className="font-medium md:hidden">{trade.userAddress.slice(0, 6)}</span>
+                      {/* Desktop: First 6 + Last 6 */}
+                      <span className="font-medium hidden md:inline">{trade.userAddress.slice(0, 6)}...{trade.userAddress.slice(-6)}</span>
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(trade.userAddress);
                           setCopiedAddress(trade.userAddress);
                           setTimeout(() => setCopiedAddress(null), 2000);
                         }}
-                        className="hover:text-white transition-colors cursor-pointer"
+                        className="hidden md:inline-flex hover:text-white transition-colors cursor-pointer"
                         style={{ color: copiedAddress === trade.userAddress ? '#ffffff' : '#6B6E71' }}
                         title="Copy address"
                       >
@@ -135,7 +138,7 @@ export function ChartBox({
                         href={`https://solscan.io/address/${trade.userAddress}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:text-white transition-colors"
+                        className="hidden md:inline-flex hover:text-white transition-colors"
                         style={{ color: '#6B6E71' }}
                         title="View on Solscan"
                       >
@@ -145,79 +148,144 @@ export function ChartBox({
                       </a>
                     </div>
                   </td>
-                  <td className="py-3 font-medium uppercase w-[100px]">{trade.market}</td>
+                  <td className="hidden md:table-cell py-3 font-medium uppercase w-[100px]">{trade.market}</td>
                   <td className="py-3 w-[100px]">
                     <span style={{ color: trade.isBaseToQuote ? '#FF6F94' : '#6ECC94' }}>
                       {trade.isBaseToQuote ? 'Sell' : 'Buy'}
                     </span>
                   </td>
                   <td className="py-3 w-[120px]">
-                    {(() => {
-                      if (!trade.marketCapUsd) return <span className="text-[#6B6E71]">-</span>;
+                    {/* Mobile: 1 decimal */}
+                    <span className="md:hidden">
+                      {(() => {
+                        if (!trade.marketCapUsd) return <span className="text-[#6B6E71]">-</span>;
 
-                      const mcap = trade.marketCapUsd;
+                        const mcap = trade.marketCapUsd;
 
-                      // Validate market cap is within reasonable bounds
-                      // Min: $1, Max: $100B (anything beyond is likely a calculation error)
-                      if (mcap < 1 || mcap > 100000000000) {
-                        return <span className="text-[#6B6E71]">-</span>;
-                      }
+                        if (mcap < 1 || mcap > 100000000000) {
+                          return <span className="text-[#6B6E71]">-</span>;
+                        }
 
-                      const removeTrailingZeros = (num: string): string => {
-                        return num.replace(/\.?0+$/, '');
-                      };
+                        const removeTrailingZeros = (num: string): string => {
+                          return num.replace(/\.?0+$/, '');
+                        };
 
-                      let formattedMcap;
-                      if (mcap >= 1000000000) {
-                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000000000).toFixed(3)) + 'B';
-                      } else if (mcap >= 1000000) {
-                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000000).toFixed(3)) + 'M';
-                      } else if (mcap >= 1000) {
-                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000).toFixed(3)) + 'K';
-                      } else {
-                        formattedMcap = '$' + removeTrailingZeros(mcap.toFixed(2));
-                      }
+                        let formattedMcap;
+                        if (mcap >= 1000000000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000000000).toFixed(1)) + 'B';
+                        } else if (mcap >= 1000000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000000).toFixed(1)) + 'M';
+                        } else if (mcap >= 1000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000).toFixed(1)) + 'K';
+                        } else {
+                          formattedMcap = '$' + removeTrailingZeros(mcap.toFixed(1));
+                        }
 
-                      return formattedMcap;
-                    })()}
+                        return formattedMcap;
+                      })()}
+                    </span>
+                    {/* Desktop: 3 decimals */}
+                    <span className="hidden md:inline">
+                      {(() => {
+                        if (!trade.marketCapUsd) return <span className="text-[#6B6E71]">-</span>;
+
+                        const mcap = trade.marketCapUsd;
+
+                        if (mcap < 1 || mcap > 100000000000) {
+                          return <span className="text-[#6B6E71]">-</span>;
+                        }
+
+                        const removeTrailingZeros = (num: string): string => {
+                          return num.replace(/\.?0+$/, '');
+                        };
+
+                        let formattedMcap;
+                        if (mcap >= 1000000000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000000000).toFixed(3)) + 'B';
+                        } else if (mcap >= 1000000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000000).toFixed(3)) + 'M';
+                        } else if (mcap >= 1000) {
+                          formattedMcap = '$' + removeTrailingZeros((mcap / 1000).toFixed(3)) + 'K';
+                        } else {
+                          formattedMcap = '$' + removeTrailingZeros(mcap.toFixed(2));
+                        }
+
+                        return formattedMcap;
+                      })()}
+                    </span>
                   </td>
                   <td className="py-3 w-[140px]">
-                    {(() => {
-                      const tokenUsed = getTokenUsed(trade.isBaseToQuote, trade.market);
-                      const amount = parseFloat(trade.amountIn);
+                    {/* Mobile: 1 decimal */}
+                    <span className="md:hidden">
+                      {(() => {
+                        const tokenUsed = getTokenUsed(trade.isBaseToQuote, trade.market);
+                        const amount = parseFloat(trade.amountIn);
 
-                      const removeTrailingZeros = (num: string): string => {
-                        return num.replace(/\.?0+$/, '');
-                      };
+                        const removeTrailingZeros = (num: string): string => {
+                          return num.replace(/\.?0+$/, '');
+                        };
 
-                      let formattedAmount;
-                      if (tokenUsed === 'SOL') {
-                        formattedAmount = removeTrailingZeros(amount.toFixed(3));
-                      } else {
-                        // ZC formatting with K/M/B notation
-                        if (amount >= 1000000000) {
-                          formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
-                        } else if (amount >= 1000000) {
-                          formattedAmount = removeTrailingZeros((amount / 1000000).toFixed(3)) + 'M';
-                        } else if (amount >= 1000) {
-                          formattedAmount = removeTrailingZeros((amount / 1000).toFixed(3)) + 'K';
+                        let formattedAmount;
+                        if (tokenUsed === 'SOL') {
+                          formattedAmount = removeTrailingZeros(amount.toFixed(1));
                         } else {
-                          formattedAmount = removeTrailingZeros(amount.toFixed(3));
+                          // ZC formatting with K/M/B notation
+                          if (amount >= 1000000000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(1)) + 'B';
+                          } else if (amount >= 1000000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000000).toFixed(1)) + 'M';
+                          } else if (amount >= 1000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000).toFixed(1)) + 'K';
+                          } else {
+                            formattedAmount = removeTrailingZeros(amount.toFixed(1));
+                          }
                         }
-                      }
 
-                      return `${formattedAmount} ${tokenUsed.replace('$', '')}`;
-                    })()}
+                        return `${formattedAmount} ${tokenUsed.replace('$', '')}`;
+                      })()}
+                    </span>
+                    {/* Desktop: 3 decimals */}
+                    <span className="hidden md:inline">
+                      {(() => {
+                        const tokenUsed = getTokenUsed(trade.isBaseToQuote, trade.market);
+                        const amount = parseFloat(trade.amountIn);
+
+                        const removeTrailingZeros = (num: string): string => {
+                          return num.replace(/\.?0+$/, '');
+                        };
+
+                        let formattedAmount;
+                        if (tokenUsed === 'SOL') {
+                          formattedAmount = removeTrailingZeros(amount.toFixed(3));
+                        } else {
+                          // ZC formatting with K/M/B notation
+                          if (amount >= 1000000000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
+                          } else if (amount >= 1000000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000000).toFixed(3)) + 'M';
+                          } else if (amount >= 1000) {
+                            formattedAmount = removeTrailingZeros((amount / 1000).toFixed(3)) + 'K';
+                          } else {
+                            formattedAmount = removeTrailingZeros(amount.toFixed(3));
+                          }
+                        }
+
+                        return `${formattedAmount} ${tokenUsed.replace('$', '')}`;
+                      })()}
+                    </span>
                   </td>
-                  <td className="py-3 w-[160px]">
+                  <td className="hidden md:table-cell py-3 w-[160px]">
                     {trade.txSignature ? (
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium">{trade.txSignature.slice(0, 12)}...</span>
+                        {/* Mobile: First 6 */}
+                        <span className="font-medium md:hidden">{trade.txSignature.slice(0, 6)}...</span>
+                        {/* Desktop: First 12 */}
+                        <span className="font-medium hidden md:inline">{trade.txSignature.slice(0, 12)}...</span>
                         <a
                           href={`https://solscan.io/tx/${trade.txSignature}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
+                          className="hidden md:inline-flex hover:text-white transition-colors"
                           style={{ color: '#6B6E71' }}
                           title="View transaction"
                         >

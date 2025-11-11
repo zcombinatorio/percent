@@ -270,7 +270,10 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-2.5 pb-4 px-5 transition-all duration-300">
       <div className="text-white flex flex-col items-center">
         <div className="flex items-center justify-center gap-2 w-full mb-4.5">
-          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase block" style={{ color: '#DDDDD7' }}>
+          <span className="md:hidden text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase block" style={{ color: '#DDDDD7' }}>
+            I. {mode === 'deposit' ? 'Deposit' : 'Withdraw'}
+          </span>
+          <span className="hidden md:block text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
             I. {mode === 'deposit' ? 'Deposit' : 'Withdraw'} Funds
           </span>
 
@@ -362,7 +365,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
         <button
           onClick={mode === 'deposit' ? handleDeposit : handleWithdraw}
           disabled={!amount || parseFloat(amount) <= 0 || isDepositing || !!balanceError}
-          className={`h-[56px] w-[140px] px-6 rounded-[6px] font-semibold transition cursor-pointer whitespace-nowrap uppercase font-ibm-plex-mono text-md flex items-center justify-center ${
+          className={`h-[56px] w-[100px] md:w-[140px] px-4 md:px-6 rounded-[6px] font-semibold transition cursor-pointer whitespace-nowrap uppercase font-ibm-plex-mono text-md flex items-center justify-center ${
             amount && parseFloat(amount) > 0 && !balanceError && !isDepositing
               ? 'bg-[#DDDDD7]'
               : 'bg-[#414346] cursor-not-allowed'
