@@ -7,10 +7,11 @@ interface LeaderboardEntry {
 
 interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
+  totalVolume?: number;
   loading?: boolean;
 }
 
-export function LeaderboardTable({ entries, loading = false }: LeaderboardTableProps) {
+export function LeaderboardTable({ entries, totalVolume, loading = false }: LeaderboardTableProps) {
   const formatAddress = (address: string) => {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
@@ -31,6 +32,20 @@ export function LeaderboardTable({ entries, loading = false }: LeaderboardTableP
     <div className="overflow-y-auto scrollbar-hide border border-[#191919] rounded-[9px]">
       <table className="w-full">
         <thead className="text-[#6B6E71] font-medium uppercase sticky top-0" style={{ backgroundColor: '#121212' }}>
+          {totalVolume !== undefined && (
+            <tr className="border-b border-[#191919]">
+              <td colSpan={3} className="py-3 px-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: '#6B6E71' }}>
+                    TOTAL VOLUME (ALL PROPOSALS)
+                  </span>
+                  <span className="text-lg font-medium" style={{ color: '#E9E9E3' }}>
+                    ${formatVolume(totalVolume)}
+                  </span>
+                </div>
+              </td>
+            </tr>
+          )}
           <tr>
             <th className="py-4 pl-5 text-left font-medium text-sm">Rank</th>
             <th className="py-4 text-left font-medium text-sm">Wallet Address</th>

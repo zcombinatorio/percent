@@ -19,6 +19,7 @@ export interface LeaderboardEntry {
 
 export function useLeaderboard() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [totalVolume, setTotalVolume] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,8 +103,13 @@ export function useLeaderboard() {
         }))
         .sort((a, b) => b.volume - a.volume);
 
+      // Calculate total volume across all traders
+      const totalVolumeSum = leaderboardEntries.reduce((sum, entry) => sum + entry.volume, 0);
+
       console.log('Leaderboard entries:', leaderboardEntries.length);
+      console.log('Total volume:', totalVolumeSum);
       setEntries(leaderboardEntries);
+      setTotalVolume(totalVolumeSum);
     } catch (err) {
       console.error('Error fetching leaderboard:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch leaderboard');
@@ -119,6 +125,7 @@ export function useLeaderboard() {
 
   return {
     entries,
+    totalVolume,
     loading: loading || proposalsLoading,
     error,
     refetch: fetchLeaderboard

@@ -21,7 +21,7 @@ export default function LeaderboardPage() {
   const hasWalletBalance = solBalance > 0 || zcBalance > 0;
 
   // Fetch leaderboard data
-  const { entries: leaderboardEntries, loading: leaderboardLoading, error: leaderboardError } = useLeaderboard();
+  const { entries: leaderboardEntries, totalVolume, loading: leaderboardLoading, error: leaderboardError } = useLeaderboard();
 
   // Fetch pot data
   const { potSol, loading: potLoading } = usePot();
@@ -114,7 +114,7 @@ export default function LeaderboardPage() {
 
               {/* Leaderboard Table Card */}
               <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
-                <LeaderboardTable entries={leaderboardEntries} loading={leaderboardLoading} />
+                <LeaderboardTable entries={leaderboardEntries} totalVolume={totalVolume} loading={leaderboardLoading} />
               </div>
             </div>
           </div>
