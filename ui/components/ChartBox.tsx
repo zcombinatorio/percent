@@ -65,10 +65,17 @@ export function ChartBox({
       {/* Conditional Content */}
       {view === 'chart' ? (
         <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px]">
-          <MarketChart proposalId={proposalId} market={selectedMarket} height={615} />
+          {/* Mobile: 400px */}
+          <div className="md:hidden">
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={480} />
+          </div>
+          {/* Desktop: 615px */}
+          <div className="hidden md:block">
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={615} />
+          </div>
         </div>
       ) : (
-        <div className="h-[615px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
+        <div className="h-[480px] md:h-[615px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
           <table className="w-full text-sm">
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>

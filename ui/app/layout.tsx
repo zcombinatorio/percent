@@ -5,7 +5,6 @@ import "./globals.css";
 import PrivyProviderWrapper from "@/providers/PrivyProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import FeedbackWidget from "@/components/FeedbackWidget";
-import MobileBlocker from "@/components/MobileBlocker";
 import { Toaster } from "react-hot-toast";
 
 const inter = Inter({
@@ -48,35 +47,33 @@ export default function RootLayout({
         className={`${inter.variable} ${ibmPlexMono.variable} ${robotoMono.variable} ${rinter.variable} font-sans antialiased bg-[#0a0a0a] text-white`}
       >
         <ErrorBoundary>
-          <MobileBlocker>
-            <PrivyProviderWrapper>
-              {children}
-              <FeedbackWidget />
-              <Toaster
-                position="bottom-right"
-                toastOptions={{
-                  style: {
-                    background: '#272727',
-                    color: '#fff',
-                    borderRadius: '8px',
-                    border: '1px solid #404040',
+          <PrivyProviderWrapper>
+            {children}
+            <FeedbackWidget />
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: '#272727',
+                  color: '#fff',
+                  borderRadius: '8px',
+                  border: '1px solid #404040',
+                },
+                success: {
+                  iconTheme: {
+                    primary: '#10b981',
+                    secondary: '#fff',
                   },
-                  success: {
-                    iconTheme: {
-                      primary: '#10b981',
-                      secondary: '#fff',
-                    },
+                },
+                error: {
+                  iconTheme: {
+                    primary: '#ef4444',
+                    secondary: '#fff',
                   },
-                  error: {
-                    iconTheme: {
-                      primary: '#ef4444',
-                      secondary: '#fff',
-                    },
-                  },
-                }}
-              />
-            </PrivyProviderWrapper>
-          </MobileBlocker>
+                },
+              }}
+            />
+          </PrivyProviderWrapper>
         </ErrorBoundary>
       </body>
     </html>
