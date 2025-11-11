@@ -40,9 +40,9 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
   return (
     <div style={{ backgroundColor: '#0a0a0a' }}>
       {/* First Row: Logo / wallet / balances / links */}
-      <div className="h-14 flex items-center justify-between px-8">
+      <div className="h-14 flex items-center justify-between px-4 md:px-8">
         {/* Left side: Logo / wallet / balances / links */}
-        <div className="flex items-center gap-4 text-gray-400">
+        <div className="flex items-center gap-2 md:gap-4 text-gray-400">
           <a
             href="/"
             className="hover:opacity-80 transition-opacity"
@@ -107,7 +107,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
       </div>
 
       {/* Right side: Links */}
-      <nav className="flex items-center gap-3 sm:gap-6">
+      <nav className="hidden md:flex items-center gap-3 sm:gap-6">
         <a
           href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad"
           target="_blank"
@@ -118,17 +118,6 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
           onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
         >
           <span className="text-sm">$ZC</span>
-        </a>
-        <a
-          href="https://jup.ag/tokens/zcQPTGhdiTMFM6erwko2DWBTkN8nCnAGM7MUX9RpERC"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="transition-colors"
-          style={{ color: '#6B6E71' }}
-          onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
-          onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
-        >
-          <span className="text-sm">$PERC</span>
         </a>
         <a
           href="https://docs.percent.markets/"
@@ -187,8 +176,13 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
       </nav>
       </div>
 
+<<<<<<< HEAD
       {/* Second Row: Live/History/Leaderboard Tab Navigation */}
       <div className="px-8 border-b border-[#292929]">
+=======
+      {/* Second Row: Live/History Tab Navigation */}
+      <div className="px-4 md:px-8 border-b border-[#292929]">
+>>>>>>> main
         <div className="flex">
           <button
             onClick={() => onNavTabChange('live')}

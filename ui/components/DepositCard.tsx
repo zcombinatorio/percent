@@ -7,6 +7,7 @@ import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/formatters';
 import { buildApiUrl } from '@/lib/api-utils';
+import type { UserBalancesResponse } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const SOL_DECIMALS = 9;
@@ -17,22 +18,39 @@ interface DepositCardProps {
   proposalId: number;
   solBalance: number | null;
   zcBalance: number | null;
+  userBalances: UserBalancesResponse | null;
   onDepositSuccess: () => void;
 }
 
-export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSuccess }: DepositCardProps) {
+export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, onDepositSuccess }: DepositCardProps) {
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const { wallets } = useSolanaWallets();
+  const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState<'sol' | 'zc'>('sol');
   const [isDepositing, setIsDepositing] = useState(false);
 
   // Calculate max balance
   const maxBalance = useMemo(() => {
-    const balance = selectedToken === 'sol' ? (solBalance || 0) : (zcBalance || 0);
-    // Reserve gas for SOL deposits
-    return selectedToken === 'sol' ? Math.max(0, balance - SOL_GAS_RESERVE) : balance;
-  }, [selectedToken, solBalance, zcBalance]);
+    if (mode === 'deposit') {
+      const balance = selectedToken === 'sol' ? (solBalance || 0) : (zcBalance || 0);
+      // Reserve gas for SOL deposits
+      return selectedToken === 'sol' ? Math.max(0, balance - SOL_GAS_RESERVE) : balance;
+    } else {
+      // Withdraw mode: can only merge min(pass, fail) pairs
+      if (!userBalances) return 0;
+
+      const decimals = selectedToken === 'sol' ? SOL_DECIMALS : ZC_DECIMALS;
+      const vault = selectedToken === 'sol' ? userBalances.quote : userBalances.base;
+
+      const passBalance = parseFloat(vault.passConditional);
+      const failBalance = parseFloat(vault.failConditional);
+      const minBalance = Math.min(passBalance, failBalance);
+
+      // Convert from smallest units to decimal
+      return minBalance / Math.pow(10, decimals);
+    }
+  }, [mode, selectedToken, solBalance, zcBalance, userBalances]);
 
   // Validate balance
   const balanceError = useMemo(() => {
@@ -152,12 +170,142 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
     }
   }, [authenticated, walletAddress, amount, balanceError, selectedToken, wallets, proposalId, login, onDepositSuccess]);
 
+  // Handle withdraw
+  const handleWithdraw = useCallback(async () => {
+    if (!authenticated) {
+      login();
+      return;
+    }
+
+    if (!walletAddress) {
+      toast.error('No wallet address found');
+      return;
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (balanceError) {
+      toast.error(balanceError);
+      return;
+    }
+
+    const wallet = wallets[0];
+    if (!wallet) {
+      toast.error('No wallet connected');
+      return;
+    }
+
+    setIsDepositing(true);
+    const toastId = toast.loading(`Withdrawing ${amount} ${selectedToken.toUpperCase()}...`);
+
+    try {
+      // Convert amount to smallest units
+      const decimals = selectedToken === 'sol' ? SOL_DECIMALS : ZC_DECIMALS;
+      const amountInSmallestUnits = Math.floor(parseFloat(amount) * Math.pow(10, decimals));
+
+      // Determine vault type
+      const vaultType = selectedToken === 'zc' ? 'base' : 'quote';
+
+      // Step 1: Build merge transaction
+      const buildResponse = await fetch(
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: walletAddress,
+            amount: amountInSmallestUnits.toString()
+          })
+        }
+      );
+
+      if (!buildResponse.ok) {
+        const error = await buildResponse.json();
+        throw new Error(error.message || 'Failed to build transaction');
+      }
+
+      const buildData = await buildResponse.json();
+
+      // Step 2: Sign transaction
+      const mergeTx = Transaction.from(Buffer.from(buildData.transaction, 'base64'));
+      const signedTx = await wallet.signTransaction(mergeTx);
+
+      // Step 3: Execute merge transaction
+      const executeResponse = await fetch(
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transaction: Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString('base64')
+          })
+        }
+      );
+
+      if (!executeResponse.ok) {
+        const error = await executeResponse.json();
+        throw new Error(error.message || 'Failed to execute transaction');
+      }
+
+      // Success
+      toast.success(`Successfully withdrew ${amount} ${selectedToken.toUpperCase()}!`, { id: toastId, duration: 5000 });
+      setAmount('');
+      onDepositSuccess();
+
+    } catch (error) {
+      console.error('Withdraw error:', error);
+      toast.error(
+        `Failed to withdraw: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { id: toastId }
+      );
+    } finally {
+      setIsDepositing(false);
+    }
+  }, [authenticated, walletAddress, amount, balanceError, selectedToken, wallets, proposalId, login, onDepositSuccess]);
+
   return (
-    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
+    <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-2.5 pb-4 px-5 transition-all duration-300">
       <div className="text-white flex flex-col items-center">
-        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block text-center" style={{ color: '#DDDDD7' }}>
-          I. Deposit Funds
-        </span>
+        <div className="flex items-center justify-center gap-2 w-full mb-4.5">
+          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase block" style={{ color: '#DDDDD7' }}>
+            I. {mode === 'deposit' ? 'Deposit' : 'Withdraw'} Funds
+          </span>
+
+          {/* Pill Toggle */}
+          <div className="flex items-center gap-[2px] p-[3px] border border-[#191919] rounded-full">
+            <button
+              onClick={() => {
+                setMode('deposit');
+                setAmount('');
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer font-ibm-plex-mono ${
+                mode === 'deposit'
+                  ? 'bg-[#DDDDD7]'
+                  : 'bg-transparent'
+              }`}
+              style={mode === 'deposit' ? { color: '#161616', fontFamily: 'IBM Plex Mono, monospace' } : { color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}
+            >
+              Deposit
+            </button>
+            <button
+              onClick={() => {
+                setMode('withdraw');
+                setAmount('');
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition cursor-pointer font-ibm-plex-mono ${
+                mode === 'withdraw'
+                  ? 'bg-[#DDDDD7]'
+                  : 'bg-transparent'
+              }`}
+              style={mode === 'withdraw' ? { color: '#161616', fontFamily: 'IBM Plex Mono, monospace' } : { color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}
+            >
+              Withdraw
+            </button>
+          </div>
+        </div>
 
         {/* Input and Button Row */}
         <div className="flex items-center gap-2 w-full pb-1">
@@ -210,9 +358,9 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
           </div>
         </div>
 
-        {/* Deposit Button */}
+        {/* Deposit/Withdraw Button */}
         <button
-          onClick={handleDeposit}
+          onClick={mode === 'deposit' ? handleDeposit : handleWithdraw}
           disabled={!amount || parseFloat(amount) <= 0 || isDepositing || !!balanceError}
           className={`h-[56px] w-[140px] px-6 rounded-[6px] font-semibold transition cursor-pointer whitespace-nowrap uppercase font-ibm-plex-mono text-md flex items-center justify-center ${
             amount && parseFloat(amount) > 0 && !balanceError && !isDepositing
@@ -224,7 +372,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, onDepositSucces
           {isDepositing ? (
             <div className="animate-spin h-4 w-4 rounded-full border-2 border-[#161616] border-t-transparent"></div>
           ) : (
-            'DEPOSIT'
+            mode === 'deposit' ? 'DEPOSIT' : 'WITHDRAW'
           )}
         </button>
         </div>

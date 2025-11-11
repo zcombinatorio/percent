@@ -18,6 +18,7 @@ export interface Trade {
   amountOut: string;
   price: string;
   txSignature: string | null;
+  marketCapUsd?: number;
 }
 
 interface TradeHistoryResponse {

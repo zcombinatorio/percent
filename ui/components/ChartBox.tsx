@@ -2,16 +2,7 @@
 
 import { useState } from 'react';
 import MarketChart from './MarketChart';
-
-interface Trade {
-  id: number;
-  userAddress: string;
-  market: 'pass' | 'fail';
-  isBaseToQuote: boolean;
-  amountIn: string;
-  txSignature: string | null;
-  timestamp: string;
-}
+import type { Trade } from '@/hooks/useTradeHistory';
 
 interface ChartBoxProps {
   proposalId: number;
@@ -97,16 +88,24 @@ export function ChartBox({
       {/* Conditional Content */}
       {view === 'chart' ? (
         <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px]">
-          <MarketChart proposalId={proposalId} market={selectedMarket} height={615} />
+          {/* Mobile: 400px */}
+          <div className="md:hidden">
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={480} />
+          </div>
+          {/* Desktop: 615px */}
+          <div className="hidden md:block">
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={615} />
+          </div>
         </div>
       ) : (
-        <div className="h-[615px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
+        <div className="h-[480px] md:h-[615px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
           <table className="w-full text-sm">
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>
                 <th className="py-3 pl-3 text-left font-medium w-[240px]">Trader</th>
                 <th className="py-3 text-left font-medium w-[100px]">Coin</th>
                 <th className="py-3 text-left font-medium w-[100px]">Trade</th>
+                <th className="py-3 text-left font-medium w-[120px]">MCAP</th>
                 <th className="py-3 text-left font-medium w-[140px]">Amount</th>
                 <th className="py-3 text-left font-medium w-[160px]">Tx</th>
                 <th className="py-3 pr-3 text-right font-medium">Age</th>
@@ -115,13 +114,13 @@ export function ChartBox({
             <tbody>
             {tradesLoading ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+                <td colSpan={7} className="py-8 text-center text-[#6B6E71]">
                   Loading trades...
                 </td>
               </tr>
             ) : trades.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+                <td colSpan={7} className="py-8 text-center text-[#6B6E71]">
                   No trades yet
                 </td>
               </tr>
@@ -174,6 +173,36 @@ export function ChartBox({
                     <span style={{ color: trade.isBaseToQuote ? '#FF6F94' : '#6ECC94' }}>
                       {trade.isBaseToQuote ? 'Sell' : 'Buy'}
                     </span>
+                  </td>
+                  <td className="py-3 w-[120px]">
+                    {(() => {
+                      if (!trade.marketCapUsd) return <span className="text-[#6B6E71]">-</span>;
+
+                      const mcap = trade.marketCapUsd;
+
+                      // Validate market cap is within reasonable bounds
+                      // Min: $1, Max: $100B (anything beyond is likely a calculation error)
+                      if (mcap < 1 || mcap > 100000000000) {
+                        return <span className="text-[#6B6E71]">-</span>;
+                      }
+
+                      const removeTrailingZeros = (num: string): string => {
+                        return num.replace(/\.?0+$/, '');
+                      };
+
+                      let formattedMcap;
+                      if (mcap >= 1000000000) {
+                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000000000).toFixed(3)) + 'B';
+                      } else if (mcap >= 1000000) {
+                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000000).toFixed(3)) + 'M';
+                      } else if (mcap >= 1000) {
+                        formattedMcap = '$' + removeTrailingZeros((mcap / 1000).toFixed(3)) + 'K';
+                      } else {
+                        formattedMcap = '$' + removeTrailingZeros(mcap.toFixed(2));
+                      }
+
+                      return formattedMcap;
+                    })()}
                   </td>
                   <td className="py-3 w-[140px]">
                     {(() => {

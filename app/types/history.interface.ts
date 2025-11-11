@@ -44,6 +44,8 @@ export interface ITradeHistory {
   amountOut: Decimal;             // Output token amount received
   price: Decimal;                 // Execution price (calculated from amounts)
   txSignature?: string;           // Solana transaction signature (optional)
+  totalSupply?: number;           // Total supply of tokens (for market cap calculation)
+  marketCapUsd?: number;          // Market cap in USD at time of trade
 }
 
 /**
