@@ -78,10 +78,15 @@ Edit `.env` and configure:
 ```env
 # Server Configuration
 PORT=3001
-API_KEY=your-api-key-here
+API_KEY=your-secret-api-key-here  # Set to any secret value you choose
+WS_PORT=9091                        # WebSocket server port
 
 # Database
 DB_URL=postgresql://username:password@localhost:5432/percent_db
+DB_LISTEN_URL=postgresql://username:password@localhost:5432/percent_db  # Usually same as DB_URL
+
+# For AWS RDS with SSL:
+# DB_URL=postgresql://user:pass@host.rds.amazonaws.com:5432/dbname?sslmode=verify-full&sslrootcert=/path/to/us-east-1-bundle.pem
 
 # Solana
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
