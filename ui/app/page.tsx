@@ -28,6 +28,7 @@ import { api } from '@/lib/api';
 import { claimWinnings } from '@/lib/trading';
 import { buildApiUrl } from '@/lib/api-utils';
 import Masonry from 'react-masonry-css';
+import { ProposalVolume } from '@/components/ProposalVolume';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
   ssr: false,
@@ -184,6 +185,7 @@ export default function HomePage() {
   // Fetch trade history for the selected proposal
   const {
     trades,
+    totalVolume,
     loading: tradesLoading,
     refetch: refetchTrades,
     getTimeAgo,
@@ -618,6 +620,7 @@ export default function HomePage() {
                       proposalId={proposal.id}
                       selectedMarket={selectedMarket}
                       trades={trades.filter(trade => trade.market === selectedMarket)}
+                      totalVolume={totalVolume}
                       tradesLoading={tradesLoading}
                       getTimeAgo={getTimeAgo}
                       getTokenUsed={getTokenUsed}
@@ -839,6 +842,7 @@ export default function HomePage() {
                                   Final PFG: {proposalPfgs[proposal.id].toFixed(1)}%
                                 </span>
                               )}
+                              <ProposalVolume proposalId={proposal.id} />
                             </div>
                             <div className="text-sm text-[#B0AFAB]">
                               {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {
