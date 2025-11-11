@@ -146,6 +146,11 @@ router.get('/:id/trades', async (req, res, next) => {
       limitNum || 100
     );
 
+    // Get current SOL/USD price for market cap calculation
+    const { SolPriceService } = await import('../../app/services/sol-price.service');
+    const solPriceService = SolPriceService.getInstance();
+    const solPrice = await solPriceService.getSolPrice();
+
     logger.info('[GET /:id/trades] Trade history retrieved', {
       proposalId,
       moderatorId,
@@ -169,6 +174,9 @@ router.get('/:id/trades', async (req, res, next) => {
         amountOut: trade.amountOut.toString(),
         price: trade.price.toString(),
         txSignature: trade.txSignature,
+        marketCapUsd: trade.totalSupply
+          ? trade.price.toNumber() * trade.totalSupply * solPrice
+          : undefined,
       }))
     });
   } catch (error) {

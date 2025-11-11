@@ -181,22 +181,27 @@ export class HistoryService {
     const pool = getPool();
 
     let query = `
-      SELECT * FROM i_trade_history
-      WHERE moderator_id = $1 AND proposal_id = $2
+      SELECT
+        t.*,
+        p.total_supply
+      FROM i_trade_history t
+      LEFT JOIN i_proposals p ON t.moderator_id = p.moderator_id
+        AND t.proposal_id = p.proposal_id
+      WHERE t.moderator_id = $1 AND t.proposal_id = $2
     `;
     const params: (number | Date)[] = [moderatorId, proposalId];
 
     if (from) {
       params.push(from);
-      query += ` AND timestamp >= $${params.length}`;
+      query += ` AND t.timestamp >= $${params.length}`;
     }
 
     if (to) {
       params.push(to);
-      query += ` AND timestamp <= $${params.length}`;
+      query += ` AND t.timestamp <= $${params.length}`;
     }
 
-    query += ' ORDER BY timestamp DESC';
+    query += ' ORDER BY t.timestamp DESC';
 
     if (limit) {
       query += ` LIMIT ${limit}`;
@@ -216,6 +221,7 @@ export class HistoryService {
       amountOut: new Decimal(row.amount_out),
       price: new Decimal(row.price),
       txSignature: row.tx_signature,
+      totalSupply: row.total_supply ? parseInt(row.total_supply) : undefined,
     }));
   }
 

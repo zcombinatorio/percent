@@ -1,13 +1,4 @@
-
-interface Trade {
-  id: number;
-  userAddress: string;
-  market: 'pass' | 'fail';
-  isBaseToQuote: boolean;
-  amountIn: string;
-  txSignature: string | null;
-  timestamp: string;
-}
+import type { Trade } from '@/hooks/useTradeHistory';
 
 interface TradeHistoryTableProps {
   trades: Trade[];
@@ -32,6 +23,7 @@ export function TradeHistoryTable({
             <th className="py-3 pl-3 text-left font-medium">Trader</th>
             <th className="py-3 text-left font-medium">Coin</th>
             <th className="py-3 text-left font-medium">Trade</th>
+            <th className="py-3 text-left font-medium">MCAP</th>
             <th className="py-3 text-left font-medium">Amount</th>
             <th className="py-3 text-left font-medium">Tx</th>
             <th className="py-3 pr-3 text-right font-medium">Age</th>
@@ -40,13 +32,13 @@ export function TradeHistoryTable({
         <tbody>
         {loading ? (
           <tr>
-            <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+            <td colSpan={7} className="py-8 text-center text-[#6B6E71]">
               Loading trades...
             </td>
           </tr>
         ) : trades.length === 0 ? (
           <tr>
-            <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
+            <td colSpan={7} className="py-8 text-center text-[#6B6E71]">
               No trades yet
             </td>
           </tr>
@@ -133,6 +125,32 @@ export function TradeHistoryTable({
                 </td>
                 <td className="py-3" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
                   {isBuy ? 'Buy' : 'Sell'}
+                </td>
+                <td className="py-3" style={{ color: '#DDDDD7' }}>
+                  {(() => {
+                    if (!trade.marketCapUsd) return '—';
+
+                    const mcap = trade.marketCapUsd;
+
+                    // Validate market cap is within reasonable bounds
+                    // Min: $1, Max: $100B (anything beyond is likely a calculation error)
+                    if (mcap < 1 || mcap > 100000000000) {
+                      return '—';
+                    }
+
+                    let formattedMcap;
+                    if (mcap >= 1000000000) {
+                      formattedMcap = '$' + removeTrailingZeros((mcap / 1000000000).toFixed(3)) + 'B';
+                    } else if (mcap >= 1000000) {
+                      formattedMcap = '$' + removeTrailingZeros((mcap / 1000000).toFixed(3)) + 'M';
+                    } else if (mcap >= 1000) {
+                      formattedMcap = '$' + removeTrailingZeros((mcap / 1000).toFixed(3)) + 'K';
+                    } else {
+                      formattedMcap = '$' + removeTrailingZeros(mcap.toFixed(2));
+                    }
+
+                    return formattedMcap;
+                  })()}
                 </td>
                 <td className="py-3" style={{ color: '#DDDDD7' }}>
                   {formattedAmount} {tokenUsed.replace('$', '')}
