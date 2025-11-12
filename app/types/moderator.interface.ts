@@ -9,10 +9,9 @@ import { PersistenceService } from '@app/services/persistence.service';
  * Enum representing the possible states of a proposal
  */
 export enum ProposalStatus {
-  Uninitialized = 'Uninitialized', // Proposal created but not yet initialized on-chain
+  Uninitialized = 'Uninitialized',  // Proposal created but not yet initialized on-chain
   Pending = 'Pending',              // Proposal is active and voting is ongoing
-  Passed = 'Passed',                // Proposal passed the threshold
-  Failed = 'Failed',                // Proposal failed to pass the threshold
+  Finalized = 'Finalized',          // Proposal has been finalized
   Executed = 'Executed'             // Proposal has been executed
 }
 

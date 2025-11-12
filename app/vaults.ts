@@ -26,9 +26,9 @@ import { LoggerService } from '@app/services/logger.service';
 /**
  * Vault implementation for managing conditional tokens in prediction markets
  * 
- * Each vault manages BOTH pass and fail conditional tokens for a single token type:
- * 1. Split: 1 regular token → 1 pass token + 1 fail token
- * 2. Merge: 1 pass token + 1 fail token → 1 regular token
+ * Each vault manages multiple conditional tokens for a single token type:
+ * 1. Split: 1 regular token → N conditional tokens
+ * 2. Merge: N conditional tokens → 1 regular token
  * 3. Finalize: Determines which conditional tokens can be redeemed
  * 4. Redeem: Exchange winning conditional tokens → regular tokens (1:1)
  * 
@@ -42,15 +42,15 @@ export class Vault implements IVault {
   public readonly vaultType: VaultType;
   public readonly regularMint: PublicKey;
   public readonly decimals: number;
-  private _passConditionalMint!: PublicKey;
-  private _failConditionalMint!: PublicKey;
+  public readonly markets: number;
+  private _conditionalMints!: PublicKey[];
   private _escrow!: PublicKey;
   private _state: VaultState = VaultState.Uninitialized;
+  private _winningConditionalMint: PublicKey | null = null;
   private _proposalStatus: ProposalStatus = ProposalStatus.Pending;
 
   // Public readonly getters
-  get passConditionalMint(): PublicKey { return this._passConditionalMint; }
-  get failConditionalMint(): PublicKey { return this._failConditionalMint; }
+  get conditionalMints(): PublicKey[] { return this._conditionalMints; }
   get escrow(): PublicKey { return this._escrow; }
   get state(): VaultState { return this._state; }
 
@@ -58,13 +58,18 @@ export class Vault implements IVault {
   private escrowKeypair: Keypair;
   private tokenService: ISPLTokenService;
   private executionService: IExecutionService;
-  private passMintKeypair: Keypair | null = null;
-  private failMintKeypair: Keypair | null = null;
+  private mintKeypairs: Keypair[] | null = null;
   private logger: LoggerService;
 
   constructor(config: IVaultConfig) {
     this.proposalId = config.proposalId;
     this.vaultType = config.vaultType;
+
+    if (config.markets < 2 || config.markets > 4) {
+      throw new Error('Number of markets must be between 2 and 4 (inclusive)');
+    }
+
+    this.markets = config.markets;
     this.regularMint = config.regularMint;
     this.decimals = config.decimals;
     this.authority = config.authority;
@@ -74,14 +79,8 @@ export class Vault implements IVault {
     // This ensures the same keypair is generated when reconstructing from database
     this.escrowKeypair = this.generateDeterministicEscrowKeypair();
 
-    // Generate mint keypairs upfront
-    // Used only for initializing the vault
-    this.passMintKeypair = Keypair.generate();
-    this.failMintKeypair = Keypair.generate();
-    
-    // Store public keys
-    this._passConditionalMint = this.passMintKeypair.publicKey;
-    this._failConditionalMint = this.failMintKeypair.publicKey;
+    // Initialize conditional mints
+    this.initializeConditionalMints();
 
     // Initialize services with ExecutionService
     this.tokenService = new SPLTokenService(
@@ -123,6 +122,26 @@ export class Vault implements IVault {
   }
 
   /**
+   * Initializes the conditional mints
+   * Generates keypairs for each market upfront
+   * Used only for initializing the vault
+   */
+  private initializeConditionalMints(): void {
+    if (this.mintKeypairs) {
+      return;
+    }
+    // Generate keypairs for each market upfront
+    // Used only for initializing the vault
+    this.mintKeypairs = []
+    for (let i = 0; i < this.markets; i++) {
+      this.mintKeypairs.push(Keypair.generate());
+    }
+
+    // Store public keys
+    this._conditionalMints = this.mintKeypairs.map(keypair => keypair.publicKey);
+  }
+
+  /**
    * Builds a transaction for initializing the vault
    * Creates both pass and fail conditional token mints and escrow account
    * Transaction is always pre-signed with authority and mint keypairs
@@ -134,33 +153,27 @@ export class Vault implements IVault {
       throw new Error('Vault already initialized');
     }
 
-    if (!this.passMintKeypair || !this.failMintKeypair) {
-      this.passMintKeypair = Keypair.generate();
-      this.failMintKeypair = Keypair.generate();
-      this._passConditionalMint = this.passMintKeypair.publicKey;
-      this._failConditionalMint = this.failMintKeypair.publicKey;
-    }
+    this.initializeConditionalMints();
 
     // Build single transaction with all instructions
     const transaction = new Transaction();
 
-    // Create and initialize pass conditional mint using token service
-    const passMinIxs = await this.tokenService.buildCreateMintIxs(
-      this.passMintKeypair,
-      this.decimals,
-      this.authority.publicKey,
-      this.authority.publicKey
-    );
-    transaction.add(...passMinIxs);
+    // Never should happen, just to shut the linter up
+    if (!this.mintKeypairs) {
+      throw new Error('Mint keypairs not initialized');
+    }
 
-    // Create and initialize fail conditional mint using token service
-    const failMintIxs = await this.tokenService.buildCreateMintIxs(
-      this.failMintKeypair,
-      this.decimals,
-      this.authority.publicKey,
-      this.authority.publicKey
-    );
-    transaction.add(...failMintIxs);
+    // Create and initialize conditional tokens using token service
+    for (let i = 0; i < this.markets; i++) {
+      const mintIxs = await this.tokenService.buildCreateMintIxs(
+        this.mintKeypairs[i]!, // keypair for the mint
+        this.decimals,
+        this.authority.publicKey,
+        this.authority.publicKey
+      );
+      transaction.add(...mintIxs);
+    }
+
 
     // Get escrow token account address
     this._escrow = await getAssociatedTokenAddress(
@@ -181,7 +194,7 @@ export class Vault implements IVault {
     )
 
     // Add memo for transaction identification
-    const memoMessage = `%[Vault/${this.vaultType}] Init Proposal #${this.proposalId}`;
+    const memoMessage = `%[QMVault/${this.vaultType}] Init Proposal #${this.proposalId}`;
     transaction.add(createMemoIx(memoMessage));
 
     // Add blockhash and fee payer
@@ -193,7 +206,7 @@ export class Vault implements IVault {
     await this.executionService.addComputeBudgetInstructions(transaction);
 
     // Pre-sign the transaction with all required signers
-    transaction.partialSign(this.authority, this.passMintKeypair, this.failMintKeypair);
+    transaction.partialSign(this.authority, ...this.mintKeypairs);
 
     return transaction;
   }
@@ -201,8 +214,7 @@ export class Vault implements IVault {
   /**
    * Initializes the vault by creating both pass and fail conditional token mints and escrow account
    * Must be called before any split/merge operations
-   * Creates two conditional mints (pass/fail) with decimals specified in constructor
-   * All operations are atomic in a single transaction
+   * Creates N conditional mints with decimals specified in constructor
    */
   async initialize(): Promise<void> {
     // Build the pre-signed initialization transaction
@@ -223,19 +235,17 @@ export class Vault implements IVault {
   }
 
   /**
-   * Builds a transaction for splitting regular tokens into BOTH pass and fail conditional tokens
-   * User receives equal amounts of both conditional tokens for each regular token
+   * Builds a transaction for splitting regular tokens into N conditional tokens
+   * User receives equal amounts of each conditional token for each regular token
    * Automatically handles SOL wrapping if needed (mainnet + quote vault)
    * @param user - User's public key who is splitting tokens
    * @param amount - Amount to split in smallest units
-   * @param presign - Whether to pre-sign with authority (default: false)
    * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if vault is finalized, amount is invalid, or insufficient balance
    */
   async buildSplitTx(
     user: PublicKey,
     amount: bigint,
-    presign: boolean = false
   ): Promise<Transaction> {
     if (this._state === VaultState.Uninitialized) {
       throw new Error('Vault not initialized');
@@ -262,7 +272,7 @@ export class Vault implements IVault {
         );
       }
     } else {
-      const userBalance = await this.getBalance(user);
+      const userBalance = await this.getRegularBalance(user);
       if (amount > userBalance) {
         throw new Error(
           `Insufficient ${this.vaultType} token balance: requested ${amount}, available ${userBalance}`
@@ -280,33 +290,22 @@ export class Vault implements IVault {
 
     // Get user's token accounts
     const userRegularAccount = await getAssociatedTokenAddress(this.regularMint, user);
-    const userPassAccount = await getAssociatedTokenAddress(this.passConditionalMint, user);
-    const userFailAccount = await getAssociatedTokenAddress(this.failConditionalMint, user);
+    const userConditionalTokenAccounts = await Promise.all(this.conditionalMints.map(mint => getAssociatedTokenAddress(mint, user)));
 
-    // Create pass conditional account if needed (idempotent)
-    tx.add(
-      createAssociatedTokenAccountIdempotentInstruction(
-        user, // payer
-        userPassAccount,
-        user, // owner
-        this.passConditionalMint,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
-    );
+    // Create conditional accounts if needed (idempotent)
+    for (let i = 0; i < this.markets; i++) {
+      tx.add(
+        createAssociatedTokenAccountIdempotentInstruction(
+          user, // payer
+          userConditionalTokenAccounts[i]!,
+          user, // owner
+          this.conditionalMints[i]!,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
 
-    // Create fail conditional account if needed (idempotent)
-    tx.add(
-      createAssociatedTokenAccountIdempotentInstruction(
-        user, // payer
-        userFailAccount,
-        user, // owner
-        this.failConditionalMint,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
-    )
-    
     // Transfer regular tokens from user to escrow (user signs)
     const transferIx = this.tokenService.buildTransferIx(
       userRegularAccount,
@@ -316,26 +315,18 @@ export class Vault implements IVault {
     );
     tx.add(transferIx);
     
-    // Mint pass conditional tokens to user (authority signs)
-    const mintPassIx = this.tokenService.buildMintToIx(
-      this.passConditionalMint,
-      userPassAccount,
-      amount,
-      this.authority.publicKey // authority must sign
-    );
-    tx.add(mintPassIx);
+    // Mint conditional tokens to user (authority signs)
+    for (let i = 0; i < this.markets; i++) {  
+      tx.add(this.tokenService.buildMintToIx(
+        this.conditionalMints[i]!,
+        userConditionalTokenAccounts[i]!,
+        amount,
+        this.authority.publicKey // authority must sign
+      ));
+    }
     
-    // Mint fail conditional tokens to user (authority signs)
-    const mintFailIx = this.tokenService.buildMintToIx(
-      this.failConditionalMint,
-      userFailAccount,
-      amount,
-      this.authority.publicKey // authority must sign
-    );
-    tx.add(mintFailIx);
-
     // Add memo for transaction identification on Solscan
-    const memoMessage = `%[Vault/${this.vaultType}] Split ${amount} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[QMVault/${this.vaultType}] Split ${amount} | Proposal #${this.proposalId}}`;
     tx.add(createMemoIx(memoMessage));
 
     // Add blockhash and fee payer so transaction can be signed
@@ -346,11 +337,6 @@ export class Vault implements IVault {
     // Add compute budget instructions before any signing
     await this.executionService.addComputeBudgetInstructions(tx);
 
-    // Pre-sign with authority for minting operations if requested
-    if (presign) {
-      tx.partialSign(this.authority);
-    }
-
     return tx;
   }
 
@@ -360,14 +346,12 @@ export class Vault implements IVault {
    * Automatically handles SOL unwrapping if needed (mainnet + quote vault)
    * @param user - User's public key who is merging tokens
    * @param amount - Amount to merge in smallest units (of each conditional token)
-   * @param presign - Whether to pre-sign with escrow (default: false)
    * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if insufficient balance of either conditional token or vault is finalized
    */
   async buildMergeTx(
     user: PublicKey,
     amount: bigint,
-    presign: boolean = false
   ): Promise<Transaction> {
     if (this._state === VaultState.Uninitialized) {
       throw new Error('Vault not initialized');
@@ -384,28 +368,22 @@ export class Vault implements IVault {
     // Check if we need to handle wrapped SOL
     const shouldHandleSol = this.shouldHandleWrappedSOL();
     
-    // Check user has sufficient balance of BOTH conditional tokens
-    const passBalance = await this.getPassConditionalBalance(user);
-    const failBalance = await this.getFailConditionalBalance(user);
+    // Check user has sufficient balance of ALL conditional tokens
+    const userConditionalBalances = await Promise.all(this.conditionalMints.map(mint => this.getConditionalBalance(user, mint)));
     
-    if (amount > passBalance) {
-      throw new Error(
-        `Insufficient pass conditional ${this.vaultType} balance: requested ${amount}, available ${passBalance}`
-      );
-    }
-    
-    if (amount > failBalance) {
-      throw new Error(
-        `Insufficient fail conditional ${this.vaultType} balance: requested ${amount}, available ${failBalance}`
-      );
+    for (let i = 0; i < this.markets; i++) {
+      if (amount > userConditionalBalances[i]!) {
+        throw new Error(
+          `Insufficient ${this.vaultType} token balance: requested ${amount}`
+        );
+      }
     }
     
     const tx = new Transaction();
 
     // Get user's token accounts
     const userRegularAccount = await getAssociatedTokenAddress(this.regularMint, user);
-    const userPassAccount = await getAssociatedTokenAddress(this.passConditionalMint, user);
-    const userFailAccount = await getAssociatedTokenAddress(this.failConditionalMint, user);
+    const userConditionalTokenAccounts = await Promise.all(this.conditionalMints.map(mint => getAssociatedTokenAddress(mint, user)));
 
     // Ensure user's regular token account exists (create if needed)
     // This is especially important for wrapped SOL which might not exist
@@ -420,23 +398,16 @@ export class Vault implements IVault {
       )
     )
 
-    // Burn pass conditional tokens from user (user signs)
-    const burnPassIx = this.tokenService.buildBurnIx(
-      this.passConditionalMint,
-      userPassAccount,
-      amount,
-      user // user must sign
-    );
-    tx.add(burnPassIx);
-    
-    // Burn fail conditional tokens from user (user signs)
-    const burnFailIx = this.tokenService.buildBurnIx(
-      this.failConditionalMint,
-      userFailAccount,
-      amount,
-      user // user must sign
-    );
-    tx.add(burnFailIx);
+    // Burn conditional tokens from user (user signs)
+    for (let i = 0; i < this.markets; i++) {
+      tx.add(this.tokenService.buildBurnIx(
+        this.conditionalMints[i]!,
+        userConditionalTokenAccounts[i]!,
+        amount,
+        user // user must sign
+      ));
+    }
+  
     
     // Transfer regular tokens from escrow to user (escrow signs)
     const transferIx = this.tokenService.buildTransferIx(
@@ -448,26 +419,18 @@ export class Vault implements IVault {
     tx.add(transferIx);
     
     // Optionally close accounts if balances are 0
-    if (passBalance === amount) {
-      const closePassIx = this.tokenService.buildCloseAccountIx(
-        userPassAccount,
-        user, // rent goes back to user
-        user // user must sign
-      );
-      tx.add(closePassIx);
-    }
-    
-    if (failBalance === amount) {
-      const closeFailIx = this.tokenService.buildCloseAccountIx(
-        userFailAccount,
-        user, // rent goes back to user
-        user // user must sign
-      );
-      tx.add(closeFailIx);
+    for (let i = 0; i < this.markets; i++) {
+      if (userConditionalBalances[i]! <= 0n) {
+        tx.add(this.tokenService.buildCloseAccountIx(
+          userConditionalTokenAccounts[i]!,
+          user, // rent goes back to user
+          user // user must sign
+        ));
+      }
     }
 
     // Add memo for transaction identification on Solscan
-    const memoMessage = `%[Vault/${this.vaultType}] Merge ${amount} | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[QMVault/${this.vaultType}] Merge ${amount} | Proposal #${this.proposalId}}`;
     tx.add(createMemoIx(memoMessage));
 
     // If handling wrapped SOL, add unwrap instructions at the end
@@ -497,22 +460,16 @@ export class Vault implements IVault {
     // Add compute budget instructions before any signing
     await this.executionService.addComputeBudgetInstructions(tx);
 
-    // Pre-sign with escrow for transferring regular tokens back to user if requested
-    if (presign) {
-      tx.partialSign(this.escrowKeypair);
-    }
-
     return tx;
   }
 
   /**
    * Executes a split transaction
    * @param tx - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with authority (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  async executeSplitTx(tx: Transaction, presigned: boolean = false): Promise<string> {
+  async executeSplitTx(tx: Transaction): Promise<string> {
     if (this._state === VaultState.Uninitialized) {
       throw new Error('Vault not initialized - cannot execute split');
     }
@@ -521,11 +478,9 @@ export class Vault implements IVault {
       throw new Error('Vault is finalized - no splits allowed');
     }
 
-    // Execute transaction - sign with authority if not pre-signed
+    // Execute transaction
     this.logger.info('Executing transaction to split tokens');
-    const result = presigned
-      ? await this.executionService.executeTx(tx)
-      : await this.executionService.executeTx(tx, this.authority);
+    const result = await this.executionService.executeTx(tx, this.authority);
 
     if (result.status === 'failed') {
       throw new Error(`Split transaction failed: ${result.error}`);
@@ -537,11 +492,10 @@ export class Vault implements IVault {
   /**
    * Executes a merge transaction
    * @param tx - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  async executeMergeTx(tx: Transaction, presigned: boolean = false): Promise<string> {
+  async executeMergeTx(tx: Transaction): Promise<string> {
     if (this._state === VaultState.Uninitialized) {
       throw new Error('Vault not initialized - cannot execute merge');
     }
@@ -550,11 +504,9 @@ export class Vault implements IVault {
       throw new Error('Vault is finalized - no merges allowed, use redemption instead');
     }
 
-    // Execute transaction - sign with escrow if not pre-signed
+    // Execute transaction
     this.logger.info('Executing transaction to merge tokens');
-    const result = presigned
-      ? await this.executionService.executeTx(tx)
-      : await this.executionService.executeTx(tx, this.escrowKeypair);
+    const result = await this.executionService.executeTx(tx, this.escrowKeypair);
 
     if (result.status === 'failed') {
       throw new Error(`Merge transaction failed: ${result.error}`);
@@ -564,11 +516,11 @@ export class Vault implements IVault {
   }
 
   /**
-   * Gets regular token balance for a user
+   * Gets base/quote token balance for a user
    * @param user - User's public key
    * @returns Balance in smallest units
    */
-  async getBalance(user: PublicKey): Promise<bigint> {
+  async getRegularBalance(user: PublicKey): Promise<bigint> {
     const userAccount = await getAssociatedTokenAddress(this.regularMint, user);
     return this.tokenService.getBalance(userAccount);
   }
@@ -578,18 +530,8 @@ export class Vault implements IVault {
    * @param user - User's public key
    * @returns Balance in smallest units
    */
-  async getPassConditionalBalance(user: PublicKey): Promise<bigint> {
-    const userAccount = await getAssociatedTokenAddress(this.passConditionalMint, user);
-    return this.tokenService.getBalance(userAccount);
-  }
-
-  /**
-   * Gets fail conditional token balance for a user
-   * @param user - User's public key
-   * @returns Balance in smallest units
-   */
-  async getFailConditionalBalance(user: PublicKey): Promise<bigint> {
-    const userAccount = await getAssociatedTokenAddress(this.failConditionalMint, user);
+  async getConditionalBalance(user: PublicKey, mint: PublicKey): Promise<bigint> {
+    const userAccount = await getAssociatedTokenAddress(mint, user);
     return this.tokenService.getBalance(userAccount);
   }
 
@@ -599,110 +541,68 @@ export class Vault implements IVault {
    * @returns Complete balance snapshot for all token types
    */
   async getUserBalances(user: PublicKey): Promise<ITokenBalance> {
-    const [regular, passConditional, failConditional] = await Promise.all([
-      this.getBalance(user),
-      this.getPassConditionalBalance(user),
-      this.getFailConditionalBalance(user)
+    const [regular, conditionalBalances] = await Promise.all([
+      this.getRegularBalance(user),
+      Promise.all(this.conditionalMints.map(mint => this.getConditionalBalance(user, mint)))
     ]);
     
     return {
       regular,
-      passConditional,
-      failConditional
+      conditional: Object.fromEntries(this.conditionalMints.map((mint, index) => [mint.toBase58(), conditionalBalances[index]!]))
     };
   }
 
   /**
-   * Gets total supply of regular tokens held in escrow
-   * @returns Total supply in smallest units
-   */
-  async getTotalSupply(): Promise<bigint> {
-    return this.tokenService.getBalance(this.escrow);
-  }
-
-  /**
-   * Gets total supply of pass conditional tokens issued
-   * @returns Total supply in smallest units
-   */
-  async getPassConditionalTotalSupply(): Promise<bigint> {
-    return this.tokenService.getTotalSupply(this.passConditionalMint);
-  }
-
-  /**
-   * Gets total supply of fail conditional tokens issued
-   * @returns Total supply in smallest units
-   */
-  async getFailConditionalTotalSupply(): Promise<bigint> {
-    return this.tokenService.getTotalSupply(this.failConditionalMint);
-  }
-
-  /**
-   * Finalizes the vault when proposal ends, storing the proposal status
+   * Finalizes the vault when proposal ends, storing the winning conditional mint
    * After finalization, split/merge are blocked and only redemption is allowed
-   * @param proposalStatus - The final status of the proposal (Passed or Failed)
+   * @param winningConditionalMint - The winning conditional mint
    * @throws Error if vault is already finalized or status is invalid
-   * 
-   * Effects:
-   * - Sets finalized flag preventing new splits/merges
-   * - Stores proposal status to determine which tokens can be redeemed
    */
-  async finalize(proposalStatus: ProposalStatus): Promise<void> {
-    if (this._state === VaultState.Uninitialized) {
-      throw new Error('Vault not initialized');
-    }
-    
-    if (this._state === VaultState.Finalized) {
-      throw new Error('Vault is already finalized');
-    }
-    
-    if (proposalStatus === ProposalStatus.Uninitialized || 
-        proposalStatus === ProposalStatus.Pending) {
-      throw new Error(`Cannot finalize vault with status: ${proposalStatus}`);
+  async finalize(winningConditionalMint: PublicKey): Promise<void> {
+    if (this._state != VaultState.Active) {
+      throw new Error('Vault not active');
     }
     
     this._state = VaultState.Finalized;
-    this._proposalStatus = proposalStatus;
+    this._proposalStatus = ProposalStatus.Finalized;
+    this._winningConditionalMint = winningConditionalMint;
   }
 
   /**
    * Builds a transaction to redeem winning conditional tokens for regular tokens
-   * Only the winning conditional tokens (pass if passed, fail if failed) can be redeemed
+   * Only the winning conditional tokens can be redeemed
    * Automatically handles SOL unwrapping if needed (mainnet + quote vault)
    * @param user - User's public key
-   * @param presign - Whether to pre-sign with escrow (default: false)
    * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if vault not finalized or no winning tokens to redeem
    */
-  async buildRedeemWinningTokensTx(user: PublicKey, presign: boolean = false): Promise<Transaction> {
+  async buildRedeemWinningTokensTx(user: PublicKey): Promise<Transaction> {
     if (this._state !== VaultState.Finalized) {
       throw new Error('Cannot redeem before vault finalization');
     }
 
-    if (this._proposalStatus === ProposalStatus.Pending) {
-      throw new Error(`Cannot redeem from pending proposal`);
+    if (this._proposalStatus != ProposalStatus.Finalized) {
+      throw new Error(`Cannot redeem before proposal finalization`);
+    }
+
+    if (this._winningConditionalMint === null) {
+        throw new Error('No winning conditional mint');
     }
 
     // Check if we need to handle wrapped SOL
     const shouldHandleSol = this.shouldHandleWrappedSOL();
     
-    // Determine which conditional token is the winning token
-    // Executed proposals are passed proposals that have been executed
-    const isPassWinning = this._proposalStatus === ProposalStatus.Passed || 
-                          this._proposalStatus === ProposalStatus.Executed;
-    const winningMint = isPassWinning ? this.passConditionalMint : this.failConditionalMint;
-    const winningBalance = isPassWinning 
-      ? await this.getPassConditionalBalance(user)
-      : await this.getFailConditionalBalance(user);
+    const winningBalance = await this.getConditionalBalance(user, this._winningConditionalMint);
     
     if (winningBalance === 0n) {
-      throw new Error(`No winning ${isPassWinning ? 'pass' : 'fail'} tokens to redeem`);
+      throw new Error(`No winning tokens to redeem`);
     }
     
     const tx = new Transaction();
 
     // Get user's token accounts
     const userRegularAccount = await getAssociatedTokenAddress(this.regularMint, user);
-    const userWinningAccount = await getAssociatedTokenAddress(winningMint, user);
+    const userWinningAccount = await getAssociatedTokenAddress(this._winningConditionalMint, user);
 
     // Ensure user's regular token account exists (create if needed)
     tx.add(
@@ -718,7 +618,7 @@ export class Vault implements IVault {
 
     // Burn all winning conditional tokens
     const burnIx = this.tokenService.buildBurnIx(
-      winningMint,
+      this._winningConditionalMint,
       userWinningAccount,
       winningBalance,
       user
@@ -743,8 +643,7 @@ export class Vault implements IVault {
     tx.add(closeIx);
 
     // Add memo for transaction identification on Solscan
-    const winningType = isPassWinning ? 'pass' : 'fail';
-    const memoMessage = `%[Vault/${this.vaultType}] Redeem ${winningBalance} (${winningType}) | Proposal #${this.proposalId} | ${user.toBase58()}`;
+    const memoMessage = `%[QMVault/${this.vaultType}] Redeem ${winningBalance} | Proposal #${this.proposalId}}`;
     tx.add(createMemoIx(memoMessage));
 
     // If handling wrapped SOL, add unwrap instructions at the end
@@ -774,27 +673,20 @@ export class Vault implements IVault {
     // Add compute budget instructions before any signing
     await this.executionService.addComputeBudgetInstructions(tx);
 
-    // Pre-sign with escrow for transferring regular tokens to winner if requested
-    if (presign) {
-      tx.partialSign(this.escrowKeypair);
-    }
-
     return tx;
   }
 
   /**
    * Executes a redeem winning tokens transaction
    * @param tx - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  async executeRedeemWinningTokensTx(tx: Transaction, presigned: boolean = false): Promise<string> {
-    // Execute transaction - sign with escrow if not pre-signed
+  async executeRedeemWinningTokensTx(tx: Transaction): Promise<string> {
+    // Execute transaction
     this.logger.info('Executing transaction to redeem winning tokens');
-    const result = presigned
-      ? await this.executionService.executeTx(tx)
-      : await this.executionService.executeTx(tx, this.escrowKeypair);
+
+    const result = await this.executionService.executeTx(tx, this.escrowKeypair);
 
     if (result.status === 'failed') {
       throw new Error(`Redeem winning tokens transaction failed: ${result.error}`);
@@ -812,11 +704,12 @@ export class Vault implements IVault {
       // Core identifiers
       proposalId: this.proposalId,
       vaultType: this.vaultType,
+      markets: this.markets,
 
-      // Token mints - handle case where they might not be initialized yet
+      // Token mints
       regularMint: this.regularMint.toBase58(),
-      passConditionalMint: this._passConditionalMint?.toBase58() || '',
-      failConditionalMint: this._failConditionalMint?.toBase58() || '',
+      conditionalMints: this.conditionalMints.map(mint => mint.toBase58()),
+      winningConditionalMint: this._winningConditionalMint?.toBase58() || '',
 
       // State (escrow is deterministic and doesn't need to be stored)
       state: this._state,
@@ -841,6 +734,7 @@ export class Vault implements IVault {
     const vault = new Vault({
       proposalId: data.proposalId,
       vaultType: data.vaultType,
+      markets: data.markets,
       regularMint: new PublicKey(data.regularMint),
       decimals: data.decimals,
       authority: config.authority,
@@ -852,15 +746,11 @@ export class Vault implements IVault {
     // These are private fields that need to be restored for a fully functional vault
     vault._state = data.state;
     vault._proposalStatus = data.proposalStatus;
+    vault._winningConditionalMint = data.winningConditionalMint ? new PublicKey(data.winningConditionalMint) : null;
 
     // Restore the public keys if they exist (not empty strings)
-    if (data.passConditionalMint) {
-      vault._passConditionalMint = new PublicKey(data.passConditionalMint);
-    }
-    if (data.failConditionalMint) {
-      vault._failConditionalMint = new PublicKey(data.failConditionalMint);
-    }
-
+    vault._conditionalMints = data.conditionalMints.filter(mint => mint !== '').map(mint => new PublicKey(mint));
+  
     // Regenerate the escrow public key if the vault has been initialized
     // The escrow keypair is deterministically generated, so we can recreate it
     if (vault._state !== VaultState.Uninitialized && data.regularMint) {
@@ -875,8 +765,7 @@ export class Vault implements IVault {
 
     // Clear the mint keypairs as they're only needed for initialization
     // and we're loading an already initialized vault
-    vault.passMintKeypair = null;
-    vault.failMintKeypair = null;
+    vault.mintKeypairs = null;
 
     return vault;
   }
