@@ -12,7 +12,6 @@ export enum ProposalStatus {
   Uninitialized = 'Uninitialized',  // Proposal created but not yet initialized on-chain
   Pending = 'Pending',              // Proposal is active and voting is ongoing
   Finalized = 'Finalized',          // Proposal has been finalized
-  Executed = 'Executed'             // Proposal has been executed
 }
 
 /**

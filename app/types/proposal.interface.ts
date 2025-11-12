@@ -1,10 +1,10 @@
-import { Transaction, PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import { IAMM, IAMMSerializedData } from './amm.interface';
 import { IVault, IVaultSerializedData } from './vault.interface';
 import { ITWAPOracle, ITWAPConfig, ITWAPOracleSerializedData } from './twap-oracle.interface';
 import { ProposalStatus } from './moderator.interface';
-import { IExecutionResult, IExecutionService } from './execution.interface';
+import { IExecutionService } from './execution.interface';
 import { LoggerService } from '../services/logger.service';
 
 /**
@@ -15,7 +15,8 @@ export interface IProposalConfig {
   moderatorId: number;                          // Moderator ID
   title: string;                                // Proposal title (required)
   description?: string;                         // Human-readable description (optional)
-  transaction: Transaction;                     // Solana transaction to execute if passed
+  market_labels?: string[];                      // Labels for each market
+  markets: number;                              // Number of markets
   createdAt: number;                           // Creation timestamp in milliseconds
   proposalLength: number;                      // Duration of voting period in seconds
   baseMint: PublicKey;                         // Public key of base token mint
@@ -37,17 +38,17 @@ export interface IProposalConfig {
 /**
  * Interface for governance proposals in the protocol
  * Manages AMMs, vaults, and TWAP oracle for price discovery
+ * Supports 2-5 markets per proposal
  */
 export interface IProposal {
   readonly config: IProposalConfig;    // Configuration object containing all proposal parameters
-  pAMM: IAMM;                          // Pass AMM (initialized during proposal setup)
-  fAMM: IAMM;                          // Fail AMM (initialized during proposal setup)
-  baseVault: IVault;                  // Base vault managing both pBase and fBase tokens
-  quoteVault: IVault;                 // Quote vault managing both pQuote and fQuote tokens
+  AMMs: IAMM[];                        // Array of AMMs (one per market, initialized during proposal setup)
+  baseVault: IVault;                  // Base vault managing N conditional base tokens
+  quoteVault: IVault;                 // Quote vault managing N conditional quote tokens
   readonly twapOracle: ITWAPOracle;   // Time-weighted average price oracle (immutable)
   readonly finalizedAt: number;       // Timestamp when voting ends (ms, immutable)
-  readonly status: ProposalStatus;    // Current status (Pending, Passed, Failed, Executed)
-  
+  readonly status: ProposalStatus;    // Current status (Pending, Finalized, Executed)
+
   /**
    * Initializes the proposal's blockchain components
    * Sets up AMMs, vaults, and begins TWAP recording
@@ -56,33 +57,25 @@ export interface IProposal {
   initialize(): Promise<void>;
 
   /**
-   * Gets both AMMs for the proposal
-   * @returns Tuple of [pAMM, fAMM]
+   * Gets all AMMs for the proposal
+   * @returns Array of AMM instances
    * @throws Error if AMMs are uninitialized
    */
-  getAMMs(): [IAMM, IAMM];
-  
+  getAMMs(): IAMM[];
+
   /**
    * Gets both vaults for the proposal
    * @returns Tuple of [baseVault, quoteVault]
    * @throws Error if vaults are uninitialized
    */
   getVaults(): [IVault, IVault];
-  
-  /**
-   * Finalizes the proposal based on voting results
-   * Currently assumes all proposals pass (TWAP logic TODO)
-   * @returns The final status after checking time and votes
-   */
-  finalize(): Promise<ProposalStatus>;
 
   /**
-   * Executes the proposal's transaction
-   * @param signer - Keypair to sign and execute the transaction
-   * @returns Execution result with signature and status
-   * @throws Error if proposal hasn't passed or already executed
+   * Finalizes the proposal based on TWAP results
+   * Determines winner by highest TWAP index
+   * @returns The final status after checking time and TWAP
    */
-  execute(signer: Keypair): Promise<IExecutionResult>;
+  finalize(): Promise<ProposalStatus>;
 
   /**
    * Serializes the proposal state for persistence
@@ -100,6 +93,8 @@ export interface IProposalSerializedData {
   moderatorId: number;
   title: string;
   description?: string;
+  market_labels?: string[];
+  markets: number;
   createdAt: number;
   proposalLength: number;
   finalizedAt: number;
@@ -110,18 +105,6 @@ export interface IProposalSerializedData {
   quoteMint: string;
   baseDecimals: number;
   quoteDecimals: number;
-
-  // Transaction data (instructions only, not full transaction)
-  transactionInstructions: {
-    programId: string;
-    keys: {
-      pubkey: string;
-      isSigner: boolean;
-      isWritable: boolean;
-    }[];
-    data: string; // base64 encoded
-  }[];
-  transactionFeePayer?: string;
 
   // AMM configuration
   ammConfig: {
@@ -137,8 +120,7 @@ export interface IProposalSerializedData {
   twapConfig: ITWAPConfig;
 
   // Serialized components
-  pAMMData: IAMMSerializedData;
-  fAMMData: IAMMSerializedData;
+  AMMData: IAMMSerializedData[];
   baseVaultData: IVaultSerializedData;
   quoteVaultData: IVaultSerializedData;
   twapOracleData: ITWAPOracleSerializedData;

@@ -1,11 +1,10 @@
-import { Keypair, Transaction, PublicKey } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import { IProposal, IProposalConfig, IProposalSerializedData, IProposalDeserializeConfig } from './types/proposal.interface';
 import { IAMM } from './types/amm.interface';
 import { IVault, VaultType } from './types/vault.interface';
-import { ITWAPOracle, TWAPStatus } from './types/twap-oracle.interface';
+import { ITWAPOracle } from './types/twap-oracle.interface';
 import { ProposalStatus } from './types/moderator.interface';
 import { TWAPOracle } from './twap-oracle';
-import { IExecutionResult, IExecutionService } from './types/execution.interface';
 import { Vault } from './vault';
 import { AMM } from './amm';
 import { BN } from '@coral-xyz/anchor';
@@ -18,15 +17,13 @@ import { LoggerService } from './services/logger.service';
  */
 export class Proposal implements IProposal {
   public readonly config: IProposalConfig;
-  public pAMM: IAMM;
-  public fAMM: IAMM;
+  public AMMs: IAMM[];
   public baseVault: IVault;
   public quoteVault: IVault;
   public readonly twapOracle: ITWAPOracle;
   public readonly finalizedAt: number;
 
   private _status: ProposalStatus = ProposalStatus.Uninitialized;
-  private readonly executionService: IExecutionService;
   private logger: LoggerService;
 
   /**
@@ -43,13 +40,25 @@ export class Proposal implements IProposal {
   constructor(config: IProposalConfig) {
     this.config = config;
     this.finalizedAt = config.createdAt + (config.proposalLength * 1000);
-    this.executionService = config.executionService;
     this.logger = config.logger;
+    
+    if (config.markets < 2 || config.markets > 4) {
+      throw new Error('Number of markets must be between 2 and 4 (inclusive)');
+    }
+
+    if (config.market_labels && config.market_labels.length !== config.markets) {
+      throw new Error('Number of market labels must match number of markets');
+    }
+
+    if (!config.market_labels) {
+      config.market_labels = Array(config.markets).map((_, index) => `Market ${index + 1}`);
+    }
 
     // Create TWAP oracle
     this.twapOracle = new TWAPOracle(
       config.id,
       config.twap,
+      config.markets,
       config.createdAt,
       this.finalizedAt
     );
@@ -58,6 +67,7 @@ export class Proposal implements IProposal {
     this.baseVault = new Vault({
       proposalId: config.id,
       vaultType: VaultType.Base,
+      markets: config.markets,
       regularMint: config.baseMint,
       decimals: config.baseDecimals,
       authority: config.authority,
@@ -68,6 +78,7 @@ export class Proposal implements IProposal {
     this.quoteVault = new Vault({
       proposalId: config.id,
       vaultType: VaultType.Quote,
+      markets: config.markets,
       regularMint: config.quoteMint,
       decimals: config.quoteDecimals,
       authority: config.authority,
@@ -75,27 +86,19 @@ export class Proposal implements IProposal {
       logger: config.logger.createChild('quoteVault')
     });
 
-    // Initialize pass AMM (trades pBase/pQuote tokens)
-    this.pAMM = new AMM(
-      this.baseVault.passConditionalMint,
-      this.quoteVault.passConditionalMint,
-      config.baseDecimals,
-      config.quoteDecimals,
-      config.authority,
-      config.executionService,
-      config.logger.createChild('pAMM')
-    );
-    
-    // Initialize fail AMM (trades fBase/fQuote tokens)
-    this.fAMM = new AMM(
-      this.baseVault.failConditionalMint,
-      this.quoteVault.failConditionalMint,
-      config.baseDecimals,
-      config.quoteDecimals,
-      config.authority,
-      config.executionService,
-      config.logger.createChild('fAMM')
-    );
+    // Initialize AMMs (trades conditional tokens for each market)
+    this.AMMs = [];
+    for (let i = 0; i < config.markets; i++) {
+      this.AMMs.push(new AMM(
+        this.baseVault.conditionalMints[i],
+        this.quoteVault.conditionalMints[i],
+        config.baseDecimals,
+        config.quoteDecimals,
+        config.authority,
+        config.executionService,
+        config.logger.createChild(`amm-${i}`)
+      ));
+    }
   }
 
 
@@ -135,20 +138,17 @@ export class Proposal implements IProposal {
     await this.quoteVault.executeSplitTx(quoteSplitTx);
     
     // Initialize AMMs with initial liquidity
-    // Both AMMs get the same amounts since splitting gives equal pass and fail tokens
+    // All AMMs get the same amounts since splitting gives equal conditional tokens
     this.logger.info('Initializing AMMs');
-    await this.pAMM.initialize(
-      this.config.ammConfig.initialBaseAmount,
-      this.config.ammConfig.initialQuoteAmount
-    );
-    
-    await this.fAMM.initialize(
-      this.config.ammConfig.initialBaseAmount,
-      this.config.ammConfig.initialQuoteAmount
-    );
+    for (let i = 0; i < this.config.markets; i++) {
+      await this.AMMs[i].initialize(
+        this.config.ammConfig.initialBaseAmount,
+        this.config.ammConfig.initialQuoteAmount
+      );
+    }
     
     // Set AMMs in TWAP oracle so it can track prices
-    this.twapOracle.setAMMs(this.pAMM, this.fAMM);
+    this.twapOracle.setAMMs(this.AMMs);
     
     // Update status to Pending now that everything is initialized
     this._status = ProposalStatus.Pending;
@@ -156,16 +156,16 @@ export class Proposal implements IProposal {
   }
 
   /**
-   * Returns both AMMs for the proposal
-   * @returns Tuple of [pAMM, fAMM]
+   * Returns all AMMs for the proposal
+   * @returns Array of AMM instances
    * @throws Error if AMMs are not initialized
    */
-  getAMMs(): [IAMM, IAMM] {
+  getAMMs(): IAMM[] {
     if (this._status === ProposalStatus.Uninitialized) {
       throw new Error(`Proposal #${this.config.id}: Not initialized - call initialize() first`);
     }
 
-    return [this.pAMM, this.fAMM];
+    return this.AMMs;
   }
 
   /**
@@ -203,44 +203,31 @@ export class Proposal implements IProposal {
       this.logger.info('Cranking TWAP');
       await this.twapOracle.crankTWAP();
 
-      // Use TWAP oracle to determine pass/fail with fresh data
-      const twapStatus = await this.twapOracle.fetchStatus();
-      this.logger.info(`TWAP status is ${twapStatus}`);
-      const passed = twapStatus === TWAPStatus.Passing;
-      this._status = passed ? ProposalStatus.Passed : ProposalStatus.Failed;
+      this._status = ProposalStatus.Finalized;
       
       // Remove liquidity from AMMs before finalizing vaults
-      if (!this.pAMM.isFinalized) {
-        this.logger.info('Removing liquidity from pAMM', {
-          ammType: 'pass'
-        });
+      for (let i = 0; i < this.config.markets; i++) {
         try {
-          await this.pAMM.removeLiquidity();
+          if (!this.AMMs[i].isFinalized) {
+            this.logger.info(`Removing liquidity from AMM ${i}`);
+            await this.AMMs[i].removeLiquidity();
+          }
         } catch (error) {
-          this.logger.error('Error removing liquidity from pAMM', {
-            ammType: 'pass',
+          this.logger.error('Error removing liquidity from AMM', {
+            ammIndex: i,
             error
           });
         }
       }
-      if (!this.fAMM.isFinalized) {
-        this.logger.info('Removing liquidity from fAMM', {
-          ammType: 'fail'
-        });
-        try {
-          await this.fAMM.removeLiquidity();
-        } catch (error) {
-          this.logger.error('Error removing liquidity from fAMM', {
-            ammType: 'fail',
-            error
-          });
-        }
-      }
-      
+
+      // Determine the winning conditional mint
+      const index = await this.twapOracle.fetchHighestTWAPIndex();
+      const winningConditionalMint = this.baseVault.conditionalMints[index];
+
       // Finalize both vaults with the proposal status
       this.logger.info('Finalizing vaults');
-      await this.baseVault.finalize(this._status);
-      await this.quoteVault.finalize(this._status);
+      await this.baseVault.finalize(winningConditionalMint);
+      await this.quoteVault.finalize(winningConditionalMint);
       
       // Redeem authority's winning tokens after finalization
       // This converts winning conditional tokens back to regular tokens
@@ -280,55 +267,18 @@ export class Proposal implements IProposal {
   }
 
   /**
-   * Executes the proposal's Solana transaction
-   * Only callable for proposals with Passed status
-   * @param signer - Keypair to sign and execute the transaction
-   * @returns Execution result with signature and status
-   * @throws Error if proposal is pending, already executed, or failed
-   */
-  async execute(signer: Keypair): Promise<IExecutionResult> {
-    this.logger.info('Executing proposal');
-    if (this._status !== ProposalStatus.Passed) {
-      throw new Error('Failed to execute - proposal not passed');
-    }
-
-    // Execute the Solana transaction
-    this.logger.info('Adding compute budget instructions');
-    await this.executionService.addComputeBudgetInstructions(this.config.transaction);
-    this.logger.info('Executing transaction');
-    const result = await this.executionService.executeTx(
-      this.config.transaction,
-      signer
-    );
-
-    // Update status to Executed regardless of transaction result
-    this._status = ProposalStatus.Executed;
-    this.logger.info('Proposal execution returned', { result: result });
-    return result;
-  }
-
-  /**
    * Serializes the proposal state for persistence
    * @returns Serialized proposal data that can be saved to database
    */
   serialize(): IProposalSerializedData {
-    // Serialize transaction instructions (not the full transaction due to blockhash expiry)
-    const transactionInstructions = this.config.transaction.instructions.map(ix => ({
-      programId: ix.programId.toBase58(),
-      keys: ix.keys.map(key => ({
-        pubkey: key.pubkey.toBase58(),
-        isSigner: key.isSigner,
-        isWritable: key.isWritable
-      })),
-      data: Buffer.from(ix.data).toString('base64')
-    }));
-
     return {
       // Core configuration
       id: this.config.id,
       moderatorId: this.config.moderatorId,
       title: this.config.title,
       description: this.config.description,
+      market_labels: this.config.market_labels,
+      markets: this.config.markets,
       createdAt: this.config.createdAt,
       proposalLength: this.config.proposalLength,
       finalizedAt: this.finalizedAt,
@@ -339,10 +289,6 @@ export class Proposal implements IProposal {
       quoteMint: this.config.quoteMint.toBase58(),
       baseDecimals: this.config.baseDecimals,
       quoteDecimals: this.config.quoteDecimals,
-
-      // Transaction data
-      transactionInstructions,
-      transactionFeePayer: this.config.transaction.feePayer?.toBase58(),
 
       // AMM configuration
       ammConfig: {
@@ -358,8 +304,7 @@ export class Proposal implements IProposal {
       twapConfig: this.config.twap,
 
       // Serialize components using their individual serialize methods
-      pAMMData: this.pAMM.serialize(),
-      fAMMData: this.fAMM.serialize(),
+      AMMData: this.AMMs.map(amm => amm.serialize()),
       baseVaultData: this.baseVault.serialize(),
       quoteVaultData: this.quoteVault.serialize(),
       twapOracleData: this.twapOracle.serialize(),
@@ -373,26 +318,6 @@ export class Proposal implements IProposal {
    * @returns Restored proposal instance
    */
   static async deserialize(data: IProposalSerializedData, config: IProposalDeserializeConfig): Promise<Proposal> {
-    // Reconstruct transaction from instructions
-    const transaction = new Transaction();
-
-    // Reconstruct instructions
-    for (const ixData of data.transactionInstructions) {
-      transaction.add({
-        programId: new PublicKey(ixData.programId),
-        keys: ixData.keys.map(key => ({
-          pubkey: new PublicKey(key.pubkey),
-          isSigner: key.isSigner,
-          isWritable: key.isWritable
-        })),
-        data: Buffer.from(ixData.data, 'base64')
-      });
-    }
-
-    // Set fee payer if it was stored
-    if (data.transactionFeePayer) {
-      transaction.feePayer = new PublicKey(data.transactionFeePayer);
-    }
 
     // Reconstruct proposal config
     const proposalConfig: IProposalConfig = {
@@ -400,7 +325,8 @@ export class Proposal implements IProposal {
       moderatorId: data.moderatorId,
       title: data.title,
       description: data.description,
-      transaction,
+      market_labels: data.market_labels,
+      markets: data.markets,
       createdAt: data.createdAt,
       proposalLength: data.proposalLength,
       baseMint: new PublicKey(data.baseMint),
@@ -465,43 +391,35 @@ export class Proposal implements IProposal {
 
       // Deserialize AMMs
       // Patch AMM data with proposal-level token info if missing (for backward compatibility)
-      const pAMMData = {
-        ...data.pAMMData,
-        baseMint: data.pAMMData.baseMint || baseVault.passConditionalMint?.toBase58(),
-        quoteMint: data.pAMMData.quoteMint || data.quoteMint,
-        baseDecimals: data.pAMMData.baseDecimals ?? data.baseDecimals,
-        quoteDecimals: data.pAMMData.quoteDecimals ?? data.quoteDecimals
-      };
+      const AMMData = [];
+      for (let i = 0; i < data.markets; i++) {
+        const ammData = data.AMMData[i];
+        AMMData.push({
+          ...ammData,
+          baseMint: ammData.baseMint,
+          quoteMint: ammData.quoteMint || data.quoteMint,
+          baseDecimals: ammData.baseDecimals ?? data.baseDecimals,
+          quoteDecimals: ammData.quoteDecimals ?? data.quoteDecimals
+        });
+      }
 
-      const fAMMData = {
-        ...data.fAMMData,
-        baseMint: data.fAMMData.baseMint || baseVault.failConditionalMint?.toBase58(),
-        quoteMint: data.fAMMData.quoteMint || data.quoteMint,
-        baseDecimals: data.fAMMData.baseDecimals ?? data.baseDecimals,
-        quoteDecimals: data.fAMMData.quoteDecimals ?? data.quoteDecimals
-      };
-
-      const pAMM = AMM.deserialize(pAMMData, {
-        authority: config.authority,
-        executionService: config.executionService,
-        logger: config.logger.createChild('pAMM')
-      });
-
-      const fAMM = AMM.deserialize(fAMMData, {
-        authority: config.authority,
-        executionService: config.executionService,
-        logger: config.logger.createChild('fAMM')
-      });
-
-      // Replace the default AMMs with the deserialized ones
-      proposal.pAMM = pAMM;
-      proposal.fAMM = fAMM;
+      // Deserialize AMMs
+      const AMMs: IAMM[] = [];
+      for (let i = 0; i < data.markets; i++) {
+        const ammData = data.AMMData[i];
+        const amm = AMM.deserialize(ammData, {
+          authority: config.authority,
+          executionService: config.executionService,
+          logger: config.logger.createChild(`amm-${i}`)
+        });
+        AMMs.push(amm);
+      }
 
       // Deserialize TWAP oracle
       const twapOracle = TWAPOracle.deserialize(data.twapOracleData);
 
       // Set AMMs in TWAP oracle
-      twapOracle.setAMMs(pAMM, fAMM);
+      twapOracle.setAMMs(AMMs);
 
       // Replace the default TWAP oracle with the deserialized one
       (proposal as any).twapOracle = twapOracle; // Need to cast since it's readonly

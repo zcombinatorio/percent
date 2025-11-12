@@ -64,11 +64,6 @@ export class Vault implements IVault {
   constructor(config: IVaultConfig) {
     this.proposalId = config.proposalId;
     this.vaultType = config.vaultType;
-
-    if (config.markets < 2 || config.markets > 4) {
-      throw new Error('Number of markets must be between 2 and 4 (inclusive)');
-    }
-
     this.markets = config.markets;
     this.regularMint = config.regularMint;
     this.decimals = config.decimals;
