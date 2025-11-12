@@ -1,13 +1,11 @@
-import { Keypair } from '@solana/web3.js';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
-import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment, ExecutionStatus } from './types/execution.interface';
+import { IExecutionConfig, PriorityFeeMode, Commitment } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { Proposal } from './proposal';
 import { SchedulerService } from './services/scheduler.service';
 import { PersistenceService } from './services/persistence.service';
 import { ExecutionService } from './services/execution.service';
 import { LoggerService } from './services/logger.service';
-import { getNetworkFromConnection} from './utils/network';
 //import { BlockEngineUrl, JitoService } from '@slateos/jito';
 
 /**
@@ -131,7 +129,8 @@ export class Moderator implements IModerator {
         moderatorId: this.id,
         title: params.title,
         description: params.description,
-        transaction: params.transaction,
+        market_labels: params.market_labels,
+        markets: params.markets,
         createdAt: Date.now(),
         proposalLength: params.proposalLength,
         baseMint: this.config.baseMint,
@@ -203,60 +202,9 @@ export class Moderator implements IModerator {
 
     const status = await proposal.finalize();
     await this.saveProposal(proposal);
-    if (status === ProposalStatus.Passed) {
+    if (status == ProposalStatus.Finalized) {
       this.logger.info('Proposal finalized and passed');
-    } else if (status === ProposalStatus.Failed) {
-      this.logger.info('Proposal finalized and failed');
-    } else {
-      this.logger.warn('Proposal failed to finalize', { status: status });
     }
     return status;
-  }
-
-  /**
-   * Executes the transaction of a passed proposal
-   * Only callable for proposals with Passed status
-   * @param id - The ID of the proposal to execute
-   * @param signer - Keypair to sign the transaction
-   * @returns Execution result with signature and status
-   * @throws Error if proposal doesn't exist, is pending, already executed, or failed
-   */
-  async executeProposal(
-    id: number,
-    signer: Keypair
-  ): Promise<IExecutionResult> {
-    this.logger.info('Executing proposal');
-
-    try {
-      // Get proposal from cache or database
-      const proposal = await this.getProposal(id);
-      if (!proposal) {
-        throw new Error(`Proposal with ID ${id} does not exist`);
-      }
-
-      // Only Passed status can be executed
-      if (proposal.status !== ProposalStatus.Passed) {
-        throw new Error(`Cannot execute proposal #${id}: status is ${proposal.status}`);
-      }
-
-      const result = await proposal.execute(signer);
-
-      // Always save state to database
-      await this.saveProposal(proposal);
-
-      if (result.status === ExecutionStatus.Failed) {
-        this.logger.error('Proposal execution failed', { result: result });
-        throw new Error(`Failed to execute proposal #${id}: ${result.error}`);
-      }
-
-      this.logger.info('Proposal executed successfully', { result: result });
-
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to execute proposal', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
   }
 }
