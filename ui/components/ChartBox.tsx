@@ -8,6 +8,7 @@ interface ChartBoxProps {
   proposalId: number;
   selectedMarket: 'pass' | 'fail';
   trades: Trade[];
+  totalVolume: number;
   tradesLoading: boolean;
   getTimeAgo: (timestamp: string) => string;
   getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail') => string;
@@ -17,6 +18,7 @@ export function ChartBox({
   proposalId,
   selectedMarket,
   trades,
+  totalVolume,
   tradesLoading,
   getTimeAgo,
   getTokenUsed
@@ -24,16 +26,37 @@ export function ChartBox({
   const [view, setView] = useState<'chart' | 'history'>('chart');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
+  // Format volume with K/M/B suffixes
+  const formatVolume = (volume: number): string => {
+    if (volume >= 1e9) {
+      return (volume / 1e9).toFixed(2) + 'B';
+    } else if (volume >= 1e6) {
+      return (volume / 1e6).toFixed(2) + 'M';
+    } else if (volume >= 1e3) {
+      return (volume / 1e3).toFixed(2) + 'K';
+    } else {
+      return volume.toFixed(2);
+    }
+  };
+
   return (
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
-      {/* Header with inline toggle */}
+      {/* Header with inline toggle and volume */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase text-left" style={{ color: '#DDDDD7' }}>
-          {view === 'chart'
-            ? selectedMarket === 'pass' ? 'Chart: Pass Coin' : 'Chart: Fail Coin'
-            : selectedMarket === 'pass' ? 'Trades: Pass Coin' : 'Trades: Fail Coin'
-          }
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase text-left" style={{ color: '#DDDDD7' }}>
+            {view === 'chart'
+              ? selectedMarket === 'pass' ? 'Chart: Pass Coin' : 'Chart: Fail Coin'
+              : selectedMarket === 'pass' ? 'Trades: Pass Coin' : 'Trades: Fail Coin'
+            }
+          </span>
+          <span className="text-xs font-medium font-ibm-plex-mono" style={{ color: '#6B6E71' }}>
+            •
+          </span>
+          <span className="text-xs font-medium font-ibm-plex-mono" style={{ color: '#6B6E71' }}>
+            VOL ${formatVolume(totalVolume)}
+          </span>
+        </div>
 
         {/* Pill Toggle */}
         <div className="flex items-center gap-[2px] p-[3px] border border-[#191919] rounded-full">

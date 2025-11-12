@@ -258,8 +258,19 @@ export function useTradeHistory(proposalId: number | null) {
     }
   }, [solPrice, zcPrice, getTokenUsed]);
 
+  // Calculate total volume for all trades in this proposal
+  const totalVolume = useMemo(() => {
+    if (!solPrice || !zcPrice || trades.length === 0) return 0;
+
+    return trades.reduce((sum, trade) => {
+      const volume = calculateVolume(trade.amountIn, trade.isBaseToQuote, trade.market);
+      return sum + volume;
+    }, 0);
+  }, [trades, solPrice, zcPrice, calculateVolume]);
+
   return {
     trades,
+    totalVolume,
     loading,
     error,
     wsStatus,

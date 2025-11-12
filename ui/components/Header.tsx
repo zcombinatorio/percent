@@ -12,8 +12,8 @@ interface HeaderProps {
   zcBalance: number;
   hasWalletBalance?: boolean;
   login?: () => void;
-  navTab: 'live' | 'history';
-  onNavTabChange: (tab: 'live' | 'history') => void;
+  navTab: 'live' | 'history' | 'leaderboard';
+  onNavTabChange: (tab: 'live' | 'history' | 'leaderboard') => void;
   isPassMode?: boolean;
 }
 
@@ -176,7 +176,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
       </nav>
       </div>
 
-      {/* Second Row: Live/History Tab Navigation */}
+      {/* Second Row: Live/History/Leaderboard Tab Navigation */}
       <div className="px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
           <button
@@ -202,6 +202,18 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
               <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
             History
+          </button>
+          <button
+            onClick={() => onNavTabChange('leaderboard')}
+            className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
+            style={navTab === 'leaderboard' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+            onMouseEnter={(e) => { if (navTab !== 'leaderboard') e.currentTarget.style.color = '#9B9E9F'; }}
+            onMouseLeave={(e) => { if (navTab !== 'leaderboard') e.currentTarget.style.color = '#6B6E71'; }}
+          >
+            {navTab === 'leaderboard' && (
+              <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+            )}
+            Leaderboard
           </button>
         </div>
       </div>
