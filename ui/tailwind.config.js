@@ -12,6 +12,8 @@ module.exports = {
         'ibm-plex-mono': ['var(--font-ibm-plex-mono)', 'monospace'],
         'roboto-mono': ['var(--font-roboto-mono)', 'monospace'],
         'rinter': ['var(--font-rinter)', 'monospace'],
+        'supply-mono': ['var(--font-supply-mono)', 'monospace'],
+        'supply-sans': ['var(--font-supply-sans)', 'sans-serif'],
       },
       colors: {
         orange: {
@@ -29,7 +31,23 @@ module.exports = {
           600: 'hsla(0, 100%, 55%, 1)',
           400: 'hsla(0, 100%, 65%, 1)',
         },
+        'percent-orange': '#EF6300',
+        'percent-black': '#000000',
       },
+      animation: {
+        'toggle1': 'toggle1 1.4s infinite steps(2, end)',
+        'toggle2': 'toggle2 1.4s infinite steps(2, end)',
+      },
+      keyframes: {
+        toggle1: {
+          '0%, 49.99%': { visibility: 'visible' },
+          '50%, 100%': { visibility: 'hidden' }
+        },
+        toggle2: {
+          '0%, 49.99%': { visibility: 'hidden' },
+          '50%, 100%': { visibility: 'visible' }
+        }
+      }
     },
   },
   plugins: [],
