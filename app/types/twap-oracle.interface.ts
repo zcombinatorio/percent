@@ -51,17 +51,17 @@ export interface ITWAPOracle {
    *   - aggregations: Array of cumulative weighted observations (one per AMM)
    * @throws Error if AMMs are not set or no time has passed
    */
-  fetchTWAPs(): Promise<{
+  fetchTWAPs(): {
     twaps: Decimal[];
     aggregations: Decimal[];
-  }>;
+  };
 
   /**
    * Determines the index of the highest TWAP
    * @returns Index of the market with the highest TWAP
    * @throws Error if AMMs are not set
    */
-  fetchHighestTWAPIndex(): Promise<number>;
+  fetchHighestTWAPIndex(): number;
 
   /**
    * Serializes the TWAP oracle state for persistence

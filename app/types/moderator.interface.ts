@@ -96,9 +96,9 @@ export interface IModerator {
   /**
    * Finalizes a proposal after voting period ends
    * @param id - The ID of the proposal to finalize
-   * @returns The status of the proposal after finalization
+   * @returns Tuple of [status, winningMarketIndex | null]
    */
-  finalizeProposal(id: number): Promise<ProposalStatus>;
+  finalizeProposal(id: number): Promise<[ProposalStatus, number | null]>;
 
   /**
    * Gets a proposal by ID from database (always fresh data)

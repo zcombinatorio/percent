@@ -1,5 +1,5 @@
 import { PublicKey } from '@solana/web3.js';
-import { IProposal, IProposalConfig, IProposalSerializedData, IProposalDeserializeConfig } from './types/proposal.interface';
+import { IProposal, IProposalConfig, IProposalSerializedData, IProposalDeserializeConfig, IProposalStatusInfo } from './types/proposal.interface';
 import { IAMM } from './types/amm.interface';
 import { IVault, VaultType } from './types/vault.interface';
 import { ITWAPOracle } from './types/twap-oracle.interface';
@@ -27,10 +27,31 @@ export class Proposal implements IProposal {
   private logger: LoggerService;
 
   /**
-   * Getter for proposal status (read-only access)
+   * Gets comprehensive status information including winner details
+   * Winner details are computed from TWAP oracle when status is Finalized
+   * @returns Status info with winning market details (null if not finalized)
    */
-  get status(): ProposalStatus { 
-    return this._status;
+  getStatus(): IProposalStatusInfo {
+    let winningIndex: number | null = null;
+
+    // Only fetch winning index if finalized
+    if (this._status === ProposalStatus.Finalized) {
+      winningIndex = this.twapOracle.fetchHighestTWAPIndex();
+    }
+
+    return {
+      status: this._status,
+      winningMarketIndex: winningIndex,
+      winningMarketLabel: winningIndex !== null
+        ? this.config.market_labels![winningIndex]
+        : null,
+      winningBaseConditionalMint: winningIndex !== null
+        ? this.baseVault.conditionalMints[winningIndex]
+        : null,
+      winningQuoteConditionalMint: winningIndex !== null
+        ? this.quoteVault.conditionalMints[winningIndex]
+        : null
+    };
   }
 
   /**
@@ -184,19 +205,22 @@ export class Proposal implements IProposal {
    * Finalizes the proposal based on time
    * Currently assumes all proposals pass for simplicity
    * Also finalizes the AMMs and vaults accordingly
-   * @returns The current or updated proposal status
+   * @returns Tuple of [status, winningMarketIndex | null]
    */
-  async finalize(): Promise<ProposalStatus> {
+  async finalize(): Promise<[ProposalStatus, number | null]> {
     this.logger.info('Finalizing proposal');
     if (this._status === ProposalStatus.Uninitialized) {
       throw new Error(`Proposal #${this.config.id}: Not initialized - call initialize() first`);
     }
-    
+
     // Still pending if before finalization time
     if (Date.now() < this.finalizedAt) {
-      return ProposalStatus.Pending;
+      return [ProposalStatus.Pending, null];
     }
-    
+
+    // Track winning index
+    let winningIndex: number | null = null;
+
     // Update status if still pending after finalization time
     if (this._status === ProposalStatus.Pending) {
       // Perform final TWAP crank to ensure we have the most up-to-date data
@@ -204,7 +228,7 @@ export class Proposal implements IProposal {
       await this.twapOracle.crankTWAP();
 
       this._status = ProposalStatus.Finalized;
-      
+
       // Remove liquidity from AMMs before finalizing vaults
       for (let i = 0; i < this.config.markets; i++) {
         try {
@@ -221,8 +245,8 @@ export class Proposal implements IProposal {
       }
 
       // Determine the winning conditional mint
-      const index = await this.twapOracle.fetchHighestTWAPIndex();
-      const winningConditionalMint = this.baseVault.conditionalMints[index];
+      winningIndex = await this.twapOracle.fetchHighestTWAPIndex();
+      const winningConditionalMint = this.baseVault.conditionalMints[winningIndex];
 
       // Finalize both vaults with the proposal status
       this.logger.info('Finalizing vaults');
@@ -262,8 +286,8 @@ export class Proposal implements IProposal {
       }
     }
 
-    this.logger.info('Proposal finalization returned', { status: this._status });
-    return this._status;
+    this.logger.info('Proposal finalization returned', { status: this._status, winningIndex });
+    return [this._status, winningIndex];
   }
 
   /**

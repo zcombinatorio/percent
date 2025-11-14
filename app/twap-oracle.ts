@@ -137,17 +137,17 @@ export class TWAPOracle implements ITWAPOracle {
    * @returns Object containing TWAPs and aggregations
    * @throws Error if AMMs are not set or no time has passed
    */
-  async fetchTWAPs(): Promise<{
+  fetchTWAPs(): {
     twaps: Decimal[];
     aggregations: Decimal[];
-  }> {
+  } {
     if (!this._AMMs) {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
     const twapStartTime = this.createdAt + this.twapStartDelay;
     const currentTime = Math.min(Date.now(), this.finalizedAt);
-    
+
     // Calculate time passed since TWAP started
     if (currentTime <= twapStartTime) {
         // TWAP hasn't started yet, return initial values
@@ -176,12 +176,12 @@ export class TWAPOracle implements ITWAPOracle {
    * @returns Index of the highest TWAP
    * @throws Error if AMMs are not set
    */
-  async fetchHighestTWAPIndex(): Promise<number> {
+  fetchHighestTWAPIndex(): number {
     if (!this._AMMs) {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
-    const { twaps } = await this.fetchTWAPs();
+    const { twaps } = this.fetchTWAPs();
 
     // return index of the highest TWAP
     return twaps.indexOf(twaps.reduce((max, twap) => twap.gt(max) ? twap : max, new Decimal(0)));

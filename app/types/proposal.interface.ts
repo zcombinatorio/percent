@@ -8,6 +8,17 @@ import { IExecutionService } from './execution.interface';
 import { LoggerService } from '../services/logger.service';
 
 /**
+ * Comprehensive status information for a proposal
+ */
+export interface IProposalStatusInfo {
+  status: ProposalStatus;
+  winningMarketIndex: number | null;
+  winningMarketLabel: string | null;
+  winningBaseConditionalMint: PublicKey | null;
+  winningQuoteConditionalMint: PublicKey | null;
+}
+
+/**
  * Configuration for creating a new proposal
  */
 export interface IProposalConfig {
@@ -47,7 +58,12 @@ export interface IProposal {
   quoteVault: IVault;                 // Quote vault managing N conditional quote tokens
   readonly twapOracle: ITWAPOracle;   // Time-weighted average price oracle (immutable)
   readonly finalizedAt: number;       // Timestamp when voting ends (ms, immutable)
-  readonly status: ProposalStatus;    // Current status (Pending, Finalized, Executed)
+
+  /**
+   * Gets comprehensive status information including winner details
+   * @returns Status info with winning market details (if finalized)
+   */
+  getStatus(): IProposalStatusInfo;
 
   /**
    * Initializes the proposal's blockchain components
@@ -73,9 +89,9 @@ export interface IProposal {
   /**
    * Finalizes the proposal based on TWAP results
    * Determines winner by highest TWAP index
-   * @returns The final status after checking time and TWAP
+   * @returns Tuple of [status, winningMarketIndex | null]
    */
-  finalize(): Promise<ProposalStatus>;
+  finalize(): Promise<[ProposalStatus, number | null]>;
 
   /**
    * Serializes the proposal state for persistence

@@ -186,13 +186,13 @@ export class Moderator implements IModerator {
 
   /**
    * Finalizes a proposal after the voting period has ended
-   * Determines if proposal passed or failed based on votes
+   * Determines winning market by highest TWAP
    * Uses Jito bundles on mainnet if UUID is configured
    * @param id - The ID of the proposal to finalize
-   * @returns The status of the proposal after finalization
+   * @returns Tuple of [status, winningMarketIndex | null]
    * @throws Error if proposal with given ID doesn't exist
    */
-  async finalizeProposal(id: number): Promise<ProposalStatus> {
+  async finalizeProposal(id: number): Promise<[ProposalStatus, number | null]> {
     // Get proposal from cache or database
     this.logger.info('Finalizing proposal');
     const proposal = await this.getProposal(id);
@@ -200,11 +200,11 @@ export class Moderator implements IModerator {
       throw new Error(`Proposal with ID ${id} does not exist`);
     }
 
-    const status = await proposal.finalize();
+    const [status, winningIndex] = await proposal.finalize();
     await this.saveProposal(proposal);
     if (status == ProposalStatus.Finalized) {
-      this.logger.info('Proposal finalized and passed');
+      this.logger.info('Proposal finalized', { winningIndex });
     }
-    return status;
+    return [status, winningIndex];
   }
 }
