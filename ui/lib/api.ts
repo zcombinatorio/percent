@@ -12,9 +12,10 @@ class GovernanceAPI {
     this.connection = new Connection(RPC_URL);
   }
 
-  async getProposals(): Promise<ProposalListItem[]> {
+  async getProposals(poolAddress?: string): Promise<ProposalListItem[]> {
     try {
-      const url = buildApiUrl(API_BASE_URL, '/api/proposals');
+      const params = poolAddress ? { poolAddress } : {};
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals', params);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       const data: ProposalListResponse = await response.json();
@@ -22,6 +23,56 @@ class GovernanceAPI {
     } catch (error) {
       console.error('Error fetching proposals:', error);
       return [];
+    }
+  }
+
+  async getPoolByName(name: string): Promise<{
+    pool: {
+      poolAddress: string;
+      name: string;
+      baseMint: string;
+      quoteMint: string;
+      baseDecimals: number;
+      quoteDecimals: number;
+    };
+    isAuthorized?: boolean;
+  } | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch pool');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching pool:', error);
+      return null;
+    }
+  }
+
+  async getPoolByNameWithAuth(name: string, walletAddress: string): Promise<{
+    pool: {
+      poolAddress: string;
+      name: string;
+      baseMint: string;
+      quoteMint: string;
+      baseDecimals: number;
+      quoteDecimals: number;
+    };
+    isAuthorized: boolean;
+  } | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`, { wallet: walletAddress });
+      const response = await fetch(url);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch pool');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching pool with auth:', error);
+      return null;
     }
   }
 
@@ -133,6 +184,74 @@ class GovernanceAPI {
     } catch (error) {
       console.error('Error fetching swap quote:', error);
       return null;
+    }
+  }
+
+  async checkWhitelistStatus(walletAddress: string): Promise<{
+    wallet: string;
+    isWhitelisted: boolean;
+    pools: string[];
+    poolsWithMetadata: Array<{
+      poolAddress: string;
+      metadata: {
+        poolAddress: string;
+        name: string;
+        baseMint: string;
+        quoteMint: string;
+        baseDecimals: number;
+        quoteDecimals: number;
+      } | null;
+    }>;
+  } | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, '/api/whitelist/check', { wallet: walletAddress });
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to check whitelist status');
+      return await response.json();
+    } catch (error) {
+      console.error('Error checking whitelist status:', error);
+      return null;
+    }
+  }
+
+  async createProposal(params: {
+    title: string;
+    description: string;
+    proposalLength: number;
+    creatorWallet: string;
+  }): Promise<{
+    moderatorId: number;
+    id: number;
+    title: string;
+    description: string;
+    status: string;
+    createdAt: number;
+    finalizedAt: number;
+  } | null> {
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+      if (!apiKey) {
+        throw new Error('API key not configured');
+      }
+
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals', { moderatorId: '1' });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-KEY': apiKey
+        },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create proposal');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating proposal:', error);
+      throw error;
     }
   }
 }

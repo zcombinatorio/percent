@@ -1,19 +1,17 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
+import { useTokenContext } from '@/providers/TokenContext';
+import { api } from '@/lib/api';
 import Header from '@/components/Header';
 import EditableFlipCard from '@/components/EditableFlipCard';
 import toast from 'react-hot-toast';
 
-// Whitelisted wallets allowed to create proposals
-const ALLOWED_WALLETS = [
-  '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP'
-];
-
 export default function CreatePage() {
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
+  const { tokenSlug, poolAddress, poolMetadata, isLoading: poolLoading } = useTokenContext();
   const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
   const hasWalletBalance = solBalance > 0 || zcBalance > 0;
 
@@ -22,13 +20,38 @@ export default function CreatePage() {
   const [proposalLengthHours, setProposalLengthHours] = useState('24');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDescriptionFocused, setIsDescriptionFocused] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Refs for flip card inputs to manage auto-focus
   const firstDigitRef = useRef<HTMLInputElement>(null);
   const secondDigitRef = useRef<HTMLInputElement>(null);
 
-  // Check if wallet has permission to create proposals
-  const hasPermission = walletAddress ? ALLOWED_WALLETS.includes(walletAddress) : false;
+  // Check if wallet is authorized for THIS specific pool
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!walletAddress || !poolAddress) {
+        setIsAuthorized(false);
+        setAuthLoading(false);
+        return;
+      }
+
+      setAuthLoading(true);
+      try {
+        const result = await api.getPoolByNameWithAuth(tokenSlug, walletAddress);
+        setIsAuthorized(result?.isAuthorized || false);
+      } catch {
+        setIsAuthorized(false);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [walletAddress, poolAddress, tokenSlug]);
+
+  const hasPermission = isAuthorized;
+  const poolName = poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase();
 
   // Check if form is valid (title and description filled)
   const isFormInvalid = !title.trim() || !description.trim();
@@ -50,6 +73,14 @@ export default function CreatePage() {
       toast.error('Proposal length must be a positive number');
       return;
     }
+    if (!poolAddress) {
+      toast.error('Pool not loaded');
+      return;
+    }
+    if (!walletAddress) {
+      toast.error('Wallet not connected');
+      return;
+    }
 
     setIsSubmitting(true);
     const toastId = toast.loading('Creating Decision Market...');
@@ -58,11 +89,12 @@ export default function CreatePage() {
       // Convert hours to seconds
       const proposalLength = Math.floor(hours * 3600);
 
-      // Simple request - backend handles everything else
       const requestBody = {
         title: title.trim(),
         description: description.trim(),
-        proposalLength
+        proposalLength,
+        spotPoolAddress: poolAddress,
+        creatorWallet: walletAddress
       };
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -85,7 +117,7 @@ export default function CreatePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || error.error || 'Failed to create DM');
+        throw new Error(error.error || 'Failed to create DM');
       }
 
       const data = await response.json();
@@ -111,6 +143,8 @@ export default function CreatePage() {
     }
   };
 
+  const stillLoading = !ready || poolLoading || (walletAddress && authLoading);
+
   return (
     <div className="flex h-screen" style={{ backgroundColor: '#0a0a0a' }}>
       <div className="flex-1 flex flex-col">
@@ -122,6 +156,7 @@ export default function CreatePage() {
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
+          tokenSlug={tokenSlug}
         />
 
         {/* Content Area */}
@@ -134,6 +169,11 @@ export default function CreatePage() {
                 </h2>
               </div>
 
+              {stillLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <p style={{ color: '#6B6E71' }}>Checking permissions...</p>
+                </div>
+              ) : (
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   {/* Left Column (3/5 width) */}
@@ -174,10 +214,10 @@ export default function CreatePage() {
                         onKeyDown={(e) => {
                           if (e.key === 'Tab' && !description.trim()) {
                             e.preventDefault();
-                            setDescription('Should ZC merge PR #15? https://github.com/zcombinatorio/percent/pull/15');
+                            setDescription(`Should ${poolName} merge PR #15? https://github.com/example/pull/15`);
                           }
                         }}
-                        placeholder="Should ZC merge PR #15? https://github.com/zcombinatorio/percent/pull/15"
+                        placeholder={`Should ${poolName} merge PR #15? https://github.com/example/pull/15`}
                         className="w-full flex-1 px-3 py-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono resize-none"
                         style={{
                           WebkitAppearance: 'none',
@@ -255,14 +295,15 @@ export default function CreatePage() {
                           }`}
                         >
                           {!hasPermission
-                            ? 'NO PERMISSION'
-                            : (isSubmitting ? 'Creating DM...' : 'Create DM')}
+                            ? 'NOT AUTHORIZED'
+                            : (isSubmitting ? `Creating ${poolName} DM...` : `CREATE ${poolName} DM`)}
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
               </form>
+              )}
             </div>
           </div>
         </div>

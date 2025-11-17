@@ -6,7 +6,7 @@ interface CarouselItem {
 }
 
 interface TokenCarouselProps {
-  carouselRef: RefObject<HTMLDivElement>
+  carouselRef: RefObject<HTMLDivElement | null>
   currentCard: number
   items: CarouselItem[]
   onScrollLeft: () => void

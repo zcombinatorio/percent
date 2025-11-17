@@ -18,10 +18,12 @@ import { api } from '@/lib/api';
 import { claimWinnings } from '@/lib/trading';
 import Masonry from 'react-masonry-css';
 import { ProposalVolume } from '@/components/ProposalVolume';
+import { useTokenContext } from '@/providers/TokenContext';
 
 export default function HistoryPage() {
+  const { tokenSlug, poolAddress } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { proposals, loading, refetch } = useProposals();
+  const { proposals, loading, refetch } = useProposals(poolAddress || undefined);
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
@@ -137,6 +139,7 @@ export default function HistoryPage() {
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
+          tokenSlug={tokenSlug}
         />
 
         <div className="flex-1 flex justify-center overflow-y-auto">
@@ -209,7 +212,7 @@ export default function HistoryPage() {
                     <div className="text-white flex flex-col">
                       <div className="flex items-center justify-between gap-2 mb-6">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>ZC-{proposal.id}</div>
+                          <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>
                           {proposal.status === 'Passed' && (
                             <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#6ECC9433', color: '#6ECC94' }}>
                               Pass
@@ -356,7 +359,7 @@ export default function HistoryPage() {
                       <div className="text-white flex flex-col">
                         <div className="flex items-center justify-between gap-2 mb-6">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>ZC-{proposal.id}</div>
+                            <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>
                             {proposal.status === 'Passed' && (
                               <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#6ECC9433', color: '#6ECC94' }}>
                                 Pass

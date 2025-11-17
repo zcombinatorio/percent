@@ -49,22 +49,29 @@ export class DammService {
    * Step 1: Build DAMM deposit transaction
    * @param tokenAAmount - Token A amount in UI units
    * @param tokenBAmount - Token B amount in UI units
+   * @param poolAddress - Optional DAMM pool address (defaults to ZC-SOL pool if not provided)
    * @returns Unsigned transaction and metadata
    */
   async buildDammDeposit(
     tokenAAmount: number,
-    tokenBAmount: number
+    tokenBAmount: number,
+    poolAddress?: string
   ): Promise<DammDepositBuildResponse> {
     try {
+      const requestBody: Record<string, unknown> = {
+        tokenAAmount,
+        tokenBAmount,
+      };
+      if (poolAddress) {
+        requestBody.poolAddress = poolAddress;
+      }
+
       const response = await fetch(`${API_URL}/damm/deposit/build`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          tokenAAmount,
-          tokenBAmount,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -138,16 +145,18 @@ export class DammService {
    * @param tokenAAmount - Token A amount in UI units
    * @param tokenBAmount - Token B amount in UI units
    * @param signTransaction - Function to sign transaction (from wallet/keypair)
+   * @param poolAddress - Optional DAMM pool address (defaults to ZC-SOL pool if not provided)
    * @returns Deposit result with amounts
    */
   async depositToDammPool(
     tokenAAmount: number,
     tokenBAmount: number,
-    signTransaction: (transaction: Transaction) => Promise<Transaction>
+    signTransaction: (transaction: Transaction) => Promise<Transaction>,
+    poolAddress?: string
   ): Promise<DammDepositConfirmResponse> {
     try {
       // Step 1: Build unsigned transaction
-      const buildData = await this.buildDammDeposit(tokenAAmount, tokenBAmount);
+      const buildData = await this.buildDammDeposit(tokenAAmount, tokenBAmount, poolAddress);
 
       // Step 2: Deserialize and sign transaction
       const transactionBuffer = bs58.decode(buildData.transaction);

@@ -29,6 +29,7 @@ import { claimWinnings } from '@/lib/trading';
 import { buildApiUrl } from '@/lib/api-utils';
 import Masonry from 'react-masonry-css';
 import { ProposalVolume } from '@/components/ProposalVolume';
+import { useTokenContext } from '@/providers/TokenContext';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
   ssr: false,
@@ -47,8 +48,9 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 
 export default function HomePage() {
   const router = useRouter();
+  const { tokenSlug, poolAddress } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { proposals, loading, refetch } = useProposals();
+  const { proposals, loading, refetch } = useProposals(poolAddress || undefined);
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
@@ -397,6 +399,7 @@ export default function HomePage() {
             hasWalletBalance={hasWalletBalance}
             login={login}
             isPassMode={isPassMode}
+            tokenSlug={tokenSlug}
           />
 
           {/* Empty state */}
@@ -424,6 +427,7 @@ export default function HomePage() {
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={isPassMode}
+          tokenSlug={tokenSlug}
         />
 
         {/* Content Area */}
@@ -464,7 +468,7 @@ export default function HomePage() {
                         const cardInner = (
                           <div className="flex flex-col justify-between h-full">
                             <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
-                              PROPOSAL ZC-{proposal.id}
+                              PROPOSAL {tokenSlug.toUpperCase()}-{proposal.id}
                               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>

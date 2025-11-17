@@ -293,7 +293,8 @@ export class Moderator implements IModerator {
       this.logger.info('Starting deposit-back to DAMM pool', {
         proposalId,
         originalWithdrawnTokenA: metadata.tokenA,
-        originalWithdrawnTokenB: metadata.tokenB
+        originalWithdrawnTokenB: metadata.tokenB,
+        poolAddress: metadata.poolAddress
       });
 
       // Token decimals
@@ -350,7 +351,8 @@ export class Moderator implements IModerator {
           const depositResult = await this.dammService.depositToDammPool(
             tokenAAmountUI,
             tokenBAmountUI,
-            signTransaction
+            signTransaction,
+            metadata.poolAddress
           );
 
           // Mark as deposited in database with actual amounts from API response

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import type { ProposalListItem, ProposalDetailResponse } from '@/types/api';
 
-export function useProposals() {
+export function useProposals(poolAddress?: string) {
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -10,7 +10,7 @@ export function useProposals() {
   const fetchProposals = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getProposals();
+      const data = await api.getProposals(poolAddress);
 
       // Only filter proposals if moderator ID is 2
       const moderatorId = process.env.NEXT_PUBLIC_MODERATOR_ID;
@@ -27,7 +27,7 @@ export function useProposals() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [poolAddress]);
 
   useEffect(() => {
     fetchProposals();

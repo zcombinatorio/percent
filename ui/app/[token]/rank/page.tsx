@@ -7,9 +7,11 @@ import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { usePot } from '@/hooks/usePot';
 import Header from '@/components/Header';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
+import { useTokenContext } from '@/providers/TokenContext';
 
 export default function LeaderboardPage() {
   const router = useRouter();
+  const { tokenSlug } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
 
   // Fetch wallet balances
@@ -36,6 +38,7 @@ export default function LeaderboardPage() {
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
+          tokenSlug={tokenSlug}
         />
 
         {/* Content Area */}

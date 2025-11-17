@@ -437,6 +437,7 @@ export class PersistenceService implements IPersistenceService {
    * @param tokenA - Base token amount withdrawn
    * @param tokenB - Quote token amount withdrawn
    * @param spotPrice - Spot price at withdrawal time
+   * @param poolAddress - DAMM pool address used for withdrawal
    */
   async storeWithdrawalMetadata(
     proposalId: number,
@@ -445,7 +446,8 @@ export class PersistenceService implements IPersistenceService {
     percentage: number,
     tokenA: string,
     tokenB: string,
-    spotPrice: number
+    spotPrice: number,
+    poolAddress: string
   ): Promise<void> {
     try {
       const query = `
@@ -453,8 +455,8 @@ export class PersistenceService implements IPersistenceService {
           moderator_id, proposal_id,
           withdrawal_request_id, withdrawal_signature,
           withdrawal_percentage, withdrawn_token_a, withdrawn_token_b,
-          spot_price, needs_deposit_back
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          spot_price, needs_deposit_back, pool_address
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (moderator_id, proposal_id) DO UPDATE SET
           withdrawal_request_id = EXCLUDED.withdrawal_request_id,
           withdrawal_signature = EXCLUDED.withdrawal_signature,
@@ -462,6 +464,7 @@ export class PersistenceService implements IPersistenceService {
           withdrawn_token_a = EXCLUDED.withdrawn_token_a,
           withdrawn_token_b = EXCLUDED.withdrawn_token_b,
           spot_price = EXCLUDED.spot_price,
+          pool_address = EXCLUDED.pool_address,
           updated_at = NOW()
       `;
 
@@ -474,7 +477,8 @@ export class PersistenceService implements IPersistenceService {
         tokenA,
         tokenB,
         spotPrice,
-        true // needs_deposit_back
+        true, // needs_deposit_back
+        poolAddress
       ]);
 
       // Update proposal to mark it has a withdrawal
@@ -515,13 +519,15 @@ export class PersistenceService implements IPersistenceService {
     needsDepositBack: boolean;
     depositSignature: string | null;
     depositedAt: Date | null;
+    poolAddress: string;
   } | null> {
     try {
       const result = await this.pool.query(
         `SELECT
           withdrawal_request_id, withdrawal_signature,
           withdrawal_percentage, withdrawn_token_a, withdrawn_token_b,
-          spot_price, needs_deposit_back, deposit_signature, deposited_at
+          spot_price, needs_deposit_back, deposit_signature, deposited_at,
+          pool_address
          FROM i_proposal_withdrawals
          WHERE moderator_id = $1 AND proposal_id = $2`,
         [this.moderatorId, proposalId]
@@ -541,7 +547,8 @@ export class PersistenceService implements IPersistenceService {
         spotPrice: parseFloat(row.spot_price),
         needsDepositBack: row.needs_deposit_back,
         depositSignature: row.deposit_signature,
-        depositedAt: row.deposited_at ? new Date(row.deposited_at) : null
+        depositedAt: row.deposited_at ? new Date(row.deposited_at) : null,
+        poolAddress: row.pool_address
       };
     } catch (error) {
       this.logger.error('Failed to get withdrawal metadata', {

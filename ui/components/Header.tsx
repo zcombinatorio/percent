@@ -14,9 +14,10 @@ interface HeaderProps {
   hasWalletBalance?: boolean;
   login?: () => void;
   isPassMode?: boolean;
+  tokenSlug?: string; // NEW: Dynamic token routing
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login, isPassMode = true }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login, isPassMode = true, tokenSlug = 'zc' }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -190,7 +191,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
       <div className="px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
           <button
-            onClick={() => router.push('/zc')}
+            onClick={() => router.push(`/${tokenSlug}`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
             style={activeTab === 'live' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
             onMouseEnter={(e) => { if (activeTab !== 'live') e.currentTarget.style.color = '#9B9E9F'; }}
@@ -202,7 +203,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
             Live
           </button>
           <button
-            onClick={() => router.push('/zc/history')}
+            onClick={() => router.push(`/${tokenSlug}/history`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
             style={activeTab === 'history' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
             onMouseEnter={(e) => { if (activeTab !== 'history') e.currentTarget.style.color = '#9B9E9F'; }}
@@ -214,7 +215,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
             History
           </button>
           <button
-            onClick={() => router.push('/zc/rank')}
+            onClick={() => router.push(`/${tokenSlug}/rank`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
             style={activeTab === 'rank' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
             onMouseEnter={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#9B9E9F'; }}
@@ -226,7 +227,7 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
             Rankings
           </button>
           <button
-            onClick={() => router.push('/zc/create')}
+            onClick={() => router.push(`/${tokenSlug}/create`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
             style={activeTab === 'create' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
             onMouseEnter={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#9B9E9F'; }}
