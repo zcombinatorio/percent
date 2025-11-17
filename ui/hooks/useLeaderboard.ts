@@ -24,14 +24,14 @@ export function useLeaderboard() {
   const [error, setError] = useState<string | null>(null);
 
   const { proposals, loading: proposalsLoading } = useProposals();
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices();
 
   const fetchLeaderboard = useCallback(async () => {
     console.log('[Leaderboard] Fetch attempt:', {
       proposalsLoading,
       proposalsCount: proposals.length,
       solPrice,
-      zcPrice
+      baseTokenPrice
     });
 
     if (proposalsLoading) {
@@ -45,7 +45,7 @@ export function useLeaderboard() {
       return;
     }
 
-    if (!solPrice || !zcPrice) {
+    if (!solPrice || !baseTokenPrice) {
       console.log('[Leaderboard] Waiting for token prices...');
       return;
     }
@@ -88,7 +88,7 @@ export function useLeaderboard() {
         // isBaseToQuote = true → used ZC (base token)
         // isBaseToQuote = false → used SOL (quote token)
         const volumeUSD = trade.isBaseToQuote
-          ? amount * zcPrice
+          ? amount * baseTokenPrice
           : amount * solPrice;
 
         const currentVolume = volumeMap.get(trade.userAddress) || 0;
@@ -117,7 +117,7 @@ export function useLeaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [proposals, proposalsLoading, solPrice, zcPrice]);
+  }, [proposals, proposalsLoading, solPrice, baseTokenPrice]);
 
   useEffect(() => {
     fetchLeaderboard();

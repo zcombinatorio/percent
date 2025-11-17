@@ -2,20 +2,27 @@ import { useState, useEffect, useCallback } from 'react';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getAccount, getAssociatedTokenAddress } from '@solana/spl-token';
 
-// $ZC token mint address
-const ZC_MINT = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
-
 interface WalletBalances {
   sol: number;
-  zc: number;
+  baseToken: number; // Dynamic token balance (ZC, OOGWAY, etc.)
   loading: boolean;
   error: string | null;
 }
 
-export function useWalletBalances(walletAddress: string | null): WalletBalances {
+interface UseWalletBalancesParams {
+  walletAddress: string | null;
+  baseMint?: string | null; // Token mint address
+  baseDecimals?: number; // Token decimals (default 6)
+}
+
+export function useWalletBalances({
+  walletAddress,
+  baseMint,
+  baseDecimals = 6,
+}: UseWalletBalancesParams): WalletBalances {
   const [balances, setBalances] = useState<WalletBalances>({
     sol: 0,
-    zc: 0,
+    baseToken: 0,
     loading: false,
     error: null,
   });
@@ -32,47 +39,49 @@ export function useWalletBalances(walletAddress: string | null): WalletBalances 
       const connection = new Connection(rpcUrl, 'confirmed');
       const pubKey = new PublicKey(address);
 
-        // Fetch SOL balance
-        const solBalance = await connection.getBalance(pubKey);
-        const solAmount = solBalance / LAMPORTS_PER_SOL;
+      // Fetch SOL balance
+      const solBalance = await connection.getBalance(pubKey);
+      const solAmount = solBalance / LAMPORTS_PER_SOL;
 
-        // Fetch $ZC token balance
-        let zcAmount = 0;
+      // Fetch base token balance (if baseMint provided)
+      let baseTokenAmount = 0;
+      if (baseMint) {
         try {
-            const zcMint = new PublicKey(ZC_MINT);
-            const zcATA = await getAssociatedTokenAddress(
-              zcMint,
-              pubKey
-            );
+          const tokenMint = new PublicKey(baseMint);
+          const tokenATA = await getAssociatedTokenAddress(
+            tokenMint,
+            pubKey
+          );
 
-            const zcAccount = await getAccount(connection, zcATA);
-            // $ZC has 6 decimals
-            zcAmount = Number(zcAccount.amount) / 1e6;
-        } catch (error) {
+          const tokenAccount = await getAccount(connection, tokenATA);
+          // Use dynamic decimals
+          baseTokenAmount = Number(tokenAccount.amount) / Math.pow(10, baseDecimals);
+        } catch {
           // Token account might not exist if user has 0 balance - this is normal
         }
+      }
 
       setBalances({
         sol: solAmount,
-        zc: zcAmount,
+        baseToken: baseTokenAmount,
         loading: false,
         error: null,
       });
     } catch (error) {
       setBalances({
         sol: 0,
-        zc: 0,
+        baseToken: 0,
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to fetch balances',
       });
     }
-  }, []);
+  }, [baseMint, baseDecimals]);
 
   useEffect(() => {
     if (!walletAddress) {
       setBalances({
         sol: 0,
-        zc: 0,
+        baseToken: 0,
         loading: false,
         error: null,
       });
@@ -89,7 +98,7 @@ export function useWalletBalances(walletAddress: string | null): WalletBalances 
       : process.env.NEXT_PUBLIC_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
     const pubKey = new PublicKey(walletAddress);
-    
+
     // Subscribe to account changes for SOL balance
     const solSubscriptionId = connection.onAccountChange(
       pubKey,
@@ -100,38 +109,40 @@ export function useWalletBalances(walletAddress: string | null): WalletBalances 
       'confirmed'
     );
 
-    // Subscribe to $ZC token account changes
-    let zcSubscriptionId: number | null = null;
-    (async () => {
-      try {
-        const zcMint = new PublicKey(ZC_MINT);
-        const zcATA = await getAssociatedTokenAddress(zcMint, pubKey);
+    // Subscribe to base token account changes (if baseMint provided)
+    let tokenSubscriptionId: number | null = null;
+    if (baseMint) {
+      (async () => {
+        try {
+          const tokenMint = new PublicKey(baseMint);
+          const tokenATA = await getAssociatedTokenAddress(tokenMint, pubKey);
 
-        zcSubscriptionId = connection.onAccountChange(
-          zcATA,
-          () => {
-            // Refetch balances when token account changes
-            fetchBalances(walletAddress);
-          },
-          'confirmed'
-        );
-      } catch (error) {
-        // Could not subscribe to $ZC account changes - this is normal if account doesn't exist
-      }
-    })();
-    
+          tokenSubscriptionId = connection.onAccountChange(
+            tokenATA,
+            () => {
+              // Refetch balances when token account changes
+              fetchBalances(walletAddress);
+            },
+            'confirmed'
+          );
+        } catch {
+          // Could not subscribe to token account changes - this is normal if account doesn't exist
+        }
+      })();
+    }
+
     // Also refresh every 30 seconds as fallback
     const interval = setInterval(() => fetchBalances(walletAddress), 30000);
-    
+
     // Cleanup
     return () => {
       connection.removeAccountChangeListener(solSubscriptionId);
-      if (zcSubscriptionId !== null) {
-        connection.removeAccountChangeListener(zcSubscriptionId);
+      if (tokenSubscriptionId !== null) {
+        connection.removeAccountChangeListener(tokenSubscriptionId);
       }
       clearInterval(interval);
     };
-  }, [walletAddress, fetchBalances]);
+  }, [walletAddress, baseMint, fetchBalances]);
 
   return balances;
 }

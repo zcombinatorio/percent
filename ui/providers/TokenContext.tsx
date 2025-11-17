@@ -17,6 +17,10 @@ interface TokenContextValue {
   tokenSlug: string;
   poolAddress: string | null;
   poolMetadata: PoolMetadata | null;
+  // Convenience getters for common values
+  baseMint: string | null;
+  baseDecimals: number;
+  tokenSymbol: string;
   isLoading: boolean;
   error: string | null;
 }
@@ -66,6 +70,10 @@ export function TokenProvider({ tokenSlug, children }: TokenProviderProps) {
     tokenSlug,
     poolAddress: poolMetadata?.poolAddress || null,
     poolMetadata,
+    // Convenience getters
+    baseMint: poolMetadata?.baseMint || null,
+    baseDecimals: poolMetadata?.baseDecimals || 6, // Default to 6 if not loaded
+    tokenSymbol: poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase(),
     isLoading,
     error,
   };

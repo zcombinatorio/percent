@@ -21,18 +21,22 @@ import { ProposalVolume } from '@/components/ProposalVolume';
 import { useTokenContext } from '@/providers/TokenContext';
 
 export default function HistoryPage() {
-  const { tokenSlug, poolAddress } = useTokenContext();
+  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals(poolAddress || undefined);
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
 
-  // Fetch wallet balances
-  const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
+  // Fetch wallet balances for current token
+  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+    walletAddress,
+    baseMint,
+    baseDecimals,
+  });
 
   // Fetch token prices for USD conversion
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices(baseMint);
 
   // Get Solana wallets for transaction signing
   const { wallets } = useSolanaWallets();
@@ -126,7 +130,7 @@ export default function HistoryPage() {
   }, [sortedProposals]);
 
   // Calculate total balance
-  const hasWalletBalance = (solBalance > 0 || zcBalance > 0);
+  const hasWalletBalance = (solBalance > 0 || baseTokenBalance > 0);
 
   return (
     <div className="flex h-screen" style={{ backgroundColor: '#0a0a0a' }}>
@@ -135,11 +139,12 @@ export default function HistoryPage() {
           walletAddress={walletAddress}
           authenticated={authenticated}
           solBalance={solBalance}
-          zcBalance={zcBalance}
+          baseTokenBalance={baseTokenBalance}
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
           tokenSlug={tokenSlug}
+          tokenSymbol={tokenSymbol}
         />
 
         <div className="flex-1 flex justify-center overflow-y-auto">

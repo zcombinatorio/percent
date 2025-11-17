@@ -13,8 +13,11 @@ export const POOL_WHITELIST: Record<string, string[]> = {
     'FgACAue3FuWPrL7xSqXWtUdHLne52dvVsKyKxjwqPYtr',
     'FtV94i2JvmaqsE1rBT72C9YR58wYJXt1ZjRmPb4tDvMK',
   ],
-  // Add more pools as needed:
-  // 'AnotherPoolAddress...': ['DevWallet3...', 'DevWallet4...'],
+  // oogway
+  '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': [
+    '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',
+    'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',
+  ],
 };
 
 /**
@@ -92,5 +95,12 @@ export const POOL_METADATA: Record<string, PoolMetadata> = {
     baseDecimals: 6,
     quoteDecimals: 9,
   },
-  // Add more pool metadata as needed
+  '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': {
+    poolAddress: '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
+    name: 'oogway',
+    baseMint: 'C7MGcMnN8cXUkj8JQuMhkJZh6WqY2r8QnT3AUfKTkrix', // ZC token
+    quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
+    baseDecimals: 6,
+    quoteDecimals: 9,
+  },
 };

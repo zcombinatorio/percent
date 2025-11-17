@@ -34,7 +34,7 @@ export function useTradeHistory(proposalId: number | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<ConnectionStatus>('disconnected');
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -254,19 +254,19 @@ export function useTradeHistory(proposalId: number | null) {
     if (token === 'SOL') {
       return amount * solPrice;
     } else {
-      return amount * zcPrice;
+      return amount * baseTokenPrice;
     }
-  }, [solPrice, zcPrice, getTokenUsed]);
+  }, [solPrice, baseTokenPrice, getTokenUsed]);
 
   // Calculate total volume for all trades in this proposal
   const totalVolume = useMemo(() => {
-    if (!solPrice || !zcPrice || trades.length === 0) return 0;
+    if (!solPrice || !baseTokenPrice || trades.length === 0) return 0;
 
     return trades.reduce((sum, trade) => {
       const volume = calculateVolume(trade.amountIn, trade.isBaseToQuote, trade.market);
       return sum + volume;
     }, 0);
-  }, [trades, solPrice, zcPrice, calculateVolume]);
+  }, [trades, solPrice, baseTokenPrice, calculateVolume]);
 
   return {
     trades,

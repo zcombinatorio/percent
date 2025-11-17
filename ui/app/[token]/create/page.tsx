@@ -11,9 +11,13 @@ import toast from 'react-hot-toast';
 
 export default function CreatePage() {
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { tokenSlug, poolAddress, poolMetadata, isLoading: poolLoading } = useTokenContext();
-  const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
-  const hasWalletBalance = solBalance > 0 || zcBalance > 0;
+  const { tokenSlug, poolAddress, poolMetadata, baseMint, baseDecimals, tokenSymbol, isLoading: poolLoading } = useTokenContext();
+  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+    walletAddress,
+    baseMint,
+    baseDecimals,
+  });
+  const hasWalletBalance = solBalance > 0 || baseTokenBalance > 0;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -152,11 +156,12 @@ export default function CreatePage() {
           walletAddress={walletAddress}
           authenticated={authenticated}
           solBalance={solBalance}
-          zcBalance={zcBalance}
+          baseTokenBalance={baseTokenBalance}
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
           tokenSlug={tokenSlug}
+          tokenSymbol={tokenSymbol}
         />
 
         {/* Content Area */}

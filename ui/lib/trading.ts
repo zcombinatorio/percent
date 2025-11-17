@@ -4,17 +4,18 @@ import { buildApiUrl, withModeratorId } from './api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// SOL and ZC mint addresses
+// SOL mint address (quote token)
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
-const ZC_MINT = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
+const SOL_DECIMALS = 9;
 
 export interface OpenPositionConfig {
   proposalId: number;
   market: 'pass' | 'fail';  // Which AMM market to trade on
-  inputToken: 'sol' | 'zc';  // Which conditional token we're selling
+  inputToken: 'sol' | 'baseToken';  // Which conditional token we're selling
   inputAmount: string;  // Amount of conditional tokens to sell
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  baseDecimals?: number;  // Decimals for the base token (default 6)
 }
 
 export interface ClosePositionConfig {
@@ -30,20 +31,18 @@ export interface ClosePositionConfig {
  * Swaps conditional tokens: e.g., Pass-ZC → Pass-SOL or Fail-SOL → Fail-ZC
  */
 export async function openPosition(config: OpenPositionConfig): Promise<void> {
-  const { proposalId, market, inputToken, inputAmount, userAddress, signTransaction } = config;
+  const { proposalId, market, inputToken, inputAmount, userAddress, signTransaction, baseDecimals = 6 } = config;
 
   // Determine swap direction based on inputToken
-  // inputToken 'zc' means we're selling base (ZC conditional) for quote (SOL conditional)
-  // inputToken 'sol' means we're selling quote (SOL conditional) for base (ZC conditional)
-  const isBaseToQuote = inputToken === 'zc';
+  // inputToken 'baseToken' means we're selling base conditional for quote (SOL conditional)
+  // inputToken 'sol' means we're selling quote (SOL conditional) for base conditional
+  const isBaseToQuote = inputToken === 'baseToken';
 
   const toastId = toast.loading(`Swapping ${market}-${inputToken.toUpperCase()}...`);
 
   try {
-    // Convert decimal amount to smallest units
-    const ZC_DECIMALS = 6;
-    const SOL_DECIMALS = 9;
-    const decimals = inputToken === 'zc' ? ZC_DECIMALS : SOL_DECIMALS;
+    // Convert decimal amount to smallest units using dynamic decimals
+    const decimals = inputToken === 'baseToken' ? baseDecimals : SOL_DECIMALS;
     const amountInSmallestUnits = Math.floor(parseFloat(inputAmount) * Math.pow(10, decimals)).toString();
 
     // Execute the swap on the selected market
@@ -57,7 +56,7 @@ export async function openPosition(config: OpenPositionConfig): Promise<void> {
     );
 
     // Success message
-    const outputToken = inputToken === 'zc' ? 'SOL' : 'ZC';
+    const outputToken = inputToken === 'baseToken' ? 'SOL' : 'BASE';
     toast.success(
       `Successfully swapped ${market}-${inputToken.toUpperCase()} → ${market}-${outputToken}!`,
       { id: toastId, duration: 5000 }

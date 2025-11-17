@@ -11,14 +11,18 @@ import { useTokenContext } from '@/providers/TokenContext';
 
 export default function LeaderboardPage() {
   const router = useRouter();
-  const { tokenSlug } = useTokenContext();
+  const { tokenSlug, baseMint, baseDecimals, tokenSymbol } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
 
-  // Fetch wallet balances
-  const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
+  // Fetch wallet balances for current token
+  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+    walletAddress,
+    baseMint,
+    baseDecimals,
+  });
 
   // Check if user has any wallet balance
-  const hasWalletBalance = solBalance > 0 || zcBalance > 0;
+  const hasWalletBalance = solBalance > 0 || baseTokenBalance > 0;
 
   // Fetch leaderboard data
   const { entries: leaderboardEntries, totalVolume, loading: leaderboardLoading, error: leaderboardError } = useLeaderboard();
@@ -34,11 +38,12 @@ export default function LeaderboardPage() {
           walletAddress={walletAddress}
           authenticated={authenticated}
           solBalance={solBalance}
-          zcBalance={zcBalance}
+          baseTokenBalance={baseTokenBalance}
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={true}
           tokenSlug={tokenSlug}
+          tokenSymbol={tokenSymbol}
         />
 
         {/* Content Area */}

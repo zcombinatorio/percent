@@ -15,10 +15,10 @@ export const TOKEN_MINTS = {
 /**
  * Convert human-readable amount to smallest token units
  * @param amount - The human-readable amount (e.g., 1.5 SOL)
- * @param token - The token type ('sol' or 'zc')
+ * @param token - The token type ('sol', 'zc', or 'baseToken')
  * @returns The amount in smallest units (e.g., 1500000000 for 1.5 SOL)
  */
-export function toSmallestUnits(amount: number, token: 'sol' | 'zc'): number {
+export function toSmallestUnits(amount: number, token: 'sol' | 'zc' | 'baseToken'): number {
   const decimals = token === 'sol' ? TOKEN_DECIMALS.SOL : TOKEN_DECIMALS.ZC;
   return Math.floor(amount * Math.pow(10, decimals));
 }
@@ -26,19 +26,19 @@ export function toSmallestUnits(amount: number, token: 'sol' | 'zc'): number {
 /**
  * Convert smallest token units to human-readable decimal amount
  * @param amount - The amount in smallest units
- * @param token - The token type ('sol' or 'zc')
+ * @param token - The token type ('sol', 'zc', or 'baseToken')
  * @returns The human-readable amount (e.g., 1.5 for 1500000000)
  */
-export function toDecimal(amount: number, token: 'sol' | 'zc'): number {
+export function toDecimal(amount: number, token: 'sol' | 'zc' | 'baseToken'): number {
   const decimals = token === 'sol' ? TOKEN_DECIMALS.SOL : TOKEN_DECIMALS.ZC;
   return amount / Math.pow(10, decimals);
 }
 
 /**
  * Get the decimal places for a given token
- * @param token - The token type ('sol' or 'zc')
+ * @param token - The token type ('sol', 'zc', or 'baseToken')
  * @returns The number of decimal places
  */
-export function getDecimals(token: 'sol' | 'zc'): number {
+export function getDecimals(token: 'sol' | 'zc' | 'baseToken'): number {
   return token === 'sol' ? TOKEN_DECIMALS.SOL : TOKEN_DECIMALS.ZC;
 }

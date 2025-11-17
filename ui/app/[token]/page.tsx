@@ -48,7 +48,7 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 
 export default function HomePage() {
   const router = useRouter();
-  const { tokenSlug, poolAddress } = useTokenContext();
+  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals(poolAddress || undefined);
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
@@ -56,11 +56,15 @@ export default function HomePage() {
   const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
   const [isPassMode, setIsPassMode] = useState(true);
 
-  // Fetch wallet balances
-  const { sol: solBalance, zc: zcBalance } = useWalletBalances(walletAddress);
+  // Fetch wallet balances for current token
+  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+    walletAddress,
+    baseMint,
+    baseDecimals,
+  });
 
   // Fetch token prices for USD conversion
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices(baseMint);
 
   // Get Solana wallets for transaction signing
   const { wallets } = useSolanaWallets();
@@ -158,14 +162,14 @@ export default function HomePage() {
 
   // Check if user has any wallet balance
   const hasWalletBalance = useMemo(() => {
-    return solBalance > 0 || zcBalance > 0;
-  }, [solBalance, zcBalance]);
+    return solBalance > 0 || baseTokenBalance > 0;
+  }, [solBalance, baseTokenBalance]);
 
   /* TRADING FUNCTIONS - COMMENTED OUT UNTIL TRADING MODAL IS IMPLEMENTED
   // Handle MAX button click - TODO: Move to trading modal
   const handleMaxClick = useCallback(() => {
     if (marketMode === 'enter') {
-      let maxBalance = selectedToken === 'sol' ? solBalance : zcBalance;
+      let maxBalance = selectedToken === 'sol' ? solBalance : baseTokenBalance;
 
       // Reserve 0.02 SOL for transaction fees when entering with SOL
       if (selectedToken === 'sol' && maxBalance !== null) {
@@ -190,7 +194,7 @@ export default function HomePage() {
         setAmount(maxExitAmount.toString());
       }
     }
-  }, [marketMode, selectedToken, solBalance, zcBalance, userBalances]);
+  }, [marketMode, selectedToken, solBalance, baseTokenBalance, userBalances]);
 
   // Handle Enter Market - Split tokens into conditional tokens
   const handleEnterMarket = useCallback(async () => {
@@ -395,11 +399,12 @@ export default function HomePage() {
             walletAddress={walletAddress}
             authenticated={authenticated}
             solBalance={solBalance}
-            zcBalance={zcBalance}
+            baseTokenBalance={baseTokenBalance}
             hasWalletBalance={hasWalletBalance}
             login={login}
             isPassMode={isPassMode}
             tokenSlug={tokenSlug}
+            tokenSymbol={tokenSymbol}
           />
 
           {/* Empty state */}
@@ -423,11 +428,12 @@ export default function HomePage() {
           walletAddress={walletAddress}
           authenticated={authenticated}
           solBalance={solBalance}
-          zcBalance={zcBalance}
+          baseTokenBalance={baseTokenBalance}
           hasWalletBalance={hasWalletBalance}
           login={login}
           isPassMode={isPassMode}
           tokenSlug={tokenSlug}
+          tokenSymbol={tokenSymbol}
         />
 
         {/* Content Area */}
@@ -540,7 +546,7 @@ export default function HomePage() {
                       <DepositCard
                         proposalId={proposal.id}
                         solBalance={solBalance}
-                        zcBalance={zcBalance}
+                        baseTokenBalance={baseTokenBalance}
                         userBalances={userBalances}
                         onDepositSuccess={refetchBalances}
                       />
@@ -574,6 +580,8 @@ export default function HomePage() {
                             userBalances={userBalances}
                             refetchBalances={refetchBalances}
                             onTradeSuccess={refetchTrades}
+                            baseMint={baseMint}
+                            tokenSymbol={tokenSymbol}
                           />
                         </div>
                       </div>
@@ -588,7 +596,7 @@ export default function HomePage() {
                                                      (selectedMarket === 'fail' && proposal.status === 'Passed');
 
                       // Calculate actual balances
-                      const zcBalance = userBalances ? parseFloat(
+                      const baseTokenBalance = userBalances ? parseFloat(
                         selectedMarket === 'pass' ?
                           userBalances.base.passConditional :
                           userBalances.base.failConditional || '0'
@@ -601,24 +609,24 @@ export default function HomePage() {
                       ) / 1e9 : 0;
 
                       // Zero out if showing losing tokens on expired market
-                      const displayZCBalance = (isExpired && isShowingLosingTokens) ? 0 : zcBalance;
+                      const displayBaseTokenBalance = (isExpired && isShowingLosingTokens) ? 0 : baseTokenBalance;
                       const displaySOLBalance = (isExpired && isShowingLosingTokens) ? 0 : solBalance;
 
                       return (
                     <div className="flex gap-4">
-                        {/* ZC Balance Card */}
+                        {/* Base Token Balance Card */}
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? 'IV. If Pass ZC Balance' : 'IV. If Fail ZC Balance'}
+                              {selectedMarket === 'pass' ? `IV. If Pass ${tokenSymbol} Balance` : `IV. If Fail ${tokenSymbol} Balance`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
-                                {formatNumber(displayZCBalance, 0)} {selectedMarket === 'pass' ? 'PASS' : 'FAIL'}
+                                {formatNumber(displayBaseTokenBalance, 0)} {selectedMarket === 'pass' ? 'PASS' : 'FAIL'}
                               </span>
-                              {zcPrice && (
+                              {baseTokenPrice && (
                                 <span className="hidden group-hover:inline">
-                                  {formatCurrency(displayZCBalance * zcPrice, 2)}
+                                  {formatCurrency(displayBaseTokenBalance * baseTokenPrice, 2)}
                                 </span>
                               )}
                             </div>

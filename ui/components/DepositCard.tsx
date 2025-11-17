@@ -17,12 +17,12 @@ const SOL_GAS_RESERVE = 0.02; // Reserve for transaction fees
 interface DepositCardProps {
   proposalId: number;
   solBalance: number | null;
-  zcBalance: number | null;
+  baseTokenBalance: number | null;
   userBalances: UserBalancesResponse | null;
   onDepositSuccess: () => void;
 }
 
-export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, onDepositSuccess }: DepositCardProps) {
+export function DepositCard({ proposalId, solBalance, baseTokenBalance, userBalances, onDepositSuccess }: DepositCardProps) {
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const { wallets } = useSolanaWallets();
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
@@ -33,7 +33,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
   // Calculate max balance
   const maxBalance = useMemo(() => {
     if (mode === 'deposit') {
-      const balance = selectedToken === 'sol' ? (solBalance || 0) : (zcBalance || 0);
+      const balance = selectedToken === 'sol' ? (solBalance || 0) : (baseTokenBalance || 0);
       // Reserve gas for SOL deposits
       return selectedToken === 'sol' ? Math.max(0, balance - SOL_GAS_RESERVE) : balance;
     } else {
@@ -50,7 +50,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
       // Convert from smallest units to decimal
       return minBalance / Math.pow(10, decimals);
     }
-  }, [mode, selectedToken, solBalance, zcBalance, userBalances]);
+  }, [mode, selectedToken, solBalance, baseTokenBalance, userBalances]);
 
   // Validate balance
   const balanceError = useMemo(() => {
