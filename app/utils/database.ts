@@ -1,6 +1,4 @@
 import { Pool } from 'pg';
-// Note: dotenv should be configured at the application entry point (server.ts or server.test.ts)
-// not in individual service files
 
 let pool: Pool | null = null;
 
@@ -40,20 +38,5 @@ export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end();
     pool = null;
-  }
-}
-
-/**
- * Test the database connection
- */
-export async function testConnection(): Promise<boolean> {
-  try {
-    const client = await getPool().connect();
-    await client.query('SELECT NOW()');
-    client.release();
-    return true;
-  } catch (error) {
-    console.error('Database connection test failed:', error);
-    return false;
   }
 }
