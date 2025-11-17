@@ -3,20 +3,7 @@ import { IProposal } from './proposal.interface';
 import { ITWAPConfig } from './twap-oracle.interface';
 
 /**
- * Serialized transaction instruction data
- */
-export interface ITransactionInstructionData {
-  programId: string;
-  keys: {
-    pubkey: string;
-    isSigner: boolean;
-    isWritable: boolean;
-  }[];
-  data: string; // base64 encoded
-}
-
-/**
- * Database representation of a proposal (new schema)
+ * Database representation of a proposal (quantum markets schema)
  */
 export interface IProposalDB {
   id: number;                          // Global unique ID
@@ -29,15 +16,15 @@ export interface IProposalDB {
   finalized_at: Date;
   proposal_length: string;              // bigint stored as string
 
-  // Transaction data
-  transaction_instructions: string | ITransactionInstructionData[]; // JSON string or parsed array
-  transaction_fee_payer?: string;       // Optional fee payer
-
   // Token configuration
   base_mint: string;
   quote_mint: string;
   base_decimals: number;
   quote_decimals: number;
+
+  // Quantum markets fields
+  markets: number;                      // Number of markets (2-4)
+  market_labels: string[];              // Labels for each market
 
   // AMM configuration
   amm_config: string | {                // JSON string or parsed object
@@ -49,8 +36,7 @@ export interface IProposalDB {
   twap_config: string | ITWAPConfig;    // JSON string or parsed object
 
   // Serialized component data
-  pass_amm_data: string | any;          // JSON string or parsed object
-  fail_amm_data: string | any;          // JSON string or parsed object
+  amm_data: string | any;               // JSON string or parsed array of AMM data
   base_vault_data: string | any;        // JSON string or parsed object
   quote_vault_data: string | any;       // JSON string or parsed object
   twap_oracle_data: string | any;       // JSON string or parsed object

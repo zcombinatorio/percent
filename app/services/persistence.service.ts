@@ -31,7 +31,7 @@ export class PersistenceService implements IPersistenceService {
   async getProposalIdCounter(): Promise<number> {
     try {
       const result = await this.pool.query<{ proposal_id_counter: number }>(
-        'SELECT proposal_id_counter FROM i_moderators WHERE id = $1',
+        'SELECT proposal_id_counter FROM qm_moderators WHERE id = $1',
         [this.moderatorId]
       );
 
@@ -61,28 +61,26 @@ export class PersistenceService implements IPersistenceService {
       // Use the proposal's serialize method
       const serializedData = proposal.serialize();
 
-      // Use new i_proposals table (id is auto-generated, not inserted)
+      // Use qm_proposals table (id is auto-generated, not inserted)
       const query = `
-        INSERT INTO i_proposals (
+        INSERT INTO qm_proposals (
           moderator_id, proposal_id, title, description, status,
           created_at, finalized_at, proposal_length,
-          transaction_instructions, transaction_fee_payer,
           base_mint, quote_mint, base_decimals, quote_decimals,
+          markets, market_labels,
           amm_config, twap_config,
-          pass_amm_data, fail_amm_data,
+          amm_data,
           base_vault_data, quote_vault_data,
           twap_oracle_data,
           spot_pool_address, total_supply
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
         ON CONFLICT (moderator_id, proposal_id) DO UPDATE SET
           status = EXCLUDED.status,
-          pass_amm_data = EXCLUDED.pass_amm_data,
-          fail_amm_data = EXCLUDED.fail_amm_data,
+          amm_data = EXCLUDED.amm_data,
           base_vault_data = EXCLUDED.base_vault_data,
           quote_vault_data = EXCLUDED.quote_vault_data,
           twap_oracle_data = EXCLUDED.twap_oracle_data,
           twap_config = EXCLUDED.twap_config,
-          transaction_fee_payer = EXCLUDED.transaction_fee_payer,
           updated_at = NOW()
       `;
 
@@ -95,16 +93,15 @@ export class PersistenceService implements IPersistenceService {
         new Date(serializedData.createdAt),
         new Date(serializedData.finalizedAt),
         serializedData.proposalLength,
-        JSON.stringify(serializedData.transactionInstructions), // New format
-        serializedData.transactionFeePayer || null,
         serializedData.baseMint,
         serializedData.quoteMint,
         serializedData.baseDecimals,
         serializedData.quoteDecimals,
+        serializedData.markets,
+        serializedData.market_labels,
         JSON.stringify(serializedData.ammConfig),
         JSON.stringify(serializedData.twapConfig || {}),
-        JSON.stringify(serializedData.pAMMData),
-        JSON.stringify(serializedData.fAMMData),
+        JSON.stringify(serializedData.AMMData),
         JSON.stringify(serializedData.baseVaultData),
         JSON.stringify(serializedData.quoteVaultData),
         JSON.stringify(serializedData.twapOracleData),
@@ -129,7 +126,7 @@ export class PersistenceService implements IPersistenceService {
   async loadProposal(proposalId: number): Promise<IProposal | null> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals WHERE moderator_id = $1 AND proposal_id = $2',
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 AND proposal_id = $2',
         [this.moderatorId, proposalId]
       );
 
@@ -156,7 +153,7 @@ export class PersistenceService implements IPersistenceService {
   async loadAllProposals(): Promise<IProposal[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals WHERE moderator_id = $1 ORDER BY id',
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 ORDER BY id',
         [this.moderatorId]
       );
 
@@ -185,7 +182,7 @@ export class PersistenceService implements IPersistenceService {
   async getProposalsForFrontend(): Promise<IProposalDB[]> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals WHERE moderator_id = $1 ORDER BY created_at DESC',
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 ORDER BY created_at DESC',
         [this.moderatorId]
       );
 
@@ -207,7 +204,7 @@ export class PersistenceService implements IPersistenceService {
   async getProposalForFrontend(proposalId: number): Promise<IProposalDB | null> {
     try {
       const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM i_proposals WHERE moderator_id = $1 AND proposal_id = $2',
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 AND proposal_id = $2',
         [this.moderatorId, proposalId]
       );
 
@@ -246,7 +243,7 @@ export class PersistenceService implements IPersistenceService {
       };
 
       const query = `
-        INSERT INTO i_moderators (id, proposal_id_counter, config, protocol_name)
+        INSERT INTO qm_moderators (id, proposal_id_counter, config, protocol_name)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (id) DO UPDATE SET
           proposal_id_counter = EXCLUDED.proposal_id_counter,
@@ -274,7 +271,7 @@ export class PersistenceService implements IPersistenceService {
   async loadModeratorState(): Promise<{ proposalCounter: number; config: IModeratorConfig; protocolName?: string } | null> {
     try {
       const result = await this.pool.query<IModeratorStateDB>(
-        'SELECT * FROM i_moderators WHERE id = $1',
+        'SELECT * FROM qm_moderators WHERE id = $1',
         [this.moderatorId]
       );
 
@@ -353,32 +350,8 @@ export class PersistenceService implements IPersistenceService {
         baseDecimals: row.base_decimals,
         quoteDecimals: row.quote_decimals,
 
-        transactionInstructions: (() => {
-          const txData = typeof row.transaction_instructions === 'string'
-            ? JSON.parse(row.transaction_instructions)
-            : row.transaction_instructions;
-
-          // Handle both old format (array) and new format (object with instructions)
-          if (Array.isArray(txData)) {
-            return txData; // Old format: direct array of instructions
-          } else if (txData && typeof txData === 'object' && 'instructions' in txData) {
-            return txData.instructions; // New format: extract instructions array
-          }
-          return []; // Fallback
-        })(),
-        transactionFeePayer: (() => {
-          if (row.transaction_fee_payer) return row.transaction_fee_payer;
-
-          // Check if new format has feePayer
-          const txData = typeof row.transaction_instructions === 'string'
-            ? JSON.parse(row.transaction_instructions)
-            : row.transaction_instructions;
-
-          if (txData && typeof txData === 'object' && 'feePayer' in txData && txData.feePayer) {
-            return txData.feePayer;
-          }
-          return undefined;
-        })(),
+        markets: row.markets,
+        market_labels: row.market_labels,
 
         ammConfig: typeof row.amm_config === 'string'
           ? JSON.parse(row.amm_config)
@@ -391,12 +364,9 @@ export class PersistenceService implements IPersistenceService {
         spotPoolAddress: row.spot_pool_address || undefined,
         totalSupply: row.total_supply || 1000000000,
 
-        pAMMData: typeof row.pass_amm_data === 'string'
-          ? JSON.parse(row.pass_amm_data)
-          : row.pass_amm_data,
-        fAMMData: typeof row.fail_amm_data === 'string'
-          ? JSON.parse(row.fail_amm_data)
-          : row.fail_amm_data,
+        AMMData: typeof row.amm_data === 'string'
+          ? JSON.parse(row.amm_data)
+          : row.amm_data,
         baseVaultData: typeof row.base_vault_data === 'string'
           ? JSON.parse(row.base_vault_data)
           : row.base_vault_data,

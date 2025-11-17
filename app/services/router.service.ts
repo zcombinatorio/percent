@@ -41,7 +41,7 @@ export class RouterService implements IRouterService {
       this.logger.info('Loading moderators from database...');
 
       // Query for all moderator IDs
-      const result = await pool.query<{ id: number }>('SELECT id FROM i_moderators');
+      const result = await pool.query<{ id: number }>('SELECT id FROM qm_moderators');
 
       // Load each moderator
       for (const row of result.rows) {
@@ -107,7 +107,7 @@ export class RouterService implements IRouterService {
     try {
       // Get the next available ID from i_moderators table
       const idResult = await pool.query<{ max: number }>(
-        'SELECT COALESCE(MAX(id), 0) as max FROM i_moderators'
+        'SELECT COALESCE(MAX(id), 0) as max FROM qm_moderators'
       );
       const nextId = (idResult.rows[0]?.max || 0) + 1;
 
@@ -186,8 +186,9 @@ export class RouterService implements IRouterService {
 
       for (const proposal of proposals) {
         const now = Date.now();
-
-        if (proposal.status === ProposalStatus.Pending) {
+        
+        let status = proposal.getStatus()
+        if (status.status === ProposalStatus.Pending) {
           if (now >= proposal.finalizedAt) {
             // Proposal should have been finalized
             this.logger.info(`Finalizing overdue proposal #${proposal.config.id} for moderator ${moderatorId}`);

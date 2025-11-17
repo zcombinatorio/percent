@@ -26,19 +26,19 @@ export interface IProposalConfig {
   moderatorId: number;                          // Moderator ID
   title: string;                                // Proposal title (required)
   description?: string;                         // Human-readable description (optional)
-  market_labels?: string[];                      // Labels for each market
+  market_labels?: string[];                     // Labels for each market
   markets: number;                              // Number of markets
-  createdAt: number;                           // Creation timestamp in milliseconds
-  proposalLength: number;                      // Duration of voting period in seconds
-  baseMint: PublicKey;                         // Public key of base token mint
-  quoteMint: PublicKey;                        // Public key of quote token mint
-  baseDecimals: number;                        // Number of decimals for base token conditional mints
-  quoteDecimals: number;                       // Number of decimals for quote token conditional mints
-  authority: Keypair;                          // Authority keypair (payer and mint authority)
-  executionService: IExecutionService;         // Execution service for transactions
-  twap: ITWAPConfig;                           // TWAP oracle configuration
-  spotPoolAddress?: string;                    // Optional Meteora pool address for spot market price (for charts)
-  totalSupply: number;                         // Total supply of conditional tokens for market cap calculation
+  createdAt: number;                            // Creation timestamp in milliseconds
+  proposalLength: number;                       // Duration of voting period in seconds
+  baseMint: PublicKey;                          // Public key of base token mint
+  quoteMint: PublicKey;                         // Public key of quote token mint
+  baseDecimals: number;                         // Number of decimals for base token conditional mints
+  quoteDecimals: number;                        // Number of decimals for quote token conditional mints
+  authority: Keypair;                           // Authority keypair (payer and mint authority)
+  executionService: IExecutionService;          // Execution service for transactions
+  twap: ITWAPConfig;                            // TWAP oracle configuration
+  spotPoolAddress?: string;                     // Optional Meteora pool address for spot market price (for charts)
+  totalSupply: number;                          // Total supply of conditional tokens for market cap calculation
   ammConfig: {
     initialBaseAmount: BN;                      // Initial base token liquidity (same for both AMMs)
     initialQuoteAmount: BN;                     // Initial quote token liquidity (same for both AMMs)
@@ -54,10 +54,10 @@ export interface IProposalConfig {
 export interface IProposal {
   readonly config: IProposalConfig;    // Configuration object containing all proposal parameters
   AMMs: IAMM[];                        // Array of AMMs (one per market, initialized during proposal setup)
-  baseVault: IVault;                  // Base vault managing N conditional base tokens
-  quoteVault: IVault;                 // Quote vault managing N conditional quote tokens
-  readonly twapOracle: ITWAPOracle;   // Time-weighted average price oracle (immutable)
-  readonly finalizedAt: number;       // Timestamp when voting ends (ms, immutable)
+  baseVault: IVault;                   // Base vault managing N conditional base tokens
+  quoteVault: IVault;                  // Quote vault managing N conditional quote tokens
+  readonly twapOracle: ITWAPOracle;    // Time-weighted average price oracle (immutable)
+  readonly finalizedAt: number;        // Timestamp when voting ends (ms, immutable)
 
   /**
    * Gets comprehensive status information including winner details
