@@ -482,7 +482,7 @@ export default function HomePage() {
                           cleanedDescription = descriptionStr.replace(/(https?:\/\/github\.com\/[^\s\)\],]+)/gi, '').trim();
                         }
 
-                        const content = getProposalContent(proposal.id, proposal.title, cleanedDescription, process.env.NEXT_PUBLIC_MODERATOR_ID);
+                        const content = getProposalContent(proposal.id, proposal.title, cleanedDescription, moderatorId?.toString());
                         const rawContent = content.content || cleanedDescription || '';
 
                         const cardInner = (

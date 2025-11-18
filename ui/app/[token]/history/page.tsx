@@ -158,7 +158,7 @@ export default function HistoryPage() {
               {sortedProposals
                 .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed')
                 .map((proposal) => {
-                const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID);
+                const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, moderatorId?.toString());
                 const isHovered = hoveredProposalId === proposal.id;
 
                 // Extract first section (Executive Summary) for preview
@@ -305,7 +305,7 @@ export default function HistoryPage() {
                 {sortedProposals
                   .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed')
                   .map((proposal) => {
-                  const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, process.env.NEXT_PUBLIC_MODERATOR_ID);
+                  const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, moderatorId?.toString());
                   const isHovered = hoveredProposalId === proposal.id;
 
                   // Extract first section (Executive Summary) for preview

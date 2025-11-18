@@ -16,6 +16,7 @@ interface ProposalHeaderProps {
   onTabChange: (tab: TabType) => void;
   onTimerEnd?: () => void;
   pfgPercentage: number | null;
+  moderatorId?: number | string;
 }
 
 export function ProposalHeader({
@@ -27,10 +28,10 @@ export function ProposalHeader({
   activeTab,
   onTabChange,
   onTimerEnd,
-  pfgPercentage
+  pfgPercentage,
+  moderatorId
 }: ProposalHeaderProps) {
-  const moderatorId = process.env.NEXT_PUBLIC_MODERATOR_ID;
-  const { title: displayTitle, content } = getProposalContent(proposalId, title, description, moderatorId);
+  const { title: displayTitle, content } = getProposalContent(proposalId, title, description, moderatorId?.toString());
 
   return (
     <div className="mb-4">

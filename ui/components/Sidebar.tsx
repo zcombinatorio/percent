@@ -4,6 +4,7 @@ import { useState, useMemo, memo } from 'react';
 import { ProposalListSkeleton } from '@/components/ProposalSkeleton';
 import { getProposalContent } from '@/lib/proposalContent';
 import type { ProposalListItem } from '@/types/api';
+import { useTokenContext } from '@/providers/TokenContext';
 
 interface SidebarProps {
   selectedProposal: number;
@@ -14,7 +15,7 @@ interface SidebarProps {
 
 const Sidebar = memo(({ selectedProposal, onSelectProposal, proposals, loading }: SidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const moderatorId = process.env.NEXT_PUBLIC_MODERATOR_ID;
+  const { moderatorId } = useTokenContext();
 
   const sortedProposals = useMemo(() =>
     [...proposals].sort((a, b) => b.finalizedAt - a.finalizedAt),
@@ -30,9 +31,9 @@ const Sidebar = memo(({ selectedProposal, onSelectProposal, proposals, loading }
             onClick={() => setIsCollapsed(false)}
             className="group p-1.5 hover:bg-[#424242] rounded-lg transition cursor-pointer"
           >
-            <img 
-              src="/percent-logo.svg" 
-              alt="Expand" 
+            <img
+              src="/percent-logo.svg"
+              alt="Expand"
               className="h-5 w-5 group-hover:hidden"
             />
             <svg className="h-5 w-5 fill-gray-400 hidden group-hover:block" viewBox="0 0 20 20">
@@ -41,9 +42,9 @@ const Sidebar = memo(({ selectedProposal, onSelectProposal, proposals, loading }
           </button>
         ) : (
           <>
-            <img 
-              src="/percent-logo.svg" 
-              alt="Percent" 
+            <img
+              src="/percent-logo.svg"
+              alt="Percent"
               className="h-5 w-5"
             />
             <button
@@ -79,7 +80,7 @@ const Sidebar = memo(({ selectedProposal, onSelectProposal, proposals, loading }
                 proposal.id,
                 proposal.title,
                 proposal.description,
-                moderatorId
+                moderatorId?.toString()
               );
               const truncatedTitle = displayTitle.length > 40
                 ? displayTitle.substring(0, 40) + '...'
