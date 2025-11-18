@@ -366,15 +366,17 @@ router.get('/:id/getUserBalances', async (req, res, next) => {
       proposalId,
       user: user as string,
       base: {
-        regular: baseBalances.regular.toString(),
-        passConditional: baseBalances.passConditional.toString(),
-        failConditional: baseBalances.failConditional.toString()
+        regularMint: baseVault.regularMint,
+        regularMintBalance: baseBalances.regular.toString(),
+        conditionalMints: baseVault.conditionalMints,
+        conditionalMintBalances: baseBalances.conditional,
       },
       quote: {
-        regular: quoteBalances.regular.toString(),
-        passConditional: quoteBalances.passConditional.toString(),
-        failConditional: quoteBalances.failConditional.toString()
-      }
+        regularMint: quoteBalances.regular.toString(),
+        regularMintBalance: quoteBalances.regular.toString(),
+        conditionalMints: quoteVault.conditionalMints,
+        conditionalMintBalances: quoteBalances.conditional,
+      },
     };
 
     logger.info('[GET /:id/getUserBalances] User balances retrieved', {
