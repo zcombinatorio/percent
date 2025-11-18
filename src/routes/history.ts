@@ -70,10 +70,8 @@ router.get('/:id/twap', async (req, res, next) => {
       data: twapData.map(twap => ({
         id: twap.id,
         timestamp: twap.timestamp.toISOString(),
-        passTwap: twap.passTwap.toString(),
-        failTwap: twap.failTwap.toString(),
-        passAggregation: twap.passAggregation.toString(),
-        failAggregation: twap.failAggregation.toString(),
+        twaps: twap.twaps.map(t => t.toString()),
+        aggregations: twap.aggregations.map(a => a.toString()),
       }))
     });
   } catch (error) {
@@ -254,8 +252,8 @@ router.get('/:id/chart', async (req, res, next) => {
 
     // Get proposal to access totalSupply
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
-    const proposal = await persistenceService.getProposalForFrontend(proposalId);
-    const totalSupply = proposal?.total_supply || 1000000000;
+    const proposal = await persistenceService.loadProposal(proposalId);
+    const totalSupply = proposal?.config.totalSupply || 1000000000;
 
     // Get current SOL/USD price
     const { SolPriceService } = await import('../../app/services/sol-price.service');
@@ -263,10 +261,10 @@ router.get('/:id/chart', async (req, res, next) => {
     const solPrice = await solPriceService.getSolPrice();
 
     // Transform data to USD market cap (price × total supply × SOL price) and ISO strings for JSON serialization
-    // Note: Spot prices are already in USD market cap, so don't convert them
+    // Note: Spot prices (market -1) are already in USD market cap, so don't convert them
     const formattedData = chartData.map(point => {
-      // Spot prices are already market cap USD, pass/fail need conversion
-      const multiplier = point.market === 'spot' ? 1 : (totalSupply * solPrice);
+      // Spot prices are already market cap USD, other markets need conversion
+      const multiplier = point.market === -1 ? 1 : (totalSupply * solPrice);
 
       return {
         timestamp: new Date(point.timestamp).toISOString(),
