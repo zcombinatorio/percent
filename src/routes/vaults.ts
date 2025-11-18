@@ -372,7 +372,7 @@ router.get('/:id/getUserBalances', async (req, res, next) => {
         conditionalMintBalances: baseBalances.conditional,
       },
       quote: {
-        regularMint: quoteBalances.regular.toString(),
+        regularMint: quoteVault.regularMint.toString(),
         regularMintBalance: quoteBalances.regular.toString(),
         conditionalMints: quoteVault.conditionalMints,
         conditionalMintBalances: quoteBalances.conditional,
