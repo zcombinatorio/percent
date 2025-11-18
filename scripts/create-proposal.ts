@@ -36,6 +36,8 @@ async function createProposal() {
   const request: CreateProposalRequest = {
     title: 'SolPay Retroactive Holder Redistribution (ZC-2)',
     description: 'ENTER FULL DESCRIPTION HERE',
+    markets: 2,
+    market_labels: ['pass', 'fail'],
     proposalLength: 10800, // 3 hours
     spotPoolAddress: 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad', // ZC/SOL spot pool
     totalSupply: 1037781155, // 1 billion tokens for market cap calculation

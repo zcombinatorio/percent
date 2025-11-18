@@ -245,7 +245,7 @@ export class Proposal implements IProposal {
       }
 
       // Determine the winning conditional mint
-      winningIndex = await this.twapOracle.fetchHighestTWAPIndex();
+      winningIndex = this.twapOracle.fetchHighestTWAPIndex();
       const winningConditionalMint = this.baseVault.conditionalMints[winningIndex];
 
       // Finalize both vaults with the proposal status

@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
 import { attachModerator, requireModeratorId, getModerator } from '../middleware/validation';
-import { Transaction, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
-import { ExecutionStatus } from '../../app/types/execution.interface';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
@@ -15,8 +13,9 @@ const logger = new LoggerService('api').createChild('proposals');
 export interface CreateProposalRequest {
   title: string;
   description?: string;
+  markets: number; // Number of markets (2-4)
+  market_labels?: string[]; // Optional labels for each market
   proposalLength: number;
-  transaction?: string; // Base64-encoded serialized transaction
   spotPoolAddress?: string; // Optional Meteora pool address for spot market
   totalSupply?: number; // Total supply of conditional tokens (defaults to 1 billion)
   twap: {
@@ -41,6 +40,8 @@ export interface ProposalInfo {
   createdAt: number;
   finalizedAt: number;
   passThresholdBps: number;
+  markets: number;
+  marketLabels?: string[];
 }
 
 export interface ProposalsResponse {
@@ -60,19 +61,24 @@ router.get('/', async (req, res, next) => {
 
     logger.info('[GET /] Fetching proposals', { moderatorId });
 
-    const proposals = await persistenceService.getProposalsForFrontend();
+    const proposals = await persistenceService.loadAllProposals();
 
-    const publicProposals = proposals.map(p => ({
-      id: p.proposal_id,
-      title: p.title,
-      description: p.description,
-      status: p.status,
-      createdAt: new Date(p.created_at).getTime(),
-      finalizedAt: new Date(p.finalized_at).getTime(),
-      passThresholdBps: typeof p.twap_config === 'string'
-        ? JSON.parse(p.twap_config).passThresholdBps
-        : p.twap_config.passThresholdBps,
-    }));
+    const publicProposals = proposals.map(p => {
+      const statusInfo = p.getStatus();
+      return {
+        id: p.config.id,
+        title: p.config.title,
+        description: p.config.description,
+        status: statusInfo.status,
+        winningMarketIndex: statusInfo.winningMarketIndex,
+        winningMarketLabel: statusInfo.winningMarketLabel,
+        createdAt: p.config.createdAt,
+        finalizedAt: p.finalizedAt,
+        passThresholdBps: p.config.twap.passThresholdBps,
+        markets: p.config.markets,
+        marketLabels: p.config.market_labels,
+      };
+    });
 
     logger.info('[GET /] Fetched proposals successfully', {
       moderatorId,
@@ -105,7 +111,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
-    const proposal = await persistenceService.getProposalForFrontend(id);
+    const proposal = await persistenceService.loadProposal(id);
 
     if (!proposal) {
       logger.warn('[GET /:id] Proposal not found', {
@@ -115,31 +121,39 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
+    const statusInfo = proposal.getStatus();
+    const serialized = proposal.serialize();
+
     const response = {
       moderatorId,
-      id: proposal.id,
-      description: proposal.description,
-      status: proposal.status,
-      createdAt: new Date(proposal.created_at).getTime(),
-      finalizedAt: new Date(proposal.finalized_at).getTime(),
-      proposalStatus: proposal.status,
-      proposalLength: parseInt(proposal.proposal_length),
-      baseMint: proposal.base_mint,
-      quoteMint: proposal.quote_mint,
-      spotPoolAddress: proposal.spot_pool_address,
-      totalSupply: proposal.total_supply,
-      ammConfig: proposal.amm_config,
-      passAmmState: proposal.pass_amm_data,
-      failAmmState: proposal.fail_amm_data,
-      baseVaultState: proposal.base_vault_data,
-      quoteVaultState: proposal.quote_vault_data,
-      twapOracleState: proposal.twap_oracle_data,
+      id: proposal.config.id,
+      title: proposal.config.title,
+      description: proposal.config.description,
+      status: statusInfo.status,
+      winningMarketIndex: statusInfo.winningMarketIndex,
+      winningMarketLabel: statusInfo.winningMarketLabel,
+      winningBaseConditionalMint: statusInfo.winningBaseConditionalMint?.toString() ?? null,
+      winningQuoteConditionalMint: statusInfo.winningQuoteConditionalMint?.toString() ?? null,
+      createdAt: proposal.config.createdAt,
+      finalizedAt: proposal.finalizedAt,
+      proposalLength: proposal.config.proposalLength,
+      baseMint: proposal.config.baseMint.toString(),
+      quoteMint: proposal.config.quoteMint.toString(),
+      spotPoolAddress: proposal.config.spotPoolAddress,
+      totalSupply: proposal.config.totalSupply,
+      markets: proposal.config.markets,
+      marketLabels: proposal.config.market_labels,
+      ammConfig: serialized.ammConfig,
+      ammData: serialized.AMMData,
+      baseVaultState: serialized.baseVaultData,
+      quoteVaultState: serialized.quoteVaultData,
+      twapOracleState: serialized.twapOracleData,
     };
 
     logger.info('[GET /:id] Fetched proposal details', {
       proposalId: id,
       moderatorId,
-      status: proposal.status
+      status: statusInfo.status
     });
 
     res.json(response);
@@ -165,33 +179,25 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     }
 
     // Validate required fields
-    if (!body.description || !body.proposalLength || !body.twap || !body.amm) {
+    if (!body.description || !body.markets || !body.proposalLength || !body.twap || !body.amm) {
       logger.warn('[POST /] Missing required fields', {
         receivedFields: Object.keys(req.body),
         moderatorId
       });
       return res.status(400).json({
         error: 'Missing required fields',
-        required: ['description', 'proposalLength', 'twap', 'amm']
+        required: ['description', 'markets', 'proposalLength', 'twap', 'amm']
       });
     }
 
-    // Get the proposal counter for this moderator
-    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
-    const proposalCounter = await persistenceService.getProposalIdCounter();
-
-    // Create the transaction - use memo program if no transaction provided
-    let transaction: Transaction;
-    if (body.transaction) {
-      // Deserialize base64-encoded transaction
-      transaction = Transaction.from(Buffer.from(body.transaction, 'base64'));
-    } else {
-      // Create default memo transaction
-      const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';
-      transaction = new Transaction().add({
-        programId: new PublicKey(MEMO_PROGRAM_ID),
-        keys: [],
-        data: Buffer.from(`Moderator ${moderatorId} Proposal #${proposalCounter}: ${body.title}`)
+    // Validate markets count
+    if (body.markets < 2 || body.markets > 4) {
+      logger.warn('[POST /] Invalid markets count', {
+        markets: body.markets,
+        moderatorId
+      });
+      return res.status(400).json({
+        error: 'Invalid markets count: must be between 2 and 4'
       });
     }
 
@@ -199,7 +205,8 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     const proposal = await moderator.createProposal({
       title: body.title,
       description: body.description,
-      transaction,
+      markets: body.markets,
+      market_labels: body.market_labels,
       proposalLength: body.proposalLength,
       spotPoolAddress: body.spotPoolAddress,
       totalSupply: body.totalSupply || 1000000000, // Default to 1 billion tokens
@@ -229,7 +236,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       id: proposal.config.id,
       title: proposal.config.title,
       description: proposal.config.description,
-      status: proposal.status,
+      status: proposal.getStatus().status,
       createdAt: proposal.config.createdAt,
       finalizedAt: proposal.finalizedAt
     });
@@ -284,58 +291,6 @@ router.post('/:id/finalize', requireModeratorId, async (req, res, next) => {
     });
   } catch (error) {
     logger.error('[POST /:id/finalize] Failed to finalize proposal', {
-      proposalId: req.params.id,
-      error: error instanceof Error ? error.message : String(error)
-    });
-    next(error);
-  }
-});
-
-router.post('/:id/execute', requireModeratorId, async (req, res, next) => {
-  try {
-    const moderatorId = req.moderatorId;
-    const moderator = getModerator(moderatorId);
-    const id = parseInt(req.params.id);
-
-    if (isNaN(id) || id < 0) {
-      logger.warn('[POST /:id/execute] Invalid proposal ID', {
-        providedId: req.params.id
-      });
-      return res.status(400).json({ error: 'Invalid proposal ID' });
-    }
-
-    // Get proposal from database (always fresh data)
-    const proposal = await moderator.getProposal(id);
-
-    if (!proposal) {
-      logger.warn('[POST /:id/execute] Proposal not found', {
-        proposalId: id,
-        moderatorId
-      });
-      return res.status(404).json({ error: 'Proposal not found' });
-    }
-
-    // Execute the proposal using the moderator's authority
-    const result = await moderator.executeProposal(id, moderator.config.authority);
-
-    logger.info('[POST /:id/execute] Proposal execution completed', {
-      proposalId: id,
-      moderatorId,
-      status: proposal.status,
-      executed: result.status === ExecutionStatus.Success,
-      signature: result.signature
-    });
-
-    res.json({
-      moderatorId,
-      id,
-      status: proposal.status,
-      executed: result.status === ExecutionStatus.Success,
-      signature: result.signature,
-      error: result.error
-    });
-  } catch (error) {
-    logger.error('[POST /:id/execute] Failed to execute proposal', {
       proposalId: req.params.id,
       error: error instanceof Error ? error.message : String(error)
     });

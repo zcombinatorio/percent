@@ -86,16 +86,6 @@ export interface IPersistenceService {
   loadAllProposals(): Promise<IProposal[]>;
   
   /**
-   * Get proposals for frontend (simplified data)
-   */
-  getProposalsForFrontend(): Promise<IProposalDB[]>;
-  
-  /**
-   * Get a single proposal for frontend
-   */
-  getProposalForFrontend(id: number): Promise<IProposalDB | null>;
-  
-  /**
    * Save moderator state to the database
    */
   saveModeratorState(proposalCounter: number, config: IModeratorConfig, protocolName?: string): Promise<void>;

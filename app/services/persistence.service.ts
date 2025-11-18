@@ -176,50 +176,6 @@ export class PersistenceService implements IPersistenceService {
   }
 
   /**
-   * Get proposals for frontend (simplified data)
-   * @returns An array of proposals
-   */
-  async getProposalsForFrontend(): Promise<IProposalDB[]> {
-    try {
-      const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM qm_proposals WHERE moderator_id = $1 ORDER BY created_at DESC',
-        [this.moderatorId]
-      );
-
-      return result.rows;
-    } catch (error) {
-      this.logger.error('Failed to get proposals for frontend', {
-        moderatorId: this.moderatorId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Get a single proposal for frontend by proposal_id
-   * @param proposalId - The proposal ID
-   * @returns The proposal or null if not found
-   */
-  async getProposalForFrontend(proposalId: number): Promise<IProposalDB | null> {
-    try {
-      const result = await this.pool.query<IProposalDB>(
-        'SELECT * FROM qm_proposals WHERE moderator_id = $1 AND proposal_id = $2',
-        [this.moderatorId, proposalId]
-      );
-
-      return result.rows.length > 0 ? result.rows[0] : null;
-    } catch (error) {
-      this.logger.error('Failed to get proposal for frontend', {
-        proposalId,
-        moderatorId: this.moderatorId,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
-
-  /**
    * Save moderator state to the database
    * @param proposalCounter - The proposal counter
    * @param config - The moderator config
