@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2025 Spice Finance Inc.
+ *
+ * This file is part of Percent Protocol (the "Software").
+ *
+ * Unauthorized use, reproduction, or distribution of this Software,
+ * or any portion of it, may result in severe civil and criminal penalties,
+ * and will be prosecuted to the maximum extent possible under the law.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+ * See the LICENSE file in the project root for full license details.
+ */
+
 "use client"
 
 import { useRef, useState, useCallback, useEffect } from "react"
