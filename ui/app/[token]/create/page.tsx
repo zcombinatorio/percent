@@ -57,8 +57,8 @@ export default function CreatePage() {
   const hasPermission = isAuthorized;
   const poolName = poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase();
 
-  // Check if form is valid (title and description filled)
-  const isFormInvalid = !title.trim() || !description.trim();
+  // Check if form is valid (title, description, and duration filled)
+  const isFormInvalid = !title.trim() || !description.trim() || parseFloat(proposalLengthHours) <= 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
