@@ -11,6 +11,8 @@ interface PoolMetadata {
   quoteMint: string;
   baseDecimals: number;
   quoteDecimals: number;
+  moderatorId: number;
+  icon?: string;
 }
 
 interface TokenContextValue {
@@ -21,6 +23,8 @@ interface TokenContextValue {
   baseMint: string | null;
   baseDecimals: number;
   tokenSymbol: string;
+  moderatorId: number | null;
+  icon: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -74,6 +78,8 @@ export function TokenProvider({ tokenSlug, children }: TokenProviderProps) {
     baseMint: poolMetadata?.baseMint || null,
     baseDecimals: poolMetadata?.baseDecimals || 6, // Default to 6 if not loaded
     tokenSymbol: poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase(),
+    moderatorId: poolMetadata?.moderatorId || null,
+    icon: poolMetadata?.icon || null,
     isLoading,
     error,
   };

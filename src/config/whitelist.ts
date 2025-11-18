@@ -83,6 +83,8 @@ export interface PoolMetadata {
   quoteMint: string;
   baseDecimals: number;
   quoteDecimals: number;
+  moderatorId: number;
+  icon?: string;
 }
 
 // Optional: Pool metadata for UI display
@@ -94,13 +96,17 @@ export const POOL_METADATA: Record<string, PoolMetadata> = {
     quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
     baseDecimals: 6,
     quoteDecimals: 9,
+    moderatorId: 2, // Production ZC Decision Markets
+    icon: 'https://wsrv.nl/?w=128&h=128&default=1&url=https%3A%2F%2Folive-imaginative-aardvark-508.mypinata.cloud%2Fipfs%2FQmY56Yz44o1EhTJfy6b4uhKCXpNGYvmFdsRX9yuiX1X45a',
   },
   '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': {
     poolAddress: '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
     name: 'oogway',
-    baseMint: 'C7MGcMnN8cXUkj8JQuMhkJZh6WqY2r8QnT3AUfKTkrix', // ZC token
+    baseMint: 'C7MGcMnN8cXUkj8JQuMhkJZh6WqY2r8QnT3AUfKTkrix', // oogway token
     quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
     baseDecimals: 6,
     quoteDecimals: 9,
+    moderatorId: 3, // oogway Decision Markets
+    icon: 'https://wsrv.nl/?w=128&h=128&default=1&url=https%3A%2F%2Folive-imaginative-aardvark-508.mypinata.cloud%2Fipfs%2FQmV4rzAgYREFBpDRyM5VmboewHUwS1Xu8ey2wrs9rJKcfE',
   },
 };

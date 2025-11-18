@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 
 export default function CreatePage() {
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { tokenSlug, poolAddress, poolMetadata, baseMint, baseDecimals, tokenSymbol, isLoading: poolLoading } = useTokenContext();
+  const { tokenSlug, poolAddress, poolMetadata, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: poolLoading } = useTokenContext();
   const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
     walletAddress,
     baseMint,
@@ -85,6 +85,10 @@ export default function CreatePage() {
       toast.error('Wallet not connected');
       return;
     }
+    if (!moderatorId) {
+      toast.error('Pool configuration not loaded');
+      return;
+    }
 
     setIsSubmitting(true);
     const toastId = toast.loading('Creating Decision Market...');
@@ -110,7 +114,7 @@ export default function CreatePage() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/api/proposals?moderatorId=1`, {
+      const response = await fetch(`${API_URL}/api/proposals?moderatorId=${moderatorId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,6 +166,7 @@ export default function CreatePage() {
           isPassMode={true}
           tokenSlug={tokenSlug}
           tokenSymbol={tokenSymbol}
+          tokenIcon={icon}
         />
 
         {/* Content Area */}

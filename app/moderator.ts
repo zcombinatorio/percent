@@ -1,5 +1,6 @@
-import { Keypair, Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Keypair, Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
+import { CpAmm } from '@meteora-ag/cp-amm-sdk';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
 import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment, ExecutionStatus } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
@@ -328,7 +329,68 @@ export class Moderator implements IModerator {
         gasReserve: gasReserve / LAMPORTS_PER_SOL
       });
 
-      // Step 2: Create transaction signer from authority keypair
+      // Step 2: Fetch pool state and adjust amounts to match pool ratio
+      let adjustedTokenA = tokenAAmountUI;
+      let adjustedTokenB = tokenBAmountUI;
+
+      try {
+        const cpAmm = new CpAmm(connection);
+        const poolPubkey = new PublicKey(metadata.poolAddress);
+        const poolState = await cpAmm.fetchPoolState(poolPubkey);
+
+        // Get pool reserves by fetching vault token account balances
+        const tokenAVaultInfo = await getAccount(connection, poolState.tokenAVault);
+        const tokenBVaultInfo = await getAccount(connection, poolState.tokenBVault);
+        const poolTokenA = Number(tokenAVaultInfo.amount);
+        const poolTokenB = Number(tokenBVaultInfo.amount);
+
+        if (poolTokenA > 0 && poolTokenB > 0) {
+          // Calculate pool ratio (tokenB per tokenA) - convert to UI units first
+          const poolRatio = (poolTokenB / Math.pow(10, QUOTE_DECIMALS)) / (poolTokenA / Math.pow(10, BASE_DECIMALS));
+
+          this.logger.info('Pool state fetched for deposit adjustment', {
+            poolTokenA,
+            poolTokenB,
+            poolRatio,
+            originalTokenA: tokenAAmountUI,
+            originalTokenB: tokenBAmountUI
+          });
+
+          // Calculate maximum deposit that matches pool ratio
+          // Start with all available tokenA, calculate needed tokenB
+          let neededTokenB = availableZC * poolRatio / Math.pow(10, BASE_DECIMALS);
+
+          if (neededTokenB <= tokenBAmountUI) {
+            // We have enough tokenB for all tokenA
+            adjustedTokenA = tokenAAmountUI;
+            adjustedTokenB = neededTokenB;
+          } else {
+            // Constrained by tokenB, reduce tokenA proportionally
+            adjustedTokenB = tokenBAmountUI;
+            adjustedTokenA = (availableSOL / poolRatio) / Math.pow(10, QUOTE_DECIMALS);
+          }
+
+          this.logger.info('Adjusted deposit amounts to match pool ratio', {
+            originalTokenA: tokenAAmountUI,
+            originalTokenB: tokenBAmountUI,
+            adjustedTokenA,
+            adjustedTokenB,
+            ratio: adjustedTokenB / adjustedTokenA
+          });
+        } else {
+          this.logger.warn('Pool has no liquidity, using available balances as-is', {
+            poolTokenA,
+            poolTokenB
+          });
+        }
+      } catch (poolError) {
+        this.logger.warn('Failed to fetch pool state for ratio adjustment, using available balances', {
+          error: poolError instanceof Error ? poolError.message : String(poolError)
+        });
+        // Continue with original amounts
+      }
+
+      // Step 3: Create transaction signer from authority keypair
       const signTransaction = async (transaction: any) => {
         transaction.sign(this.config.authority);
         return transaction;
@@ -343,14 +405,14 @@ export class Moderator implements IModerator {
         try {
           this.logger.info(`Attempting deposit-back (${attempt}/${MAX_RETRIES})`, {
             proposalId,
-            tokenAAmount: tokenAAmountUI,
-            tokenBAmount: tokenBAmountUI
+            tokenAAmount: adjustedTokenA,
+            tokenBAmount: adjustedTokenB
           });
 
-          // Execute deposit - API handles pool ratio internally
+          // Execute deposit with ratio-adjusted amounts
           const depositResult = await this.dammService.depositToDammPool(
-            tokenAAmountUI,
-            tokenBAmountUI,
+            adjustedTokenA,
+            adjustedTokenB,
             signTransaction,
             metadata.poolAddress
           );
@@ -367,8 +429,10 @@ export class Moderator implements IModerator {
             proposalId,
             attempt,
             depositSignature: depositResult.signature,
-            requestedTokenA: tokenAAmountUI,
-            requestedTokenB: tokenBAmountUI,
+            originalAvailableTokenA: tokenAAmountUI,
+            originalAvailableTokenB: tokenBAmountUI,
+            ratioAdjustedTokenA: adjustedTokenA,
+            ratioAdjustedTokenB: adjustedTokenB,
             actualDepositedTokenA: depositResult.amounts.tokenA,
             actualDepositedTokenB: depositResult.amounts.tokenB
           });

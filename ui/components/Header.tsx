@@ -16,9 +16,10 @@ interface HeaderProps {
   isPassMode?: boolean;
   tokenSlug?: string; // NEW: Dynamic token routing
   tokenSymbol?: string; // NEW: Display symbol (ZC, OOGWAY, etc.)
+  tokenIcon?: string | null; // NEW: Dynamic token icon URL
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, baseTokenBalance, login, isPassMode = true, tokenSlug = 'zc', tokenSymbol = 'ZC' }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, baseTokenBalance, login, isPassMode = true, tokenSlug = 'zc', tokenSymbol = 'ZC', tokenIcon = null }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -111,9 +112,13 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             </div>
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
             <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-full border border-[#191919] bg-[#2D2D2D] flex items-center justify-center text-xs font-bold" style={{ color: '#DDDDD7' }}>
-                {tokenSymbol.charAt(0)}
-              </div>
+              {tokenIcon ? (
+                <img src={tokenIcon} alt={tokenSymbol} className="w-5 h-5 rounded-full border border-[#191919]" />
+              ) : (
+                <div className="w-5 h-5 rounded-full border border-[#191919] bg-[#2D2D2D] flex items-center justify-center text-xs font-bold" style={{ color: '#DDDDD7' }}>
+                  {tokenSymbol.charAt(0)}
+                </div>
+              )}
               <span className="text-sm font-ibm-plex-mono font-medium" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>{formatTokenBalance(baseTokenBalance)}</span>
             </div>
           </>

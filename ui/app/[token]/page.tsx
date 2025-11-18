@@ -48,9 +48,15 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 
 export default function HomePage() {
   const router = useRouter();
-  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol } = useTokenContext();
+  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: tokenContextLoading } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { proposals, loading, refetch } = useProposals(poolAddress || undefined);
+
+  // Only fetch proposals after TokenContext has loaded to ensure correct moderatorId
+  const shouldFetchProposals = !tokenContextLoading && moderatorId !== null;
+  const { proposals, loading, refetch } = useProposals(
+    shouldFetchProposals ? (poolAddress || undefined) : undefined,
+    shouldFetchProposals ? moderatorId : undefined
+  );
   const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
   const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
   const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
@@ -405,6 +411,7 @@ export default function HomePage() {
             isPassMode={isPassMode}
             tokenSlug={tokenSlug}
             tokenSymbol={tokenSymbol}
+            tokenIcon={icon}
           />
 
           {/* Empty state */}
@@ -434,6 +441,7 @@ export default function HomePage() {
           isPassMode={isPassMode}
           tokenSlug={tokenSlug}
           tokenSymbol={tokenSymbol}
+          tokenIcon={icon}
         />
 
         {/* Content Area */}

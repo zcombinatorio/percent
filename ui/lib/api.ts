@@ -12,10 +12,10 @@ class GovernanceAPI {
     this.connection = new Connection(RPC_URL);
   }
 
-  async getProposals(poolAddress?: string): Promise<ProposalListItem[]> {
+  async getProposals(poolAddress?: string, moderatorId?: number | string): Promise<ProposalListItem[]> {
     try {
       const params = poolAddress ? { poolAddress } : {};
-      const url = buildApiUrl(API_BASE_URL, '/api/proposals', params);
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals', params, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       const data: ProposalListResponse = await response.json();
@@ -34,6 +34,8 @@ class GovernanceAPI {
       quoteMint: string;
       baseDecimals: number;
       quoteDecimals: number;
+      moderatorId: number;
+      icon?: string;
     };
     isAuthorized?: boolean;
   } | null> {
@@ -59,6 +61,8 @@ class GovernanceAPI {
       quoteMint: string;
       baseDecimals: number;
       quoteDecimals: number;
+      moderatorId: number;
+      icon?: string;
     };
     isAuthorized: boolean;
   } | null> {
@@ -200,6 +204,8 @@ class GovernanceAPI {
         quoteMint: string;
         baseDecimals: number;
         quoteDecimals: number;
+        moderatorId: number;
+        icon?: string;
       } | null;
     }>;
   } | null> {
