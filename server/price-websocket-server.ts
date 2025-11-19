@@ -53,7 +53,7 @@ interface TradeEvent {
 }
 
 interface ProposalCacheEntry {
-  totalSupply: number;
+  actualSupply: number; // Total supply adjusted for decimals
   fetched: number;
 }
 
@@ -541,9 +541,9 @@ class PriceWebSocketServer {
     const proposalId = tradeData.proposalId || tradeData.proposal_id;
     const priceInSol = parseFloat(tradeData.price);
 
-    // Calculate market cap USD: price (SOL) × total supply × SOL/USD
-    const totalSupply = await this.getProposalTotalSupply(proposalId);
-    const marketCapUsd = priceInSol * totalSupply * this.solPrice;
+    // Calculate market cap USD: price (SOL) × actual supply × SOL/USD
+    const actualSupply = await this.getProposalTotalSupply(proposalId);
+    const marketCapUsd = priceInSol * actualSupply * this.solPrice;
 
     // Broadcast to all clients subscribed to this proposal with BOTH formats
     const trade: TradeEvent & { marketCapUsd: number } = {
@@ -554,7 +554,7 @@ class PriceWebSocketServer {
       isBaseToQuote: tradeData.isBaseToQuote || tradeData.is_base_to_quote,
       amountIn: tradeData.amountIn || tradeData.amount_in,
       amountOut: tradeData.amountOut || tradeData.amount_out,
-      price: priceInSol,              // OLD: for legacy clients (SOL)
+      price: priceInSol.toString(),   // OLD: for legacy clients (SOL)
       marketCapUsd: marketCapUsd,     // NEW: for updated clients (USD)
       txSignature: tradeData.txSignature || tradeData.tx_signature,
       timestamp: tradeData.timestamp || new Date().toISOString()
@@ -581,10 +581,10 @@ class PriceWebSocketServer {
       marketCapUsd = priceValue;
       console.log(`[WebSocket Server] Spot market - price already in USD: $${marketCapUsd.toFixed(2)}`);
     } else {
-      // Pass/Fail prices are in SOL - calculate market cap USD: price (SOL) × total supply × SOL/USD
-      const totalSupply = await this.getProposalTotalSupply(proposalId);
-      marketCapUsd = priceValue * totalSupply * this.solPrice;
-      console.log(`[WebSocket Server] ${market} market - converting: ${priceValue} SOL × ${totalSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
+      // Pass/Fail prices are in SOL - calculate market cap USD: price (SOL) × actual supply × SOL/USD
+      const actualSupply = await this.getProposalTotalSupply(proposalId);
+      marketCapUsd = priceValue * actualSupply * this.solPrice;
+      console.log(`[WebSocket Server] ${market} market - converting: ${priceValue} SOL × ${actualSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
     }
 
     // Broadcast price update with BOTH formats for backwards compatibility
@@ -661,39 +661,43 @@ class PriceWebSocketServer {
 
     // Return cached value if fresh
     if (cached && (now - cached.fetched) < this.PROPOSAL_CACHE_TTL) {
-      return cached.totalSupply;
+      return cached.actualSupply;
     }
 
     // Fetch from database
     try {
       if (!this.pgClient) {
-        console.warn('No database connection, using default total supply');
-        return 1_000_000_000; // Default fallback
+        console.warn('No database connection, using default actual supply');
+        return 1_000_000_000; // Default fallback (1 billion tokens)
       }
 
       const result = await this.pgClient.query(
-        'SELECT total_supply FROM i_proposals WHERE proposal_id = $1 LIMIT 1',
+        'SELECT total_supply, base_decimals FROM i_proposals WHERE proposal_id = $1 LIMIT 1',
         [proposalId]
       );
 
       if (result.rows.length === 0) {
-        console.warn(`Proposal ${proposalId} not found, using default total supply`);
-        return 1_000_000_000; // Default fallback
+        console.warn(`Proposal ${proposalId} not found, using default actual supply`);
+        return 1_000_000_000; // Default fallback (1 billion tokens)
       }
 
       const totalSupply = parseInt(result.rows[0].total_supply);
+      const baseDecimals = parseInt(result.rows[0].base_decimals) || 6;
+
+      // Total supply is already the actual token count, no decimal adjustment needed
+      const actualSupply = totalSupply;
 
       // Cache the result
       this.proposalCache.set(proposalId, {
-        totalSupply,
+        actualSupply,
         fetched: now
       });
 
-      console.log(`Cached total supply for proposal ${proposalId}: ${totalSupply}`);
-      return totalSupply;
+      console.log(`Cached actual supply for proposal ${proposalId}: ${actualSupply} tokens (raw: ${totalSupply}, decimals: ${baseDecimals})`);
+      return actualSupply;
     } catch (error) {
       console.error(`Error fetching proposal ${proposalId} total supply:`, error);
-      return 1_000_000_000; // Default fallback
+      return 1_000_000_000; // Default fallback (1 billion tokens)
     }
   }
 

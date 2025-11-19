@@ -278,6 +278,31 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
         market,
         user
       });
+
+      // Record new price immediately after trade to trigger real-time updates
+      try {
+        const newPrice = await amm.fetchPrice();
+
+        await HistoryService.recordPrice({
+          moderatorId,
+          proposalId,
+          market: market as 'pass' | 'fail',
+          price: newPrice,
+        });
+
+        logger.info('[POST /:id/executeSwapTx] Price recorded after trade', {
+          proposalId,
+          market,
+          priceInSol: newPrice.toString()
+        });
+      } catch (priceError) {
+        logger.error('[POST /:id/executeSwapTx] Failed to record price after trade', {
+          error: priceError instanceof Error ? priceError.message : String(priceError),
+          proposalId,
+          market
+        });
+        // Continue even if price recording fails
+      }
     } catch (logError) {
       logger.error('[POST /:id/executeSwapTx] Failed to log trade to history', {
         error: logError instanceof Error ? logError.message : String(logError),

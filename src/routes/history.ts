@@ -193,8 +193,8 @@ router.get('/:id/trades', async (req, res, next) => {
         amountOut: trade.amountOut.toString(),
         price: trade.price.toString(),
         txSignature: trade.txSignature,
-        marketCapUsd: trade.totalSupply
-          ? trade.price.toNumber() * trade.totalSupply * solPrice
+        marketCapUsd: trade.totalSupply && trade.baseDecimals !== undefined
+          ? trade.price.toNumber() * (trade.totalSupply / Math.pow(10, trade.baseDecimals)) * solPrice
           : undefined,
       }))
     });
@@ -293,21 +293,23 @@ router.get('/:id/chart', async (req, res, next) => {
       toDate
     );
 
-    // Get proposal to access totalSupply
+    // Get proposal to access totalSupply and baseDecimals
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposal = await persistenceService.getProposalForFrontend(proposalId);
     const totalSupply = proposal?.total_supply || 1000000000;
+    const baseDecimals = proposal?.base_decimals || 6;
+    const actualSupply = totalSupply / Math.pow(10, baseDecimals);
 
     // Get current SOL/USD price
     const { SolPriceService } = await import('../../app/services/sol-price.service');
     const solPriceService = SolPriceService.getInstance();
     const solPrice = await solPriceService.getSolPrice();
 
-    // Transform data to USD market cap (price × total supply × SOL price) and ISO strings for JSON serialization
+    // Transform data to USD market cap (price × actual supply × SOL price) and ISO strings for JSON serialization
     // Note: Spot prices are already in USD market cap, so don't convert them
     const formattedData = chartData.map(point => {
       // Spot prices are already market cap USD, pass/fail need conversion
-      const multiplier = point.market === 'spot' ? 1 : (totalSupply * solPrice);
+      const multiplier = point.market === 'spot' ? 1 : (actualSupply * solPrice);
 
       return {
         timestamp: new Date(point.timestamp).toISOString(),
