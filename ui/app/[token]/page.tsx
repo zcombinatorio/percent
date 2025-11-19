@@ -112,7 +112,7 @@ export default function HomePage() {
     refetch: refetchTrades,
     getTimeAgo,
     getTokenUsed
-  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint);
+  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol);
 
   // Market caps are pre-calculated on the backend (price in SOL × total supply × SOL/USD)
   // WebSocket delivers market cap USD directly - no frontend calculation needed

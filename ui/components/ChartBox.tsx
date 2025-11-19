@@ -252,7 +252,7 @@ export function ChartBox({
                         if (tokenUsed === 'SOL') {
                           formattedAmount = removeTrailingZeros(amount.toFixed(1));
                         } else {
-                          // ZC formatting with K/M/B notation
+                          // Base token formatting with K/M/B notation
                           if (amount >= 1000000000) {
                             formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(1)) + 'B';
                           } else if (amount >= 1000000) {
@@ -281,7 +281,7 @@ export function ChartBox({
                         if (tokenUsed === 'SOL') {
                           formattedAmount = removeTrailingZeros(amount.toFixed(3));
                         } else {
-                          // ZC formatting with K/M/B notation
+                          // Base token formatting with K/M/B notation
                           if (amount >= 1000000000) {
                             formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
                           } else if (amount >= 1000000) {

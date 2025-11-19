@@ -29,7 +29,7 @@ interface TradeHistoryResponse {
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null) {
+export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -242,9 +242,9 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   // Memoized helper function to determine token used
   const getTokenUsed = useCallback((isBaseToQuote: boolean, market: 'pass' | 'fail') => {
     // Both pass and fail markets use the same token pairs:
-    // base = ZC, quote = SOL
-    return isBaseToQuote ? '$ZC' : 'SOL';
-  }, []);
+    // base = token (ZC/OOGWAY/etc), quote = SOL
+    return isBaseToQuote ? `$${tokenSymbol || 'ZC'}` : 'SOL';
+  }, [tokenSymbol]);
 
   // Memoized helper function to calculate volume in USD
   const calculateVolume = useCallback((amountIn: string, isBaseToQuote: boolean, market: 'pass' | 'fail') => {

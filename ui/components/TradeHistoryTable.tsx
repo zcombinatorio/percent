@@ -48,7 +48,7 @@ export function TradeHistoryTable({
             const isBuy = !trade.isBaseToQuote;
             const amount = parseFloat(trade.amountIn);
 
-            // Format amount with K/M/B notation for ZC - remove trailing zeros
+            // Format amount with K/M/B notation for base token - remove trailing zeros
             const removeTrailingZeros = (num: string): string => {
               return num.replace(/\.?0+$/, '');
             };
@@ -57,7 +57,7 @@ export function TradeHistoryTable({
             if (tokenUsed === 'SOL') {
               formattedAmount = removeTrailingZeros(amount.toFixed(3));
             } else {
-              // ZC formatting with K/M/B notation
+              // Base token formatting with K/M/B notation
               if (amount >= 1000000000) {
                 formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
               } else if (amount >= 1000000) {
