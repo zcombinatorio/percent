@@ -106,7 +106,7 @@ router.get('/', async (req, res, next) => {
         : p.twap_config.passThresholdBps,
       totalSupply: p.total_supply,
       poolAddress: p.spot_pool_address || null,
-      poolName: p.spot_pool_address ? (POOL_METADATA[p.spot_pool_address]?.name || 'unknown') : 'unknown',
+      poolName: p.spot_pool_address ? (POOL_METADATA[p.spot_pool_address]?.ticker || 'unknown') : 'unknown',
     }));
 
     logger.info('[GET /] Fetched proposals successfully', {
@@ -264,7 +264,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     logger.info('[POST /] Whitelist validation passed', {
       creatorWallet,
       poolAddress,
-      poolName: poolMetadata?.name || 'Unknown',
+      poolName: poolMetadata?.ticker || 'Unknown',
       requestedPool: spotPoolAddress || 'not specified'
     });
 

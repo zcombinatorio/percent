@@ -55,7 +55,7 @@ export default function CreatePage() {
   }, [walletAddress, poolAddress, tokenSlug]);
 
   const hasPermission = isAuthorized;
-  const poolName = poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase();
+  const poolName = poolMetadata?.ticker?.toUpperCase() || tokenSlug.toUpperCase();
 
   // Check if form is valid (title, description, and duration filled)
   const isFormInvalid = !title.trim() || !description.trim() || parseFloat(proposalLengthHours) <= 0;

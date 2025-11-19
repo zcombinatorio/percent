@@ -48,7 +48,7 @@ class GovernanceAPI {
   async getPoolByName(name: string): Promise<{
     pool: {
       poolAddress: string;
-      name: string;
+      ticker: string;
       baseMint: string;
       quoteMint: string;
       baseDecimals: number;
@@ -75,7 +75,7 @@ class GovernanceAPI {
   async getPoolByNameWithAuth(name: string, walletAddress: string): Promise<{
     pool: {
       poolAddress: string;
-      name: string;
+      ticker: string;
       baseMint: string;
       quoteMint: string;
       baseDecimals: number;
@@ -220,7 +220,7 @@ class GovernanceAPI {
       poolAddress: string;
       metadata: {
         poolAddress: string;
-        name: string;
+        ticker: string;
         baseMint: string;
         quoteMint: string;
         baseDecimals: number;

@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 
 interface PoolMetadata {
   poolAddress: string;
-  name: string;
+  ticker: string;
   baseMint: string;
   quoteMint: string;
   baseDecimals: number;
@@ -77,7 +77,7 @@ export function TokenProvider({ tokenSlug, children }: TokenProviderProps) {
     // Convenience getters
     baseMint: poolMetadata?.baseMint || null,
     baseDecimals: poolMetadata?.baseDecimals || 6, // Default to 6 if not loaded
-    tokenSymbol: poolMetadata?.name?.toUpperCase() || tokenSlug.toUpperCase(),
+    tokenSymbol: poolMetadata?.ticker?.toUpperCase() || tokenSlug.toUpperCase(),
     moderatorId: poolMetadata?.moderatorId || null,
     icon: poolMetadata?.icon || null,
     isLoading,

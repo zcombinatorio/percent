@@ -418,6 +418,7 @@ export default function HomePage() {
             tokenSlug={tokenSlug}
             tokenSymbol={tokenSymbol}
             tokenIcon={icon}
+            poolAddress={poolAddress}
           />
 
           {/* Empty state */}
@@ -448,6 +449,7 @@ export default function HomePage() {
           tokenSlug={tokenSlug}
           tokenSymbol={tokenSymbol}
           tokenIcon={icon}
+          poolAddress={poolAddress}
         />
 
         {/* Content Area */}
@@ -563,6 +565,8 @@ export default function HomePage() {
                         baseTokenBalance={baseTokenBalance}
                         userBalances={userBalances}
                         onDepositSuccess={refetchBalances}
+                        moderatorId={moderatorId || undefined}
+                        tokenSymbol={tokenSymbol}
                       />
                     </div>
 
@@ -632,7 +636,7 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? `IV. If Pass ${tokenSymbol} Balance` : `IV. If Fail ${tokenSymbol} Balance`}
+                              {selectedMarket === 'pass' ? `IV. If Pass ${tokenSymbol} Bal` : `IV. If Fail ${tokenSymbol} Bal`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
@@ -651,7 +655,7 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? 'IV. If Pass SOL Balance' : 'IV. If Fail SOL Balance'}
+                              {selectedMarket === 'pass' ? 'IV. If Pass SOL Bal' : 'IV. If Fail SOL Bal'}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               {/* Mobile: 3 decimals */}

@@ -68,7 +68,7 @@ export function isWalletWhitelisted(walletAddress: string): boolean {
 export function getPoolByName(name: string): PoolMetadata | null {
   const lowerName = name.toLowerCase();
   const pool = Object.values(POOL_METADATA).find(
-    p => p.name.toLowerCase() === lowerName
+    p => p.ticker.toLowerCase() === lowerName
   );
   return pool || null;
 }
@@ -78,7 +78,7 @@ export function getPoolByName(name: string): PoolMetadata | null {
  */
 export interface PoolMetadata {
   poolAddress: string;
-  name: string;
+  ticker: string;
   baseMint: string;
   quoteMint: string;
   baseDecimals: number;
@@ -91,7 +91,7 @@ export interface PoolMetadata {
 export const POOL_METADATA: Record<string, PoolMetadata> = {
   'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad': {
     poolAddress: 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad',
-    name: 'zc',
+    ticker: 'zc',
     baseMint: 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC', // ZC token
     quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
     baseDecimals: 6,
@@ -101,7 +101,7 @@ export const POOL_METADATA: Record<string, PoolMetadata> = {
   },
   '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': {
     poolAddress: '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
-    name: 'oogway',
+    ticker: 'oogway',
     baseMint: 'C7MGcMnN8cXUkj8JQuMhkJZh6WqY2r8QnT3AUfKTkrix', // oogway token
     quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
     baseDecimals: 6,

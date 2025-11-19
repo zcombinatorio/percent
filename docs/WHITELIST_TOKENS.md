@@ -8,10 +8,15 @@ To whitelist tokens and dev wallet addresses (people who can launch decision mar
 ```
 
 ## 2. POOL_METADATA (pool details)
+
+> **⚠️ CRITICAL: The `ticker` field MUST be UNIQUE across all tokens!**
+>
+> The ticker is used for routing (e.g., `/zc`, `/oogway`, `/shirtless`). Each token MUST have a different ticker value to avoid conflicts. Check existing entries in `POOL_METADATA` before adding a new token.
+
 ```typescript
 'NEW_POOL_ADDRESS': {
   poolAddress: 'NEW_POOL_ADDRESS',
-  name: 'shirtless',
+  ticker: 'shirtless', // ⚠️ MUST BE UNIQUE! Used for routing (/shirtless)
   baseMint: 'SHIRTLESS_TOKEN_MINT',
   quoteMint: 'So11111111111111111111111111111111111111112',
   baseDecimals: 6,

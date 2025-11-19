@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 
 interface PoolMetadata {
   poolAddress: string;
-  name: string;
+  ticker: string;
   baseMint: string;
   quoteMint: string;
   baseDecimals: number;
