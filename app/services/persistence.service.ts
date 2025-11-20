@@ -260,7 +260,7 @@ export class PersistenceService implements IPersistenceService {
         quoteMint: config.quoteMint.toBase58(),
         baseDecimals: config.baseDecimals,
         quoteDecimals: config.quoteDecimals,
-        authority: encryptKeypair(config.authority, encryptionKey),
+        defaultAuthority: encryptKeypair(config.defaultAuthority, encryptionKey),
         rpcUrl: config.rpcEndpoint,
       };
 
@@ -308,13 +308,18 @@ export class PersistenceService implements IPersistenceService {
         throw new Error('ENCRYPTION_KEY environment variable is not set');
       }
 
+      // Support both old 'authority' and new 'defaultAuthority' for smooth migration
+      const configData = row.config as any;
+      const authorityData = configData.defaultAuthority || configData.authority;
+
       const config: IModeratorConfig = {
         baseMint: new PublicKey(row.config.baseMint),
         quoteMint: new PublicKey(row.config.quoteMint),
         baseDecimals: row.config.baseDecimals,
         quoteDecimals: row.config.quoteDecimals,
-        authority: decryptKeypair(row.config.authority, encryptionKey),
+        defaultAuthority: decryptKeypair(authorityData, encryptionKey),
         rpcEndpoint: row.config.rpcUrl,
+        // poolAuthorities loaded from env vars in router.service.ts
       };
 
       return {
@@ -338,12 +343,20 @@ export class PersistenceService implements IPersistenceService {
    */
   private async deserializeProposal(row: IProposalDB): Promise<IProposal | null> {
     try {
-      // Load authority keypair - use test authority if in test mode
+      // Load authority keypair - use appropriate authority based on pool
       const moderatorState = await this.loadModeratorState();
       if (!moderatorState) {
         throw new Error('Moderator state not found');
       }
-      const authority = moderatorState.config.authority;
+
+      // Determine which authority to use based on proposal's spot pool address
+      let authority = moderatorState.config.defaultAuthority;
+      if (row.spot_pool_address && moderatorState.config.poolAuthorities) {
+        const poolAuthority = moderatorState.config.poolAuthorities.get(row.spot_pool_address);
+        if (poolAuthority) {
+          authority = poolAuthority;
+        }
+      }
 
       // Create logger first
       const logger = new LoggerService(`moderator-${row.moderator_id}`).createChild(`proposal-${row.proposal_id}`);
