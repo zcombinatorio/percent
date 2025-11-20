@@ -24,6 +24,7 @@ import { Transaction, PublicKey, Connection } from '@solana/web3.js';
 import { getMint } from '@solana/spl-token';
 import BN from 'bn.js';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 import { ExecutionStatus } from '../../app/types/execution.interface';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
@@ -42,6 +43,8 @@ export interface CreateProposalRequest {
   description?: string;
   proposalLength: number;
   creatorWallet: string; // Creator's wallet address for whitelist verification
+  creatorSignature?: string; // Base58-encoded Ed25519 signature on attestation message
+  attestationMessage?: string; // JSON attestation message signed by creator
   transaction?: string; // Base64-encoded serialized transaction
   spotPoolAddress?: string; // Optional Meteora pool address for spot market
   totalSupply?: number; // Total supply of conditional tokens (defaults to 1 billion)
@@ -212,6 +215,18 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       });
     }
 
+    // Validate attestation fields (user authorization proof for withdrawal)
+    if (!body.creatorSignature || !body.attestationMessage) {
+      logger.warn('[POST /] Missing attestation fields', {
+        receivedFields: Object.keys(req.body),
+        moderatorId
+      });
+      return res.status(400).json({
+        error: 'Missing required attestation fields',
+        required: ['creatorSignature', 'attestationMessage']
+      });
+    }
+
     // Step 0: Validate whitelist and get pool address
     const creatorWallet = body.creatorWallet;
     const spotPoolAddress = body.spotPoolAddress as string | undefined;
@@ -268,6 +283,82 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       requestedPool: spotPoolAddress || 'not specified'
     });
 
+    // Validate user attestation (proves user authorized the withdrawal)
+    const creatorSignature = body.creatorSignature as string;
+    const attestationMessage = body.attestationMessage as string;
+
+    let attestation: { action: string; poolAddress: string; timestamp: number; nonce: string };
+    try {
+      attestation = JSON.parse(attestationMessage);
+    } catch (error) {
+      logger.warn('[POST /] Invalid attestation format', { moderatorId });
+      return res.status(400).json({
+        error: 'Invalid attestation format: must be valid JSON'
+      });
+    }
+
+    // Verify attestation timestamp (5-minute window to prevent replay attacks)
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (Math.abs(Date.now() - attestation.timestamp) > FIVE_MINUTES) {
+      logger.warn('[POST /] Attestation expired', {
+        moderatorId,
+        attestationAge: Math.abs(Date.now() - attestation.timestamp)
+      });
+      return res.status(400).json({
+        error: 'Attestation expired: timestamp outside 5-minute window'
+      });
+    }
+
+    // Verify attestation action matches withdrawal
+    if (attestation.action !== 'withdraw') {
+      logger.warn('[POST /] Invalid attestation action', {
+        moderatorId,
+        action: attestation.action
+      });
+      return res.status(400).json({
+        error: 'Invalid attestation: action must be "withdraw"'
+      });
+    }
+
+    // Verify attestation pool address matches request
+    if (attestation.poolAddress !== poolAddress) {
+      logger.warn('[POST /] Attestation pool address mismatch', {
+        moderatorId,
+        expected: poolAddress,
+        received: attestation.poolAddress
+      });
+      return res.status(400).json({
+        error: 'Attestation pool address mismatch'
+      });
+    }
+
+    // Verify creator signature on attestation message
+    const messageBytes = new TextEncoder().encode(attestationMessage);
+    const signatureBytes = bs58.decode(creatorSignature);
+    const creatorPubKey = new PublicKey(creatorWallet);
+
+    const isCreatorSigValid = nacl.sign.detached.verify(
+      messageBytes,
+      signatureBytes,
+      creatorPubKey.toBytes()
+    );
+
+    if (!isCreatorSigValid) {
+      logger.warn('[POST /] Invalid creator signature on attestation', {
+        moderatorId,
+        creatorWallet
+      });
+      return res.status(403).json({
+        error: 'Invalid creator signature: attestation verification failed'
+      });
+    }
+
+    logger.info('[POST /] Attestation validated', {
+      action: attestation.action,
+      poolAddress: attestation.poolAddress,
+      creatorWallet
+    });
+
     // Get the proposal counter for this moderator
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposalCounter = await persistenceService.getProposalIdCounter();
@@ -303,21 +394,25 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       estimatedAmounts: withdrawBuildData.estimatedAmounts
     });
 
-    // Sign the transaction with authority keypair
+    // Sign the transaction with pool-specific authority keypair
     const transactionBuffer = bs58.decode(withdrawBuildData.transaction);
     const unsignedTx = Transaction.from(transactionBuffer);
-    unsignedTx.sign(moderator.config.authority);
+    const poolAuthority = moderator.getAuthorityForPool(poolAddress);
+    unsignedTx.sign(poolAuthority);
     const signedTxBase58 = bs58.encode(
       unsignedTx.serialize({ requireAllSignatures: false })
     );
 
-    // Confirm the withdrawal
+    // Confirm the withdrawal with attestation proof
     const withdrawConfirmResponse = await fetch(`${process.env.DAMM_API_URL || 'https://api.zcombinator.io'}/damm/withdraw/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         signedTransaction: signedTxBase58,
-        requestId: withdrawBuildData.requestId
+        requestId: withdrawBuildData.requestId,
+        creatorWallet: creatorWallet,
+        creatorSignature: creatorSignature,
+        attestationMessage: attestationMessage
       })
     });
 
@@ -346,7 +441,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
     const connection = new Connection(rpcUrl, 'confirmed');
     const mintPublicKey = new PublicKey(poolMetadata.baseMint);
     const mintInfo = await getMint(connection, mintPublicKey);
-    const totalSupply = Number(mintInfo.supply) / Math.pow(10, mintInfo.decimals);
+    const totalSupply = Math.floor(Number(mintInfo.supply) / Math.pow(10, mintInfo.decimals));
 
     logger.info('[POST /] Fetched token supply', {
       totalSupply,
@@ -514,8 +609,9 @@ router.post('/:id/execute', requireModeratorId, async (req, res, next) => {
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
-    // Execute the proposal using the moderator's authority
-    const result = await moderator.executeProposal(id, moderator.config.authority);
+    // Execute the proposal using the pool-specific authority
+    const authority = moderator.getAuthorityForPool(proposal.config.spotPoolAddress);
+    const result = await moderator.executeProposal(id, authority);
 
     logger.info('[POST /:id/execute] Proposal execution completed', {
       proposalId: id,

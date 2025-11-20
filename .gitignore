@@ -32,6 +32,7 @@ logs/
 coverage/
 .nyc_output/
 wallet.json
+wallet-oogway.json
 walletprivy.json
 arb-wallet.json
 arb-wallets/

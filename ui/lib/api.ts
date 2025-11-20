@@ -246,6 +246,9 @@ class GovernanceAPI {
     description: string;
     proposalLength: number;
     creatorWallet: string;
+    creatorSignature?: string;
+    attestationMessage?: string;
+    spotPoolAddress?: string;
     moderatorId?: number | string;
   }): Promise<{
     moderatorId: number;

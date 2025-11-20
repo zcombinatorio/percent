@@ -28,6 +28,53 @@ import { LoggerService } from './logger.service';
 import { getPool } from '../utils/database';
 
 /**
+ * Load per-pool authority keypairs from wallet JSON files
+ * Supports file-path based authority loading for security isolation
+ *
+ * Environment variable patterns:
+ * - POOL_AUTHORITY_ZC_PATH - Path to wallet JSON file for ZC pool
+ * - POOL_AUTHORITY_OOGWAY_PATH - Path to wallet JSON file for oogway pool
+ *
+ * @param logger - Logger instance for logging
+ * @returns Map of pool addresses to authority keypairs, or undefined if none configured
+ */
+function loadPoolAuthorities(logger: LoggerService): Map<string, Keypair> | undefined {
+  // Pool ticker to address mapping (same as in damm-liquidity.ts)
+  const poolMapping: Record<string, string> = {
+    'ZC': 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad',
+    'OOGWAY': '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
+  };
+
+  const poolAuthorities = new Map<string, Keypair>();
+
+  for (const [ticker, poolAddress] of Object.entries(poolMapping)) {
+    const envVarName = `POOL_AUTHORITY_${ticker}_PATH`;
+    const walletPath = process.env[envVarName];
+
+    if (walletPath) {
+      try {
+        const keypairData = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
+        const keypair = Keypair.fromSecretKey(Uint8Array.from(keypairData));
+        poolAuthorities.set(poolAddress, keypair);
+        logger.info(`Loaded pool-specific authority for ${ticker}`, {
+          poolAddress,
+          authority: keypair.publicKey.toBase58(),
+          walletPath
+        });
+      } catch (error) {
+        logger.warn(`Failed to load pool authority from ${walletPath}`, {
+          envVarName,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+  }
+
+  // Return undefined if no pool authorities were loaded (backward compat)
+  return poolAuthorities.size > 0 ? poolAuthorities : undefined;
+}
+
+/**
  * RouterService manages multiple moderators by ID
  * This is the main service that handles all moderator operations
  */
@@ -94,7 +141,18 @@ export class RouterService implements IRouterService {
 
     if (savedState) {
       this.logger.info(`Using saved moderator state for moderator ${moderatorId} with proposal counter:`, savedState.proposalCounter);
-      const moderator = new Moderator(moderatorId, savedState.protocolName, savedState.config);
+
+      // Load pool-specific authorities from environment variables
+      // Note: Pool authorities are loaded from env vars, not from database, for security
+      const poolAuthorities = loadPoolAuthorities(this.logger);
+
+      // Update config with pool authorities from environment
+      const config: IModeratorConfig = {
+        ...savedState.config,
+        poolAuthorities: poolAuthorities
+      };
+
+      const moderator = new Moderator(moderatorId, savedState.protocolName, config);
       this.moderators.set(moderatorId, moderator);
       return true;
     } else {
@@ -132,6 +190,9 @@ export class RouterService implements IRouterService {
 
       this.logger.info(`Creating new moderator with ID ${nextId}`);
 
+      // Load pool-specific authorities from environment variables
+      const poolAuthorities = loadPoolAuthorities(this.logger);
+
       // Create config
       const rpcUrl = process.env.SOLANA_RPC_URL || 'https://bernie-zo3q7f-fast-mainnet.helius-rpc.com';
       const config: IModeratorConfig = {
@@ -139,7 +200,8 @@ export class RouterService implements IRouterService {
         quoteMint,
         baseDecimals,
         quoteDecimals,
-        authority,
+        defaultAuthority: authority,
+        poolAuthorities: poolAuthorities,
         rpcEndpoint: rpcUrl,
       };
 

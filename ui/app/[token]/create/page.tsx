@@ -2,15 +2,18 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { useTokenContext } from '@/providers/TokenContext';
 import { api } from '@/lib/api';
 import Header from '@/components/Header';
 import EditableFlipCard from '@/components/EditableFlipCard';
 import toast from 'react-hot-toast';
+import bs58 from 'bs58';
 
 export default function CreatePage() {
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
+  const { wallets } = useSolanaWallets();
   const { tokenSlug, poolAddress, poolMetadata, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: poolLoading } = useTokenContext();
   const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
     walletAddress,
@@ -91,9 +94,44 @@ export default function CreatePage() {
     }
 
     setIsSubmitting(true);
-    const toastId = toast.loading('Creating Decision Market...');
+    const toastId = toast.loading('Sign the attestation in your wallet...');
 
     try {
+      // Get wallet for signing
+      const wallet = wallets[0];
+      if (!wallet) {
+        toast.error('No Solana wallet found', { id: toastId });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Generate attestation message
+      const attestation = {
+        action: 'withdraw',
+        poolAddress: poolAddress,
+        timestamp: Date.now(),
+        nonce: crypto.randomUUID()
+      };
+      const attestationMessage = JSON.stringify(attestation);
+
+      // Request user to sign attestation
+      let signatureBytes: Uint8Array;
+      try {
+        const messageBytes = new TextEncoder().encode(attestationMessage);
+        signatureBytes = await wallet.signMessage(messageBytes);
+      } catch (signError) {
+        console.error('Signature rejected:', signError);
+        toast.error('Signature rejected by user', { id: toastId });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Encode signature as base58
+      const creatorSignature = bs58.encode(signatureBytes);
+
+      // Update loading message
+      toast.loading('Creating Decision Market...', { id: toastId });
+
       // Convert hours to seconds
       const proposalLength = Math.floor(hours * 3600);
 
@@ -102,7 +140,9 @@ export default function CreatePage() {
         description: description.trim(),
         proposalLength,
         spotPoolAddress: poolAddress,
-        creatorWallet: walletAddress
+        creatorWallet: walletAddress,
+        creatorSignature,
+        attestationMessage
       };
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';

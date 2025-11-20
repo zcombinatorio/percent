@@ -94,6 +94,26 @@ export class Moderator implements IModerator {
   }
 
   /**
+   * Get the appropriate authority keypair for a given pool
+   * @param poolAddress - DAMM pool address (optional)
+   * @returns Authority keypair for the pool, or default if not mapped
+   */
+  getAuthorityForPool(poolAddress?: string): Keypair {
+    // If no pool-specific authorities configured, use default
+    if (!this.config.poolAuthorities) {
+      return this.config.defaultAuthority;
+    }
+
+    // If poolAddress not provided or not mapped, use default
+    if (!poolAddress || !this.config.poolAuthorities.has(poolAddress)) {
+      return this.config.defaultAuthority;
+    }
+
+    // Return pool-specific authority
+    return this.config.poolAuthorities.get(poolAddress)!;
+  }
+
+  /**
    * Returns a JSON object with all moderator configuration and state information
    * @returns Object containing moderator info
    */
@@ -110,7 +130,7 @@ export class Moderator implements IModerator {
         mint: this.config.quoteMint.toBase58(),
         decimals: this.config.quoteDecimals
       },
-      authority: this.config.authority.publicKey.toBase58(),
+      authority: this.config.defaultAuthority.publicKey.toBase58(),
     };
 
     return info;
@@ -150,6 +170,10 @@ export class Moderator implements IModerator {
     const proposalIdCounter = await this.getProposalIdCounter() + 1;
     try {
       this.logger.info('Creating proposal');
+
+      // Select appropriate authority based on pool address
+      const authority = this.getAuthorityForPool(params.spotPoolAddress);
+
       // Create proposal config from moderator config and params
       const proposalConfig: IProposalConfig = {
         id: proposalIdCounter,
@@ -163,7 +187,7 @@ export class Moderator implements IModerator {
         quoteMint: this.config.quoteMint,
         baseDecimals: this.config.baseDecimals,
         quoteDecimals: this.config.quoteDecimals,
-        authority: this.config.authority,
+        authority: authority,
         executionService: this.executionService,
         spotPoolAddress: params.spotPoolAddress,
         totalSupply: params.totalSupply,
@@ -353,10 +377,11 @@ export class Moderator implements IModerator {
       });
 
       // Step 2: Create transaction signer from authority keypair with validation
+      const authority = this.getAuthorityForPool(metadata.poolAddress);
       const signTransaction = async (transaction: any) => {
         // Validate fee payer matches authority wallet
-        if (!transaction.feePayer?.equals(this.config.authority.publicKey)) {
-          const error = `Fee payer mismatch: expected ${this.config.authority.publicKey.toBase58()}, got ${transaction.feePayer?.toBase58()}`;
+        if (!transaction.feePayer?.equals(authority.publicKey)) {
+          const error = `Fee payer mismatch: expected ${authority.publicKey.toBase58()}, got ${transaction.feePayer?.toBase58()}`;
           this.logger.error('Transaction validation failed', { proposalId, error });
           throw new Error(error);
         }
@@ -364,10 +389,11 @@ export class Moderator implements IModerator {
         this.logger.info('Transaction validated, signing with authority', {
           proposalId,
           feePayer: transaction.feePayer.toBase58(),
-          authority: this.config.authority.publicKey.toBase58()
+          authority: authority.publicKey.toBase58(),
+          poolAddress: metadata.poolAddress
         });
 
-        transaction.partialSign(this.config.authority);
+        transaction.partialSign(authority);
         return transaction;
       };
 
