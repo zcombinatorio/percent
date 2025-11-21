@@ -29,12 +29,12 @@ interface TradeHistoryResponse {
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useTradeHistory(proposalId: number | null) {
+export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<ConnectionStatus>('disconnected');
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices(baseMint);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -47,7 +47,7 @@ export function useTradeHistory(proposalId: number | null) {
     setError(null);
 
     try {
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/trades`, { limit: 100 });
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/trades`, { limit: 100 }, moderatorId);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch trades');
@@ -65,7 +65,7 @@ export function useTradeHistory(proposalId: number | null) {
     } finally {
       setLoading(false);
     }
-  }, [proposalId]);
+  }, [proposalId, moderatorId]);
 
   // Update proposalId ref
   useEffect(() => {
@@ -212,7 +212,7 @@ export function useTradeHistory(proposalId: number | null) {
     return () => {
       disconnectWebSocket();
     };
-  }, [proposalId, fetchTrades, connectWebSocket, disconnectWebSocket]);
+  }, [proposalId, moderatorId, fetchTrades, connectWebSocket, disconnectWebSocket]);
 
   // Memoized helper function to format time ago
   const getTimeAgo = useCallback((timestamp: string) => {
@@ -242,9 +242,9 @@ export function useTradeHistory(proposalId: number | null) {
   // Memoized helper function to determine token used
   const getTokenUsed = useCallback((isBaseToQuote: boolean, market: 'pass' | 'fail') => {
     // Both pass and fail markets use the same token pairs:
-    // base = ZC, quote = SOL
-    return isBaseToQuote ? '$ZC' : 'SOL';
-  }, []);
+    // base = token (ZC/OOGWAY/etc), quote = SOL
+    return isBaseToQuote ? `$${tokenSymbol || 'ZC'}` : 'SOL';
+  }, [tokenSymbol]);
 
   // Memoized helper function to calculate volume in USD
   const calculateVolume = useCallback((amountIn: string, isBaseToQuote: boolean, market: 'pass' | 'fail') => {
@@ -254,19 +254,19 @@ export function useTradeHistory(proposalId: number | null) {
     if (token === 'SOL') {
       return amount * solPrice;
     } else {
-      return amount * zcPrice;
+      return amount * baseTokenPrice;
     }
-  }, [solPrice, zcPrice, getTokenUsed]);
+  }, [solPrice, baseTokenPrice, getTokenUsed]);
 
   // Calculate total volume for all trades in this proposal
   const totalVolume = useMemo(() => {
-    if (!solPrice || !zcPrice || trades.length === 0) return 0;
+    if (!solPrice || !baseTokenPrice || trades.length === 0) return 0;
 
     return trades.reduce((sum, trade) => {
       const volume = calculateVolume(trade.amountIn, trade.isBaseToQuote, trade.market);
       return sum + volume;
     }, 0);
-  }, [trades, solPrice, zcPrice, calculateVolume]);
+  }, [trades, solPrice, baseTokenPrice, calculateVolume]);
 
   return {
     trades,

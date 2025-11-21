@@ -28,6 +28,8 @@ export interface ProposalListItem {
   finalizedAt: number;
   passThresholdBps: number;
   totalSupply?: number;
+  poolAddress?: string | null;
+  poolName?: string;
 }
 
 export interface ProposalListResponse {

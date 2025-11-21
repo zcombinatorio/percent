@@ -47,6 +47,38 @@ const rinter = localFont({
   variable: "--font-rinter",
 });
 
+const supplyMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/PPSupplyMono-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/PPSupplyMono-Ultralight.otf",
+      weight: "200",
+      style: "normal",
+    },
+  ],
+  variable: "--font-supply-mono",
+});
+
+const supplySans = localFont({
+  src: [
+    {
+      path: "../public/fonts/PPSupplySans-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/PPSupplySans-Ultralight.otf",
+      weight: "200",
+      style: "normal",
+    },
+  ],
+  variable: "--font-supply-sans",
+});
+
 export const metadata: Metadata = {
   title: "Z Combinator",
   description: "Trade decision markets",
@@ -63,7 +95,7 @@ export default function RootLayout({
         <script src="/charting_library/charting_library/charting_library.standalone.js" async></script>
       </head>
       <body
-        className={`${inter.variable} ${ibmPlexMono.variable} ${robotoMono.variable} ${rinter.variable} font-sans antialiased bg-[#0a0a0a] text-white`}
+        className={`${inter.variable} ${ibmPlexMono.variable} ${robotoMono.variable} ${rinter.variable} ${supplyMono.variable} ${supplySans.variable} font-sans antialiased bg-[#0a0a0a] text-white`}
       >
         <ErrorBoundary>
           <PrivyProviderWrapper>

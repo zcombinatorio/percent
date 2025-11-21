@@ -17,22 +17,28 @@ export interface LeaderboardEntry {
   volume: number; // USD volume
 }
 
-export function useLeaderboard() {
+export function useLeaderboard(moderatorId?: number | string, baseMint?: string) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [totalVolume, setTotalVolume] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { proposals, loading: proposalsLoading } = useProposals();
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+  const { proposals, loading: proposalsLoading } = useProposals(undefined, moderatorId);
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices(baseMint);
 
   const fetchLeaderboard = useCallback(async () => {
     console.log('[Leaderboard] Fetch attempt:', {
       proposalsLoading,
       proposalsCount: proposals.length,
       solPrice,
-      zcPrice
+      baseTokenPrice
     });
+
+    // Wait for moderatorId to be available from TokenContext
+    if (moderatorId == null) {
+      console.log('[Leaderboard] Waiting for moderatorId from TokenContext...');
+      return;
+    }
 
     if (proposalsLoading) {
       console.log('[Leaderboard] Waiting for proposals to load...');
@@ -45,7 +51,7 @@ export function useLeaderboard() {
       return;
     }
 
-    if (!solPrice || !zcPrice) {
+    if (!solPrice || !baseTokenPrice) {
       console.log('[Leaderboard] Waiting for token prices...');
       return;
     }
@@ -59,7 +65,7 @@ export function useLeaderboard() {
         try {
           const url = buildApiUrl(API_BASE_URL, `/api/history/${proposal.id}/trades`, {
             limit: 10000
-          });
+          }, moderatorId);
           const response = await fetch(url);
           if (!response.ok) {
             console.warn(`Failed to fetch trades for proposal ${proposal.id}`);
@@ -88,7 +94,7 @@ export function useLeaderboard() {
         // isBaseToQuote = true → used ZC (base token)
         // isBaseToQuote = false → used SOL (quote token)
         const volumeUSD = trade.isBaseToQuote
-          ? amount * zcPrice
+          ? amount * baseTokenPrice
           : amount * solPrice;
 
         const currentVolume = volumeMap.get(trade.userAddress) || 0;
@@ -117,7 +123,7 @@ export function useLeaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [proposals, proposalsLoading, solPrice, zcPrice]);
+  }, [proposals, proposalsLoading, solPrice, baseTokenPrice, moderatorId]);
 
   useEffect(() => {
     fetchLeaderboard();

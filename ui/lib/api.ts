@@ -31,9 +31,10 @@ class GovernanceAPI {
     this.connection = new Connection(RPC_URL);
   }
 
-  async getProposals(): Promise<ProposalListItem[]> {
+  async getProposals(poolAddress?: string, moderatorId?: number | string): Promise<ProposalListItem[]> {
     try {
-      const url = buildApiUrl(API_BASE_URL, '/api/proposals');
+      const params = poolAddress ? { poolAddress } : {};
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals', params, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       const data: ProposalListResponse = await response.json();
@@ -44,9 +45,63 @@ class GovernanceAPI {
     }
   }
 
-  async getProposal(id: number): Promise<ProposalDetailResponse | null> {
+  async getPoolByName(name: string): Promise<{
+    pool: {
+      poolAddress: string;
+      ticker: string;
+      baseMint: string;
+      quoteMint: string;
+      baseDecimals: number;
+      quoteDecimals: number;
+      moderatorId: number;
+      icon?: string;
+    };
+    isAuthorized?: boolean;
+  } | null> {
     try {
-      const url = buildApiUrl(API_BASE_URL, `/api/proposals/${id}`);
+      const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`);
+      const response = await fetch(url);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch pool');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching pool:', error);
+      return null;
+    }
+  }
+
+  async getPoolByNameWithAuth(name: string, walletAddress: string): Promise<{
+    pool: {
+      poolAddress: string;
+      ticker: string;
+      baseMint: string;
+      quoteMint: string;
+      baseDecimals: number;
+      quoteDecimals: number;
+      moderatorId: number;
+      icon?: string;
+    };
+    isAuthorized: boolean;
+  } | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`, { wallet: walletAddress });
+      const response = await fetch(url);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch pool');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching pool with auth:', error);
+      return null;
+    }
+  }
+
+  async getProposal(id: number, moderatorId?: number | string): Promise<ProposalDetailResponse | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, `/api/proposals/${id}`, {}, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposal');
       return await response.json();
@@ -56,9 +111,9 @@ class GovernanceAPI {
     }
   }
 
-  async getUserBalances(proposalId: number, userAddress: string): Promise<UserBalancesResponse | null> {
+  async getUserBalances(proposalId: number, userAddress: string, moderatorId?: number | string): Promise<UserBalancesResponse | null> {
     try {
-      const url = buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress });
+      const url = buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress }, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch user balances');
       return await response.json();
@@ -68,9 +123,9 @@ class GovernanceAPI {
     }
   }
 
-  async getTWAP(proposalId: number): Promise<{ passTwap: number; failTwap: number } | null> {
+  async getTWAP(proposalId: number, moderatorId?: number | string): Promise<{ passTwap: number; failTwap: number } | null> {
     try {
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/twap`);
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/twap`, {}, moderatorId);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch TWAP');
@@ -96,7 +151,8 @@ class GovernanceAPI {
     proposalId: number,
     interval: string,
     from?: Date,
-    to?: Date
+    to?: Date,
+    moderatorId?: number | string
   ): Promise<any> {
     try {
       const params: Record<string, any> = { interval };
@@ -107,7 +163,7 @@ class GovernanceAPI {
         params.to = to.toISOString();
       }
 
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/chart`, params);
+      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/chart`, params, moderatorId);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch chart data');
@@ -124,7 +180,8 @@ class GovernanceAPI {
     market: 'pass' | 'fail',
     isBaseToQuote: boolean,
     amountIn: string,
-    slippageBps: number = 2000
+    slippageBps: number = 2000,
+    moderatorId?: number | string
   ): Promise<{
     swapInAmount: string;
     consumedInAmount: string;
@@ -142,7 +199,7 @@ class GovernanceAPI {
         amountIn,
         slippageBps
       };
-      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${market}/quote`, params);
+      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${market}/quote`, params, moderatorId);
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -152,6 +209,80 @@ class GovernanceAPI {
     } catch (error) {
       console.error('Error fetching swap quote:', error);
       return null;
+    }
+  }
+
+  async checkWhitelistStatus(walletAddress: string): Promise<{
+    wallet: string;
+    isWhitelisted: boolean;
+    pools: string[];
+    poolsWithMetadata: Array<{
+      poolAddress: string;
+      metadata: {
+        poolAddress: string;
+        ticker: string;
+        baseMint: string;
+        quoteMint: string;
+        baseDecimals: number;
+        quoteDecimals: number;
+        moderatorId: number;
+        icon?: string;
+      } | null;
+    }>;
+  } | null> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, '/api/whitelist/check', { wallet: walletAddress });
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to check whitelist status');
+      return await response.json();
+    } catch (error) {
+      console.error('Error checking whitelist status:', error);
+      return null;
+    }
+  }
+
+  async createProposal(params: {
+    title: string;
+    description: string;
+    proposalLength: number;
+    creatorWallet: string;
+    creatorSignature?: string;
+    attestationMessage?: string;
+    spotPoolAddress?: string;
+    moderatorId?: number | string;
+  }): Promise<{
+    moderatorId: number;
+    id: number;
+    title: string;
+    description: string;
+    status: string;
+    createdAt: number;
+    finalizedAt: number;
+  } | null> {
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+      if (!apiKey) {
+        throw new Error('API key not configured');
+      }
+
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals', {}, params.moderatorId);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-KEY': apiKey
+        },
+        body: JSON.stringify(params)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create proposal');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating proposal:', error);
+      throw error;
     }
   }
 }

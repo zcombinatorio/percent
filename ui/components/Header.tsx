@@ -20,6 +20,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Wallet, FileText } from 'lucide-react';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import Image from 'next/image';
@@ -28,21 +29,34 @@ interface HeaderProps {
   walletAddress: string | null;
   authenticated: boolean;
   solBalance: number;
-  zcBalance: number;
+  baseTokenBalance: number; // Dynamic token balance (ZC, OOGWAY, etc.)
   hasWalletBalance?: boolean;
   login?: () => void;
-  navTab: 'live' | 'history' | 'leaderboard';
-  onNavTabChange: (tab: 'live' | 'history' | 'leaderboard') => void;
   isPassMode?: boolean;
+  tokenSlug?: string; // NEW: Dynamic token routing
+  tokenSymbol?: string; // NEW: Display symbol (ZC, OOGWAY, etc.)
+  tokenIcon?: string | null; // NEW: Dynamic token icon URL
+  poolAddress?: string | null; // NEW: Pool address for Axiom.trade links
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, zcBalance, login, navTab, onNavTabChange, isPassMode = true }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, baseTokenBalance, login, isPassMode = true, tokenSlug = 'zc', tokenSymbol = 'ZC', tokenIcon = null, poolAddress = null }: HeaderProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Auto-detect active tab from pathname
+  const activeTab = pathname.includes('/history')
+    ? 'history'
+    : pathname.includes('/rank')
+      ? 'rank'
+      : pathname.includes('/create')
+        ? 'create'
+        : 'live';
   const { exportWallet } = useSolanaWallets();
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
   const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
 
-  // Format ZC balance with K, M, B abbreviations
-  const formatZcBalance = (balance: number): string => {
+  // Format token balance with K, M, B abbreviations
+  const formatTokenBalance = (balance: number): string => {
     const absBalance = Math.abs(balance);
 
     if (absBalance >= 1e9) {
@@ -118,8 +132,14 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
             </div>
             <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
             <div className="flex items-center gap-1.5">
-              <img src="/zc-logo.jpg" alt="ZC" className="w-5 h-5 rounded-full border border-[#191919]" />
-              <span className="text-sm font-ibm-plex-mono font-medium" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>{formatZcBalance(zcBalance)}</span>
+              {tokenIcon ? (
+                <img src={tokenIcon} alt={tokenSymbol} className="w-5 h-5 rounded-full border border-[#191919]" />
+              ) : (
+                <div className="w-5 h-5 rounded-full border border-[#191919] bg-[#2D2D2D] flex items-center justify-center text-xs font-bold" style={{ color: '#DDDDD7' }}>
+                  {tokenSymbol.charAt(0)}
+                </div>
+              )}
+              <span className="text-sm font-ibm-plex-mono font-medium" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>{formatTokenBalance(baseTokenBalance)}</span>
             </div>
           </>
         )}
@@ -127,6 +147,21 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
 
       {/* Right side: Links */}
       <nav className="hidden md:flex items-center gap-3 sm:gap-6">
+        {/* Current token link (for non-ZC tokens) */}
+        {tokenSlug !== 'zc' && poolAddress && (
+          <a
+            href={`https://axiom.trade/meme/${poolAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors"
+            style={{ color: '#6B6E71' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
+          >
+            <span className="text-sm">${tokenSymbol}</span>
+          </a>
+        )}
+        {/* ZC link (always show) */}
         <a
           href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad"
           target="_blank"
@@ -199,41 +234,64 @@ export default function Header({ walletAddress, authenticated, solBalance, zcBal
       <div className="px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
           <button
-            onClick={() => onNavTabChange('live')}
+            onClick={() => router.push(`/${tokenSlug}`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-            style={navTab === 'live' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-            onMouseEnter={(e) => { if (navTab !== 'live') e.currentTarget.style.color = '#9B9E9F'; }}
-            onMouseLeave={(e) => { if (navTab !== 'live') e.currentTarget.style.color = '#6B6E71'; }}
+            style={activeTab === 'live' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+            onMouseEnter={(e) => { if (activeTab !== 'live') e.currentTarget.style.color = '#9B9E9F'; }}
+            onMouseLeave={(e) => { if (activeTab !== 'live') e.currentTarget.style.color = '#6B6E71'; }}
           >
-            {navTab === 'live' && (
+            {activeTab === 'live' && (
               <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
             Live
           </button>
           <button
-            onClick={() => onNavTabChange('history')}
+            onClick={() => router.push(`/${tokenSlug}/history`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-            style={navTab === 'history' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-            onMouseEnter={(e) => { if (navTab !== 'history') e.currentTarget.style.color = '#9B9E9F'; }}
-            onMouseLeave={(e) => { if (navTab !== 'history') e.currentTarget.style.color = '#6B6E71'; }}
+            style={activeTab === 'history' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+            onMouseEnter={(e) => { if (activeTab !== 'history') e.currentTarget.style.color = '#9B9E9F'; }}
+            onMouseLeave={(e) => { if (activeTab !== 'history') e.currentTarget.style.color = '#6B6E71'; }}
           >
-            {navTab === 'history' && (
+            {activeTab === 'history' && (
               <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
             History
           </button>
+          {tokenSlug === 'zc' && (
+            <button
+              onClick={() => router.push(`/${tokenSlug}/rank`)}
+              className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
+              style={activeTab === 'rank' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+              onMouseEnter={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#9B9E9F'; }}
+              onMouseLeave={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#6B6E71'; }}
+            >
+              {activeTab === 'rank' && (
+                <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+              )}
+              Rankings
+            </button>
+          )}
           <button
-            onClick={() => onNavTabChange('leaderboard')}
+            onClick={() => router.push(`/${tokenSlug}/create`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-            style={navTab === 'leaderboard' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-            onMouseEnter={(e) => { if (navTab !== 'leaderboard') e.currentTarget.style.color = '#9B9E9F'; }}
-            onMouseLeave={(e) => { if (navTab !== 'leaderboard') e.currentTarget.style.color = '#6B6E71'; }}
+            style={activeTab === 'create' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+            onMouseEnter={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#9B9E9F'; }}
+            onMouseLeave={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#6B6E71'; }}
           >
-            {navTab === 'leaderboard' && (
+            {activeTab === 'create' && (
               <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
-            Leaderboard
+            Create
           </button>
+          <a
+            href="https://v1.zcombinator.io/launch"
+            className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
+            style={{ color: '#6B6E71' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
+          >
+            Launch
+          </a>
         </div>
       </div>
     </div>

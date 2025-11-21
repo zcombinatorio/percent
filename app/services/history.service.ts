@@ -202,7 +202,8 @@ export class HistoryService {
     let query = `
       SELECT
         t.*,
-        p.total_supply
+        p.total_supply,
+        p.base_decimals
       FROM i_trade_history t
       LEFT JOIN i_proposals p ON t.moderator_id = p.moderator_id
         AND t.proposal_id = p.proposal_id
@@ -241,6 +242,7 @@ export class HistoryService {
       price: new Decimal(row.price),
       txSignature: row.tx_signature,
       totalSupply: row.total_supply ? parseInt(row.total_supply) : undefined,
+      baseDecimals: row.base_decimals ? parseInt(row.base_decimals) : 6,
     }));
   }
 

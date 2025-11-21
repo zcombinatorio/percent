@@ -78,7 +78,8 @@ export interface IModeratorConfig {
   quoteMint: PublicKey;                        // Public key of the quote token mint
   baseDecimals: number;                        // Number of decimals for base token conditional mints
   quoteDecimals: number;                       // Number of decimals for quote token conditional mints
-  authority: Keypair;                          // Authority keypair (payer and mint authority)
+  defaultAuthority: Keypair;                   // Default authority keypair (payer and mint authority)
+  poolAuthorities?: Map<string, Keypair>;      // Optional per-pool authority overrides (poolAddress -> authority)
   rpcEndpoint: string;                         // Solana RPC endpoint URL
   commitment?: Commitment;                     // Optional commitment level (defaults to 'confirmed')
   jitoUuid?: string;                           // Optional Jito UUID for bundle submissions (mainnet only)

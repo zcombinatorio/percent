@@ -50,10 +50,10 @@ export function ChartBox({
               : selectedMarket === 'pass' ? 'Trades: Pass Coin' : 'Trades: Fail Coin'
             }
           </span>
-          <span className="text-xs font-medium font-ibm-plex-mono" style={{ color: '#6B6E71' }}>
+          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
             •
           </span>
-          <span className="text-xs font-medium font-ibm-plex-mono" style={{ color: '#6B6E71' }}>
+          <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
             VOL ${formatVolume(totalVolume)}
           </span>
         </div>
@@ -252,7 +252,7 @@ export function ChartBox({
                         if (tokenUsed === 'SOL') {
                           formattedAmount = removeTrailingZeros(amount.toFixed(1));
                         } else {
-                          // ZC formatting with K/M/B notation
+                          // Base token formatting with K/M/B notation
                           if (amount >= 1000000000) {
                             formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(1)) + 'B';
                           } else if (amount >= 1000000) {
@@ -281,7 +281,7 @@ export function ChartBox({
                         if (tokenUsed === 'SOL') {
                           formattedAmount = removeTrailingZeros(amount.toFixed(3));
                         } else {
-                          // ZC formatting with K/M/B notation
+                          // Base token formatting with K/M/B notation
                           if (amount >= 1000000000) {
                             formattedAmount = removeTrailingZeros((amount / 1000000000).toFixed(3)) + 'B';
                           } else if (amount >= 1000000) {

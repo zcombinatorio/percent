@@ -23,9 +23,9 @@ interface ClaimablePositions {
   refetch: () => void;
 }
 
-export function useClaimablePositions(walletAddress: string | null): ClaimablePositions {
-  const { proposals } = useProposals();
-  const { sol: solPrice, zc: zcPrice } = useTokenPrices();
+export function useClaimablePositions(walletAddress: string | null, moderatorId?: number | string): ClaimablePositions {
+  const { proposals } = useProposals(undefined, moderatorId);
+  const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices();
   const [balancesMap, setBalancesMap] = useState<Map<number, UserBalancesResponse>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export function useClaimablePositions(walletAddress: string | null): ClaimablePo
     try {
       // Fetch balances for finalized proposals in parallel
       const balancePromises = finalizedProposals.map(proposal =>
-        api.getUserBalances(proposal.id, address)
+        api.getUserBalances(proposal.id, address, moderatorId)
           .then(data => ({ id: proposal.id, data }))
           .catch(() => ({ id: proposal.id, data: null }))
       );
@@ -66,7 +66,7 @@ export function useClaimablePositions(walletAddress: string | null): ClaimablePo
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [moderatorId]);
 
   useEffect(() => {
     if (!walletAddress || proposals.length === 0) {
@@ -112,7 +112,7 @@ export function useClaimablePositions(walletAddress: string | null): ClaimablePo
 
         // Check base vault winning tokens (ZC)
         if (baseWinningTokens > 0) {
-          const value = (baseWinningTokens / 1e6) * zcPrice;
+          const value = (baseWinningTokens / 1e6) * baseTokenPrice;
           claimableList.push({
             proposalId,
             proposalDescription: proposal.description,
@@ -145,7 +145,7 @@ export function useClaimablePositions(walletAddress: string | null): ClaimablePo
     });
 
     return { positions: claimableList, totalClaimableValue: total };
-  }, [balancesMap, proposals, solPrice, zcPrice]);
+  }, [balancesMap, proposals, solPrice, baseTokenPrice]);
 
   const refetch = useCallback(() => {
     if (walletAddress && proposals.length > 0) {

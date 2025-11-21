@@ -17,12 +17,14 @@ const SOL_GAS_RESERVE = 0.02; // Reserve for transaction fees
 interface DepositCardProps {
   proposalId: number;
   solBalance: number | null;
-  zcBalance: number | null;
+  baseTokenBalance: number | null;
   userBalances: UserBalancesResponse | null;
   onDepositSuccess: () => void;
+  moderatorId?: number;
+  tokenSymbol?: string;
 }
 
-export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, onDepositSuccess }: DepositCardProps) {
+export function DepositCard({ proposalId, solBalance, baseTokenBalance, userBalances, onDepositSuccess, moderatorId, tokenSymbol = 'ZC' }: DepositCardProps) {
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const { wallets } = useSolanaWallets();
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
@@ -33,7 +35,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
   // Calculate max balance
   const maxBalance = useMemo(() => {
     if (mode === 'deposit') {
-      const balance = selectedToken === 'sol' ? (solBalance || 0) : (zcBalance || 0);
+      const balance = selectedToken === 'sol' ? (solBalance || 0) : (baseTokenBalance || 0);
       // Reserve gas for SOL deposits
       return selectedToken === 'sol' ? Math.max(0, balance - SOL_GAS_RESERVE) : balance;
     } else {
@@ -50,7 +52,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
       // Convert from smallest units to decimal
       return minBalance / Math.pow(10, decimals);
     }
-  }, [mode, selectedToken, solBalance, zcBalance, userBalances]);
+  }, [mode, selectedToken, solBalance, baseTokenBalance, userBalances]);
 
   // Validate balance
   const balanceError = useMemo(() => {
@@ -60,19 +62,19 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
 
     if (inputAmount > maxBalance) {
       const decimals = selectedToken === 'sol' ? 3 : 0;
-      return `Insufficient balance. Max: ${formatNumber(maxBalance, decimals)} ${selectedToken === 'sol' ? 'SOL' : 'ZC'}`;
+      return `Insufficient balance. Max: ${formatNumber(maxBalance, decimals)} ${selectedToken === 'sol' ? 'SOL' : tokenSymbol}`;
     }
     return null;
-  }, [amount, maxBalance, selectedToken]);
+  }, [amount, maxBalance, selectedToken, tokenSymbol]);
 
   // Handle MAX button
   const handleMaxClick = useCallback(() => {
     if (maxBalance > 0) {
       setAmount(maxBalance.toString());
     } else {
-      toast.error(`No ${selectedToken.toUpperCase()} balance available`);
+      toast.error(`No ${selectedToken === 'sol' ? 'SOL' : tokenSymbol} balance available`);
     }
-  }, [maxBalance, selectedToken]);
+  }, [maxBalance, selectedToken, tokenSymbol]);
 
   // Handle deposit
   const handleDeposit = useCallback(async () => {
@@ -103,7 +105,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
     }
 
     setIsDepositing(true);
-    const toastId = toast.loading(`Depositing ${amount} ${selectedToken.toUpperCase()}...`);
+    const toastId = toast.loading(`Depositing ${amount} ${selectedToken === 'sol' ? 'SOL' : tokenSymbol}...`);
 
     try {
       // Convert amount to smallest units
@@ -115,7 +117,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
 
       // Step 1: Build split transaction
       const buildResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -139,7 +141,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
 
       // Step 3: Execute split transaction
       const executeResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -155,7 +157,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
       }
 
       // Success
-      toast.success(`Successfully deposited ${amount} ${selectedToken.toUpperCase()}!`, { id: toastId, duration: 5000 });
+      toast.success(`Successfully deposited ${amount} ${selectedToken === 'sol' ? 'SOL' : tokenSymbol}!`, { id: toastId, duration: 5000 });
       setAmount('');
       onDepositSuccess();
 
@@ -199,7 +201,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
     }
 
     setIsDepositing(true);
-    const toastId = toast.loading(`Withdrawing ${amount} ${selectedToken.toUpperCase()}...`);
+    const toastId = toast.loading(`Withdrawing ${amount} ${selectedToken === 'sol' ? 'SOL' : tokenSymbol}...`);
 
     try {
       // Convert amount to smallest units
@@ -211,7 +213,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
 
       // Step 1: Build merge transaction
       const buildResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -235,7 +237,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
 
       // Step 3: Execute merge transaction
       const executeResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -251,7 +253,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
       }
 
       // Success
-      toast.success(`Successfully withdrew ${amount} ${selectedToken.toUpperCase()}!`, { id: toastId, duration: 5000 });
+      toast.success(`Successfully withdrew ${amount} ${selectedToken === 'sol' ? 'SOL' : tokenSymbol}!`, { id: toastId, duration: 5000 });
       setAmount('');
       onDepositSuccess();
 
@@ -355,7 +357,7 @@ export function DepositCard({ proposalId, solBalance, zcBalance, userBalances, o
               {selectedToken === 'sol' ? (
                 <span className="text-xs text-[#AFAFAF] font-bold">SOL</span>
               ) : (
-                <span className="text-xs text-[#AFAFAF] font-bold">ZC</span>
+                <span className="text-xs text-[#AFAFAF] font-bold">{tokenSymbol}</span>
               )}
             </button>
           </div>

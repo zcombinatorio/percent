@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import type { ProposalListItem, ProposalDetailResponse } from '@/types/api';
 
-export function useProposals() {
+export function useProposals(poolAddress?: string, moderatorId?: number | string) {
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,11 +29,11 @@ export function useProposals() {
   const fetchProposals = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await api.getProposals();
+      const data = await api.getProposals(poolAddress, moderatorId);
 
-      // Only filter proposals if moderator ID is 2
-      const moderatorId = process.env.NEXT_PUBLIC_MODERATOR_ID;
-      const filteredData = moderatorId === '2'
+      // Server already filters by moderatorId, client-side filter only for legacy proposal exclusion
+      const modId = moderatorId?.toString();
+      const filteredData = modId === '2'
         ? data.filter(p => ![0, 1, 2, 6, 7].includes(p.id))
         : data;
 
@@ -46,16 +46,19 @@ export function useProposals() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [poolAddress, moderatorId]);
 
   useEffect(() => {
-    fetchProposals();
-  }, [fetchProposals]);
+    // Only fetch if moderatorId is provided (not null or undefined) to avoid defaulting to moderator 1
+    if (moderatorId != null) {
+      fetchProposals();
+    }
+  }, [fetchProposals, moderatorId]);
 
   return { proposals, loading, error, refetch: fetchProposals };
 }
 
-export function useProposal(id: number) {
+export function useProposal(id: number, moderatorId?: number | string) {
   const [proposal, setProposal] = useState<ProposalDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +67,7 @@ export function useProposal(id: number) {
     async function fetchProposal() {
       try {
         setLoading(true);
-        const data = await api.getProposal(id);
+        const data = await api.getProposal(id, moderatorId);
         setProposal(data);
       } catch (err) {
         console.error('Error fetching proposal:', err);
@@ -76,7 +79,7 @@ export function useProposal(id: number) {
     }
 
     fetchProposal();
-  }, [id]);
+  }, [id, moderatorId]);
 
   return { proposal, loading, error };
 }

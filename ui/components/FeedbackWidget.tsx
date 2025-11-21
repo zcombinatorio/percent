@@ -2,11 +2,18 @@
 
 import { FeedbackFish } from '@feedback-fish/react';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
+import { usePathname } from 'next/navigation';
 
 export default function FeedbackWidget() {
   const { walletAddress } = usePrivyWallet();
+  const pathname = usePathname();
 
   const FEEDBACK_FISH_PROJECT_ID = process.env.NEXT_PUBLIC_FEEDBACK_FISH_PROJECT_ID || '5391a511d6a890';
+
+  // Hide on landing page
+  if (pathname === '/') {
+    return null;
+  }
 
   return (
     <FeedbackFish

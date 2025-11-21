@@ -4,21 +4,23 @@ import { useTradeHistory } from '@/hooks/useTradeHistory';
 
 interface ProposalVolumeProps {
   proposalId: number;
+  moderatorId?: number | string;
+  baseMint?: string | null;
 }
 
-export function ProposalVolume({ proposalId }: ProposalVolumeProps) {
-  const { totalVolume, loading } = useTradeHistory(proposalId);
+export function ProposalVolume({ proposalId, moderatorId, baseMint }: ProposalVolumeProps) {
+  const { totalVolume, loading } = useTradeHistory(proposalId, moderatorId, baseMint);
 
   // Format volume with K/M/B suffixes
   const formatVolume = (volume: number): string => {
     if (volume >= 1e9) {
-      return (volume / 1e9).toFixed(2) + 'B';
+      return (volume / 1e9).toFixed(1) + 'B';
     } else if (volume >= 1e6) {
-      return (volume / 1e6).toFixed(2) + 'M';
+      return (volume / 1e6).toFixed(1) + 'M';
     } else if (volume >= 1e3) {
-      return (volume / 1e3).toFixed(2) + 'K';
+      return (volume / 1e3).toFixed(1) + 'K';
     } else {
-      return volume.toFixed(2);
+      return volume.toFixed(1);
     }
   };
 
@@ -35,7 +37,7 @@ export function ProposalVolume({ proposalId }: ProposalVolumeProps) {
   }
 
   return (
-    <span className="px-2 py-0.5 text-xs font-normal rounded-full bg-gray-500/10 text-gray-300">
+    <span className="px-2 py-0.5 text-xs font-normal rounded-full bg-gray-500/20 text-gray-300">
       Vol: ${formatVolume(totalVolume)}
     </span>
   );

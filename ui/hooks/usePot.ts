@@ -3,7 +3,7 @@ import { buildApiUrl } from '@/lib/api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export function usePot() {
+export function usePot(moderatorId?: number | string) {
   const [potSol, setPotSol] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +13,7 @@ export function usePot() {
     setError(null);
 
     try {
-      const url = buildApiUrl(API_BASE_URL, '/api/leaderboard/pot');
+      const url = buildApiUrl(API_BASE_URL, '/api/leaderboard/pot', {}, moderatorId);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -29,7 +29,7 @@ export function usePot() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [moderatorId]);
 
   useEffect(() => {
     fetchPot();

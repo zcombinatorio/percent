@@ -20,32 +20,42 @@
 import { Router } from 'express';
 import { requireApiKey } from '../middleware/auth';
 import { attachModerator, requireModeratorId, getModerator } from '../middleware/validation';
-import { Transaction, PublicKey } from '@solana/web3.js';
+import { Transaction, PublicKey, Connection } from '@solana/web3.js';
+import { getMint } from '@solana/spl-token';
 import BN from 'bn.js';
+import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 import { ExecutionStatus } from '../../app/types/execution.interface';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
+import { getPoolsForWallet, isWalletWhitelisted, POOL_METADATA } from '../config/whitelist';
 
 const routerService = RouterService.getInstance();
 const logger = new LoggerService('api').createChild('proposals');
+
+// DAMM Configuration
+const DAMM_WITHDRAWAL_PERCENTAGE = 12;
 
 // Type definition for creating a proposal
 export interface CreateProposalRequest {
   title: string;
   description?: string;
   proposalLength: number;
+  creatorWallet: string; // Creator's wallet address for whitelist verification
+  creatorSignature?: string; // Base58-encoded Ed25519 signature on attestation message
+  attestationMessage?: string; // JSON attestation message signed by creator
   transaction?: string; // Base64-encoded serialized transaction
   spotPoolAddress?: string; // Optional Meteora pool address for spot market
   totalSupply?: number; // Total supply of conditional tokens (defaults to 1 billion)
-  twap: {
+  twap?: {
     initialTwapValue: number;
     twapMaxObservationChangePerUpdate: number | null;
     twapStartDelay: number;
     passThresholdBps: number;
     minUpdateInterval: number;
   };
-  amm: {
+  amm?: {
     initialBaseAmount: string;
     initialQuoteAmount: string;
   };
@@ -75,13 +85,19 @@ router.use(attachModerator);
 router.get('/', async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;
+    const { poolAddress } = req.query;
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
 
-    logger.info('[GET /] Fetching proposals', { moderatorId });
+    logger.info('[GET /] Fetching proposals', { moderatorId, poolAddress: poolAddress || 'all' });
 
     const proposals = await persistenceService.getProposalsForFrontend();
 
-    const publicProposals = proposals.map(p => ({
+    // Filter by pool address if provided
+    const filteredProposals = poolAddress && typeof poolAddress === 'string'
+      ? proposals.filter(p => p.spot_pool_address === poolAddress)
+      : proposals;
+
+    const publicProposals = filteredProposals.map(p => ({
       id: p.proposal_id,
       title: p.title,
       description: p.description,
@@ -92,11 +108,14 @@ router.get('/', async (req, res, next) => {
         ? JSON.parse(p.twap_config).passThresholdBps
         : p.twap_config.passThresholdBps,
       totalSupply: p.total_supply,
+      poolAddress: p.spot_pool_address || null,
+      poolName: p.spot_pool_address ? (POOL_METADATA[p.spot_pool_address]?.ticker || 'unknown') : 'unknown',
     }));
 
     logger.info('[GET /] Fetched proposals successfully', {
       moderatorId,
-      count: publicProposals.length
+      count: publicProposals.length,
+      poolFilter: poolAddress || 'none'
     });
 
     res.json({
@@ -184,21 +203,259 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       return res.status(404).json({ error: 'Moderator not found' });
     }
 
-    // Validate required fields
-    if (!body.description || !body.proposalLength || !body.twap || !body.amm) {
+    // Validate required fields - now only title, description, proposalLength, creatorWallet required
+    if (!body.title || !body.description || !body.proposalLength || !body.creatorWallet) {
       logger.warn('[POST /] Missing required fields', {
         receivedFields: Object.keys(req.body),
         moderatorId
       });
       return res.status(400).json({
         error: 'Missing required fields',
-        required: ['description', 'proposalLength', 'twap', 'amm']
+        required: ['title', 'description', 'proposalLength', 'creatorWallet']
       });
     }
+
+    // Validate attestation fields (user authorization proof for withdrawal)
+    if (!body.creatorSignature || !body.attestationMessage) {
+      logger.warn('[POST /] Missing attestation fields', {
+        receivedFields: Object.keys(req.body),
+        moderatorId
+      });
+      return res.status(400).json({
+        error: 'Missing required attestation fields',
+        required: ['creatorSignature', 'attestationMessage']
+      });
+    }
+
+    // Step 0: Validate whitelist and get pool address
+    const creatorWallet = body.creatorWallet;
+    const spotPoolAddress = body.spotPoolAddress as string | undefined;
+    const authorizedPools = getPoolsForWallet(creatorWallet);
+
+    if (authorizedPools.length === 0) {
+      logger.warn('[POST /] Creator wallet not whitelisted', {
+        creatorWallet,
+        moderatorId
+      });
+      return res.status(403).json({
+        error: 'Creator wallet is not authorized to create decision markets',
+        wallet: creatorWallet
+      });
+    }
+
+    // Use pool from request body if provided, otherwise default to first authorized
+    let poolAddress: string;
+    if (spotPoolAddress) {
+      // Validate wallet is authorized for the requested pool
+      if (!authorizedPools.includes(spotPoolAddress)) {
+        logger.warn('[POST /] Wallet not authorized for requested pool', {
+          creatorWallet,
+          requestedPool: spotPoolAddress,
+          authorizedPools
+        });
+        return res.status(403).json({
+          error: 'Wallet not authorized for requested pool',
+          wallet: creatorWallet,
+          requestedPool: spotPoolAddress,
+          authorizedPools
+        });
+      }
+      poolAddress = spotPoolAddress;
+    } else {
+      // Backward compatibility: use first authorized pool
+      poolAddress = authorizedPools[0];
+    }
+
+    const poolMetadata = POOL_METADATA[poolAddress];
+
+    if (!poolMetadata) {
+      logger.error('[POST /] Pool metadata not configured', { poolAddress });
+      return res.status(500).json({
+        error: 'Pool metadata not configured',
+        poolAddress
+      });
+    }
+
+    logger.info('[POST /] Whitelist validation passed', {
+      creatorWallet,
+      poolAddress,
+      poolName: poolMetadata?.ticker || 'Unknown',
+      requestedPool: spotPoolAddress || 'not specified'
+    });
+
+    // Validate user attestation (proves user authorized the withdrawal)
+    const creatorSignature = body.creatorSignature as string;
+    const attestationMessage = body.attestationMessage as string;
+
+    let attestation: { action: string; poolAddress: string; timestamp: number; nonce: string };
+    try {
+      attestation = JSON.parse(attestationMessage);
+    } catch (error) {
+      logger.warn('[POST /] Invalid attestation format', { moderatorId });
+      return res.status(400).json({
+        error: 'Invalid attestation format: must be valid JSON'
+      });
+    }
+
+    // Verify attestation timestamp (5-minute window to prevent replay attacks)
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (Math.abs(Date.now() - attestation.timestamp) > FIVE_MINUTES) {
+      logger.warn('[POST /] Attestation expired', {
+        moderatorId,
+        attestationAge: Math.abs(Date.now() - attestation.timestamp)
+      });
+      return res.status(400).json({
+        error: 'Attestation expired: timestamp outside 5-minute window'
+      });
+    }
+
+    // Verify attestation action matches withdrawal
+    if (attestation.action !== 'withdraw') {
+      logger.warn('[POST /] Invalid attestation action', {
+        moderatorId,
+        action: attestation.action
+      });
+      return res.status(400).json({
+        error: 'Invalid attestation: action must be "withdraw"'
+      });
+    }
+
+    // Verify attestation pool address matches request
+    if (attestation.poolAddress !== poolAddress) {
+      logger.warn('[POST /] Attestation pool address mismatch', {
+        moderatorId,
+        expected: poolAddress,
+        received: attestation.poolAddress
+      });
+      return res.status(400).json({
+        error: 'Attestation pool address mismatch'
+      });
+    }
+
+    // Verify creator signature on attestation message
+    const messageBytes = new TextEncoder().encode(attestationMessage);
+    const signatureBytes = bs58.decode(creatorSignature);
+    const creatorPubKey = new PublicKey(creatorWallet);
+
+    const isCreatorSigValid = nacl.sign.detached.verify(
+      messageBytes,
+      signatureBytes,
+      creatorPubKey.toBytes()
+    );
+
+    if (!isCreatorSigValid) {
+      logger.warn('[POST /] Invalid creator signature on attestation', {
+        moderatorId,
+        creatorWallet
+      });
+      return res.status(403).json({
+        error: 'Invalid creator signature: attestation verification failed'
+      });
+    }
+
+    logger.info('[POST /] Attestation validated', {
+      action: attestation.action,
+      poolAddress: attestation.poolAddress,
+      creatorWallet
+    });
 
     // Get the proposal counter for this moderator
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
     const proposalCounter = await persistenceService.getProposalIdCounter();
+
+    // Step 1: Withdraw from DAMM pool (using whitelisted pool)
+    logger.info('[POST /] Withdrawing from DAMM pool', {
+      moderatorId,
+      percentage: DAMM_WITHDRAWAL_PERCENTAGE,
+      poolAddress
+    });
+
+    const withdrawBuildResponse = await fetch(`${process.env.DAMM_API_URL || 'https://api.zcombinator.io'}/damm/withdraw/build`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        withdrawalPercentage: DAMM_WITHDRAWAL_PERCENTAGE,
+        poolAddress
+      })
+    });
+
+    if (!withdrawBuildResponse.ok) {
+      const error = await withdrawBuildResponse.json() as { error?: string };
+      throw new Error(`DAMM withdrawal build failed: ${error.error || withdrawBuildResponse.statusText}`);
+    }
+
+    const withdrawBuildData = await withdrawBuildResponse.json() as {
+      requestId: string;
+      transaction: string;
+      estimatedAmounts: { tokenA: string; tokenB: string };
+    };
+    logger.info('[POST /] Built DAMM withdrawal transaction', {
+      requestId: withdrawBuildData.requestId,
+      estimatedAmounts: withdrawBuildData.estimatedAmounts
+    });
+
+    // Sign the transaction with pool-specific authority keypair
+    const transactionBuffer = bs58.decode(withdrawBuildData.transaction);
+    const unsignedTx = Transaction.from(transactionBuffer);
+    const poolAuthority = moderator.getAuthorityForPool(poolAddress);
+    unsignedTx.sign(poolAuthority);
+    const signedTxBase58 = bs58.encode(
+      unsignedTx.serialize({ requireAllSignatures: false })
+    );
+
+    // Confirm the withdrawal (authority signature validates access)
+    const withdrawConfirmResponse = await fetch(`${process.env.DAMM_API_URL || 'https://api.zcombinator.io'}/damm/withdraw/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        signedTransaction: signedTxBase58,
+        requestId: withdrawBuildData.requestId
+      })
+    });
+
+    if (!withdrawConfirmResponse.ok) {
+      const error = await withdrawConfirmResponse.json() as { error?: string };
+      throw new Error(`DAMM withdrawal confirm failed: ${error.error || withdrawConfirmResponse.statusText}`);
+    }
+
+    const withdrawConfirmData = await withdrawConfirmResponse.json() as {
+      signature: string;
+      estimatedAmounts: { tokenA: string; tokenB: string };
+    };
+    logger.info('[POST /] Confirmed DAMM withdrawal', {
+      signature: withdrawConfirmData.signature,
+      amounts: withdrawConfirmData.estimatedAmounts
+    });
+
+    const initialBaseAmount = withdrawConfirmData.estimatedAmounts.tokenA;
+    const initialQuoteAmount = withdrawConfirmData.estimatedAmounts.tokenB;
+
+    // Step 2: Fetch total supply using pool metadata
+    const heliusApiKey = process.env.HELIUS_API_KEY;
+    const rpcUrl = heliusApiKey
+      ? `https://mainnet.helius-rpc.com/?api-key=${heliusApiKey}`
+      : moderator.config.rpcEndpoint;
+    const connection = new Connection(rpcUrl, 'confirmed');
+    const mintPublicKey = new PublicKey(poolMetadata.baseMint);
+    const mintInfo = await getMint(connection, mintPublicKey);
+    const totalSupply = Math.floor(Number(mintInfo.supply) / Math.pow(10, mintInfo.decimals));
+
+    logger.info('[POST /] Fetched token supply', {
+      totalSupply,
+      decimals: mintInfo.decimals,
+      tokenMint: poolMetadata.baseMint
+    });
+
+    // Step 3: Calculate AMM price from withdrawn amounts
+    const baseTokens = parseInt(initialBaseAmount) / Math.pow(10, poolMetadata.baseDecimals);
+    const quoteTokens = parseInt(initialQuoteAmount) / Math.pow(10, poolMetadata.quoteDecimals);
+    const ammPrice = quoteTokens / baseTokens;
+
+    logger.info('[POST /] Calculated AMM price', {
+      baseTokens,
+      quoteTokens,
+      ammPrice
+    });
 
     // Create the transaction - use memo program if no transaction provided
     let transaction: Transaction;
@@ -215,33 +472,47 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       });
     }
 
-    // Create the proposal
+    // Create the proposal with DAMM-provided amounts
     const proposal = await moderator.createProposal({
       title: body.title,
       description: body.description,
       transaction,
       proposalLength: body.proposalLength,
-      spotPoolAddress: body.spotPoolAddress,
-      totalSupply: body.totalSupply || 1000000000, // Default to 1 billion tokens
+      spotPoolAddress: poolAddress,
+      totalSupply,
       twap: {
-        initialTwapValue: body.twap.initialTwapValue,
-        twapMaxObservationChangePerUpdate: body.twap.twapMaxObservationChangePerUpdate,
-        twapStartDelay: body.twap.twapStartDelay,
-        passThresholdBps: body.twap.passThresholdBps,
-        minUpdateInterval: body.twap.minUpdateInterval
+        initialTwapValue: ammPrice,
+        twapMaxObservationChangePerUpdate: null,
+        twapStartDelay: 0,
+        passThresholdBps: 0,
+        minUpdateInterval: 6000 // 6 seconds
       },
       amm: {
-        initialBaseAmount: new BN(body.amm.initialBaseAmount),
-        initialQuoteAmount: new BN(body.amm.initialQuoteAmount)
+        initialBaseAmount: new BN(initialBaseAmount),
+        initialQuoteAmount: new BN(initialQuoteAmount)
       }
     });
 
-    logger.info('[POST /] Created new proposal', {
+    // Store withdrawal metadata automatically
+    await persistenceService.storeWithdrawalMetadata(
+      proposal.config.id,
+      withdrawBuildData.requestId,
+      withdrawConfirmData.signature,
+      DAMM_WITHDRAWAL_PERCENTAGE,
+      initialBaseAmount,
+      initialQuoteAmount,
+      ammPrice,
+      poolAddress
+    );
+
+    logger.info('[POST /] Created new proposal with DAMM withdrawal', {
       proposalId: proposal.config.id,
       moderatorId,
       title: body.title,
       proposalLength: body.proposalLength,
-      totalSupply: body.totalSupply || 1000000000
+      totalSupply,
+      ammPrice,
+      withdrawalSignature: withdrawConfirmData.signature
     });
 
     res.status(201).json({
@@ -254,7 +525,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       finalizedAt: proposal.finalizedAt
     });
   } catch (error) {
-    logger.error('[POST /] Failed to create proposal', {
+    logger.error('[POST /] Failed to create DM', {
       error: error instanceof Error ? error.message : String(error),
       moderatorId: req.moderatorId,
       body: req.body
@@ -335,8 +606,9 @@ router.post('/:id/execute', requireModeratorId, async (req, res, next) => {
       return res.status(404).json({ error: 'Proposal not found' });
     }
 
-    // Execute the proposal using the moderator's authority
-    const result = await moderator.executeProposal(id, moderator.config.authority);
+    // Execute the proposal using the pool-specific authority
+    const authority = moderator.getAuthorityForPool(proposal.config.spotPoolAddress);
+    const result = await moderator.executeProposal(id, authority);
 
     logger.info('[POST /:id/execute] Proposal execution completed', {
       proposalId: id,

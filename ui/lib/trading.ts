@@ -23,17 +23,19 @@ import { buildApiUrl, withModeratorId } from './api-utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// SOL and ZC mint addresses
+// SOL mint address (quote token)
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
-const ZC_MINT = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
+const SOL_DECIMALS = 9;
 
 export interface OpenPositionConfig {
   proposalId: number;
   market: 'pass' | 'fail';  // Which AMM market to trade on
-  inputToken: 'sol' | 'zc';  // Which conditional token we're selling
+  inputToken: 'sol' | 'baseToken';  // Which conditional token we're selling
   inputAmount: string;  // Amount of conditional tokens to sell
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  baseDecimals?: number;  // Decimals for the base token (default 6)
+  moderatorId?: number;  // Moderator ID for multi-moderator support
 }
 
 export interface ClosePositionConfig {
@@ -42,6 +44,7 @@ export interface ClosePositionConfig {
   percentageToClose: number; // 1-100
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  moderatorId?: number;  // Moderator ID for multi-moderator support
 }
 
 /**
@@ -49,20 +52,18 @@ export interface ClosePositionConfig {
  * Swaps conditional tokens: e.g., Pass-ZC → Pass-SOL or Fail-SOL → Fail-ZC
  */
 export async function openPosition(config: OpenPositionConfig): Promise<void> {
-  const { proposalId, market, inputToken, inputAmount, userAddress, signTransaction } = config;
+  const { proposalId, market, inputToken, inputAmount, userAddress, signTransaction, baseDecimals = 6, moderatorId } = config;
 
   // Determine swap direction based on inputToken
-  // inputToken 'zc' means we're selling base (ZC conditional) for quote (SOL conditional)
-  // inputToken 'sol' means we're selling quote (SOL conditional) for base (ZC conditional)
-  const isBaseToQuote = inputToken === 'zc';
+  // inputToken 'baseToken' means we're selling base conditional for quote (SOL conditional)
+  // inputToken 'sol' means we're selling quote (SOL conditional) for base conditional
+  const isBaseToQuote = inputToken === 'baseToken';
 
   const toastId = toast.loading(`Swapping ${market}-${inputToken.toUpperCase()}...`);
 
   try {
-    // Convert decimal amount to smallest units
-    const ZC_DECIMALS = 6;
-    const SOL_DECIMALS = 9;
-    const decimals = inputToken === 'zc' ? ZC_DECIMALS : SOL_DECIMALS;
+    // Convert decimal amount to smallest units using dynamic decimals
+    const decimals = inputToken === 'baseToken' ? baseDecimals : SOL_DECIMALS;
     const amountInSmallestUnits = Math.floor(parseFloat(inputAmount) * Math.pow(10, decimals)).toString();
 
     // Execute the swap on the selected market
@@ -72,11 +73,12 @@ export async function openPosition(config: OpenPositionConfig): Promise<void> {
       isBaseToQuote,
       amountInSmallestUnits,
       userAddress,
-      signTransaction
+      signTransaction,
+      moderatorId
     );
 
     // Success message
-    const outputToken = inputToken === 'zc' ? 'SOL' : 'ZC';
+    const outputToken = inputToken === 'baseToken' ? 'SOL' : 'BASE';
     toast.success(
       `Successfully swapped ${market}-${inputToken.toUpperCase()} → ${market}-${outputToken}!`,
       { id: toastId, duration: 5000 }
@@ -96,45 +98,47 @@ export async function openPosition(config: OpenPositionConfig): Promise<void> {
  * Close a position (pass or fail) by a certain percentage
  */
 export async function closePosition(config: ClosePositionConfig): Promise<void> {
-  const { proposalId, positionType, percentageToClose, userAddress, signTransaction } = config;
-  
+  const { proposalId, positionType, percentageToClose, userAddress, signTransaction, moderatorId } = config;
+
   if (percentageToClose <= 0 || percentageToClose > 100) {
     throw new Error('Percentage to close must be between 1 and 100');
   }
-  
+
   const toastId = toast.loading(`Closing ${percentageToClose}% of position...`);
-  
+
   try {
     // Step 1: Get current balances to determine amounts to close
-    const currentBalances = await getUserBalances(proposalId, userAddress);
+    const currentBalances = await getUserBalances(proposalId, userAddress, moderatorId);
     if (!currentBalances) {
       throw new Error('Failed to get current balances');
     }
-    
+
     // Step 2: Calculate amounts to close based on position type and percentage
     const amountsToClose = calculateCloseAmounts(currentBalances, positionType, percentageToClose);
-    
+
     // Step 3: Execute reverse swaps to prepare for merging
     await executeReverseSwaps(
       proposalId,
       positionType,
       amountsToClose,
       userAddress,
-      signTransaction
+      signTransaction,
+      moderatorId
     );
-    
+
     // Step 4: Get updated balances after swaps
-    const balancesAfterSwaps = await getUserBalances(proposalId, userAddress);
+    const balancesAfterSwaps = await getUserBalances(proposalId, userAddress, moderatorId);
     if (!balancesAfterSwaps) {
       throw new Error('Failed to get balances after swaps');
     }
-    
+
     // Step 5: Merge conditional tokens back to regular tokens
     await mergeConditionalTokens(
       proposalId,
       balancesAfterSwaps,
       userAddress,
-      signTransaction
+      signTransaction,
+      moderatorId
     );
     
     toast.success(
@@ -185,12 +189,13 @@ async function executeReverseSwaps(
   positionType: 'pass' | 'fail',
   amountsToClose: any,
   userAddress: string,
-  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>,
+  moderatorId?: number
 ): Promise<void> {
-  
+
   if (positionType === 'pass') {
     // Reverse pass position: pBase + fQuote → pQuote + fBase
-    
+
     // Swap pBase → pQuote on pass market
     if (amountsToClose.pBaseToSwap && amountsToClose.pBaseToSwap !== '0') {
       await executeMarketSwap(
@@ -199,10 +204,11 @@ async function executeReverseSwaps(
         true, // base to quote
         amountsToClose.pBaseToSwap,
         userAddress,
-        signTransaction
+        signTransaction,
+        moderatorId
       );
     }
-    
+
     // Swap fQuote → fBase on fail market
     if (amountsToClose.fQuoteToSwap && amountsToClose.fQuoteToSwap !== '0') {
       await executeMarketSwap(
@@ -211,13 +217,14 @@ async function executeReverseSwaps(
         false, // quote to base
         amountsToClose.fQuoteToSwap,
         userAddress,
-        signTransaction
+        signTransaction,
+        moderatorId
       );
     }
-    
+
   } else {
     // Reverse fail position: fBase + pQuote → fQuote + pBase
-    
+
     // Swap fBase → fQuote on fail market
     if (amountsToClose.fBaseToSwap && amountsToClose.fBaseToSwap !== '0') {
       await executeMarketSwap(
@@ -226,10 +233,11 @@ async function executeReverseSwaps(
         true, // base to quote
         amountsToClose.fBaseToSwap,
         userAddress,
-        signTransaction
+        signTransaction,
+        moderatorId
       );
     }
-    
+
     // Swap pQuote → pBase on pass market
     if (amountsToClose.pQuoteToSwap && amountsToClose.pQuoteToSwap !== '0') {
       await executeMarketSwap(
@@ -238,7 +246,8 @@ async function executeReverseSwaps(
         false, // quote to base
         amountsToClose.pQuoteToSwap,
         userAddress,
-        signTransaction
+        signTransaction,
+        moderatorId
       );
     }
   }
@@ -251,14 +260,15 @@ async function mergeConditionalTokens(
   proposalId: number,
   balances: any,
   userAddress: string,
-  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>,
+  moderatorId?: number
 ): Promise<void> {
-  
+
   const pBase = parseFloat(balances.base.passConditional || '0');
   const fBase = parseFloat(balances.base.failConditional || '0');
   const pQuote = parseFloat(balances.quote.passConditional || '0');
   const fQuote = parseFloat(balances.quote.failConditional || '0');
-  
+
   // Merge base tokens if user has both pBase and fBase
   const baseMergeAmount = Math.min(pBase, fBase);
   console.log("base merge amount:", baseMergeAmount);
@@ -268,10 +278,11 @@ async function mergeConditionalTokens(
       'base',
       Math.floor(baseMergeAmount).toString(),
       userAddress,
-      signTransaction
+      signTransaction,
+      moderatorId
     );
   }
-  
+
   // Merge quote tokens if user has both pQuote and fQuote
   const quoteMergeAmount = Math.min(pQuote, fQuote);
   if (quoteMergeAmount > 0) {
@@ -280,7 +291,8 @@ async function mergeConditionalTokens(
       'quote',
       Math.floor(quoteMergeAmount).toString(),
       userAddress,
-      signTransaction
+      signTransaction,
+      moderatorId
     );
   }
 }
@@ -293,36 +305,37 @@ async function mergeTokens(
   vaultType: 'base' | 'quote',
   amount: string,
   userAddress: string,
-  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>,
+  moderatorId?: number
 ): Promise<void> {
-  
+
   // Build merge transaction
   const mergeRequest = {
     user: userAddress,
     amount: amount
   };
-  
-  const mergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`), {
+
+  const mergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildMergeTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(mergeRequest)
   });
-  
+
   if (!mergeResponse.ok) {
     const error = await mergeResponse.json();
     throw new Error(`${vaultType} merge failed: ${error.message || JSON.stringify(error)}`);
   }
-  
+
   const mergeData = await mergeResponse.json();
-  
+
   // Sign the transaction
   const mergeTx = Transaction.from(Buffer.from(mergeData.transaction, 'base64'));
   const signedMergeTx = await signTransaction(mergeTx);
-  
+
   // Execute the signed merge transaction
-  const executeMergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`), {
+  const executeMergeResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeMergeTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -331,7 +344,7 @@ async function mergeTokens(
       transaction: Buffer.from(signedMergeTx.serialize({ requireAllSignatures: false })).toString('base64')
     })
   });
-  
+
   if (!executeMergeResponse.ok) {
     const error = await executeMergeResponse.json();
     throw new Error(`${vaultType} merge execution failed: ${error.message || JSON.stringify(error)}`);
@@ -341,15 +354,15 @@ async function mergeTokens(
 /**
  * Get user balances for a proposal
  */
-async function getUserBalances(proposalId: number, userAddress: string): Promise<any> {
+async function getUserBalances(proposalId: number, userAddress: string, moderatorId?: number): Promise<any> {
   const balancesResponse = await fetch(
-    buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress })
+    buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress }, moderatorId)
   );
-  
+
   if (balancesResponse.ok) {
     return await balancesResponse.json();
   }
-  
+
   return null;
 }
 
@@ -361,36 +374,37 @@ async function splitTokens(
   vaultType: 'base' | 'quote',
   amount: string,
   userAddress: string,
-  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>,
+  moderatorId?: number
 ): Promise<void> {
-  
+
   // Build split transaction
   const splitRequest = {
     user: userAddress,
     amount: amount
   };
-  
-  const splitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`), {
+
+  const splitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildSplitTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(splitRequest)
   });
-  
+
   if (!splitResponse.ok) {
     const error = await splitResponse.json();
     throw new Error(`${vaultType} split failed: ${error.message || JSON.stringify(error)}`);
   }
-  
+
   const splitData = await splitResponse.json();
-  
+
   // Sign the transaction using the wallet
   const splitTx = Transaction.from(Buffer.from(splitData.transaction, 'base64'));
   const signedTx = await signTransaction(splitTx);
-  
+
   // Execute the signed split transaction
-  const executeSplitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`), {
+  const executeSplitResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeSplitTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -399,7 +413,7 @@ async function splitTokens(
       transaction: Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString('base64')
     })
   });
-  
+
   if (!executeSplitResponse.ok) {
     const error = await executeSplitResponse.json();
     throw new Error(`${vaultType} split execution failed: ${error.message || JSON.stringify(error)}`);
@@ -416,8 +430,9 @@ export async function claimWinnings(config: {
   userPosition: { type: 'pass' | 'fail' } | null;
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
+  moderatorId?: number;
 }): Promise<void> {
-  const { proposalId, proposalStatus, userAddress, signTransaction } = config;
+  const { proposalId, proposalStatus, userAddress, signTransaction, moderatorId } = config;
 
   // Check if user won
   const didUserWin = (proposalStatus === 'Passed' && config.userPosition?.type === 'pass') ||
@@ -431,7 +446,7 @@ export async function claimWinnings(config: {
 
   try {
     // Get user balances to determine which vaults have claimable tokens
-    const balances = await getUserBalances(proposalId, userAddress);
+    const balances = await getUserBalances(proposalId, userAddress, moderatorId);
     if (!balances) {
       throw new Error('Failed to get user balances');
     }
@@ -462,7 +477,7 @@ export async function claimWinnings(config: {
     for (const vaultType of vaultsToRedeem) {
       // Build redeem transaction
       const redeemResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildRedeemWinningTokensTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/buildRedeemWinningTokensTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: {
@@ -487,7 +502,7 @@ export async function claimWinnings(config: {
 
       // Execute the signed redeem transaction
       const executeRedeemResponse = await fetch(
-        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeRedeemWinningTokensTx`),
+        buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/${vaultType}/executeRedeemWinningTokensTx`, undefined, moderatorId),
         {
           method: 'POST',
           headers: {
@@ -531,9 +546,10 @@ async function executeMarketSwap(
   isBaseToQuote: boolean,
   amountIn: string,
   userAddress: string,
-  signTransaction: (transaction: Transaction) => Promise<Transaction>
+  signTransaction: (transaction: Transaction) => Promise<Transaction>,
+  moderatorId?: number
 ): Promise<void> {
-  
+
   // Build swap request
   const swapRequest = {
     user: userAddress,
@@ -542,20 +558,20 @@ async function executeMarketSwap(
     amountIn: amountIn,
     slippageBps: 2000 // 20% slippage for large swaps
   };
-  
-  const buildSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/buildSwapTx`), {
+
+  const buildSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/buildSwapTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(swapRequest)
   });
-  
+
   if (!buildSwapResponse.ok) {
     const error = await buildSwapResponse.json();
     throw new Error(`Build ${market} swap failed: ${error.message || JSON.stringify(error)}`);
   }
-  
+
   const swapTxData = await buildSwapResponse.json();
 
   // Sign the swap transaction
@@ -563,7 +579,7 @@ async function executeMarketSwap(
   const signedSwapTx = await signTransaction(swapTx);
 
   // Execute the signed swap transaction
-  const executeSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/executeSwapTx`), {
+  const executeSwapResponse = await fetch(buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/executeSwapTx`, undefined, moderatorId), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

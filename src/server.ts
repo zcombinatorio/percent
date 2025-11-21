@@ -17,14 +17,17 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import express, { Router } from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+
+// CRITICAL: Load environment variables BEFORE any other imports
+// This ensures process.env is populated before modules that use it are loaded
+dotenv.config();
+
+import express from 'express';
+import cors from 'cors';
 import routes from './routes';
 import { errorHandler } from './middleware/errorHandler';
 import RouterService from '../app/services/router.service';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,6 +51,7 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+
       if (process.env.DB_URL) {
         console.log('Database connection configured');
       } else {

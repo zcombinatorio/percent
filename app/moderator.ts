@@ -17,7 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Keypair } from '@solana/web3.js';
+import { Keypair, Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
+import { CpAmm } from '@meteora-ag/cp-amm-sdk';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
 import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment, ExecutionStatus } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
@@ -26,7 +28,9 @@ import { SchedulerService } from './services/scheduler.service';
 import { PersistenceService } from './services/persistence.service';
 import { ExecutionService } from './services/execution.service';
 import { LoggerService } from './services/logger.service';
+import { DammService } from './services/damm.service';
 import { getNetworkFromConnection} from './utils/network';
+import { POOL_METADATA } from '../src/config/whitelist';
 //import { BlockEngineUrl, JitoService } from '@slateos/jito';
 
 /**
@@ -40,6 +44,7 @@ export class Moderator implements IModerator {
   public scheduler: SchedulerService;                     // Scheduler for automatic tasks
   public persistenceService: PersistenceService;          // Database persistence service
   private executionService: ExecutionService;              // Execution service for transactions
+  private dammService: DammService;                        // DAMM pool interaction service
   private logger: LoggerService;                           // Logger service for this moderator
   //private jitoService?: JitoService;                       // Jito service @deprecated
 
@@ -80,11 +85,32 @@ export class Moderator implements IModerator {
     });
 
     this.executionService = new ExecutionService(executionConfig, this.logger);
+    this.dammService = new DammService(this.logger.createChild('damm'));
 
     /** @deprecated */
     // if (this.config.jitoUuid) {
     //   this.jitoService = new JitoService(BlockEngineUrl.MAINNET, this.config.jitoUuid);
     // }
+  }
+
+  /**
+   * Get the appropriate authority keypair for a given pool
+   * @param poolAddress - DAMM pool address (optional)
+   * @returns Authority keypair for the pool, or default if not mapped
+   */
+  getAuthorityForPool(poolAddress?: string): Keypair {
+    // If no pool-specific authorities configured, use default
+    if (!this.config.poolAuthorities) {
+      return this.config.defaultAuthority;
+    }
+
+    // If poolAddress not provided or not mapped, use default
+    if (!poolAddress || !this.config.poolAuthorities.has(poolAddress)) {
+      return this.config.defaultAuthority;
+    }
+
+    // Return pool-specific authority
+    return this.config.poolAuthorities.get(poolAddress)!;
   }
 
   /**
@@ -104,7 +130,7 @@ export class Moderator implements IModerator {
         mint: this.config.quoteMint.toBase58(),
         decimals: this.config.quoteDecimals
       },
-      authority: this.config.authority.publicKey.toBase58(),
+      authority: this.config.defaultAuthority.publicKey.toBase58(),
     };
 
     return info;
@@ -144,6 +170,10 @@ export class Moderator implements IModerator {
     const proposalIdCounter = await this.getProposalIdCounter() + 1;
     try {
       this.logger.info('Creating proposal');
+
+      // Select appropriate authority based on pool address
+      const authority = this.getAuthorityForPool(params.spotPoolAddress);
+
       // Create proposal config from moderator config and params
       const proposalConfig: IProposalConfig = {
         id: proposalIdCounter,
@@ -157,7 +187,7 @@ export class Moderator implements IModerator {
         quoteMint: this.config.quoteMint,
         baseDecimals: this.config.baseDecimals,
         quoteDecimals: this.config.quoteDecimals,
-        authority: this.config.authority,
+        authority: authority,
         executionService: this.executionService,
         spotPoolAddress: params.spotPoolAddress,
         totalSupply: params.totalSupply,
@@ -222,6 +252,14 @@ export class Moderator implements IModerator {
 
     const status = await proposal.finalize();
     await this.saveProposal(proposal);
+
+    // Wait for RPC to sync after finalization
+    this.logger.info('Waiting for RPC to sync after finalization', { proposalId: id });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Handle deposit-back for proposals with DAMM withdrawals
+    await this.handleDepositBack(id);
+
     if (status === ProposalStatus.Passed) {
       this.logger.info('Proposal finalized and passed');
     } else if (status === ProposalStatus.Failed) {
@@ -276,6 +314,164 @@ export class Moderator implements IModerator {
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;
+    }
+  }
+
+  /**
+   * Handle automatic deposit-back to DAMM pool after proposal finalization
+   * Deposits available ZC/SOL from authority wallet back to DAMM pool
+   * The DAMM API handles pool ratio calculation internally
+   * @param proposalId - The ID of the finalized proposal
+   */
+  private async handleDepositBack(proposalId: number): Promise<void> {
+    try {
+      // Check if proposal has withdrawal metadata
+      const metadata = await this.persistenceService.getWithdrawalMetadata(proposalId);
+
+      if (!metadata) {
+        // No withdrawal metadata, skip deposit-back
+        return;
+      }
+
+      if (!metadata.needsDepositBack) {
+        // Already deposited back
+        this.logger.info('Proposal already has deposit-back completed', { proposalId });
+        return;
+      }
+
+      this.logger.info('Starting deposit-back to DAMM pool', {
+        proposalId,
+        originalWithdrawnTokenA: metadata.tokenA,
+        originalWithdrawnTokenB: metadata.tokenB,
+        poolAddress: metadata.poolAddress
+      });
+
+      // Get pool metadata for dynamic decimal lookup
+      const poolMetadata = POOL_METADATA[metadata.poolAddress];
+      if (!poolMetadata) {
+        throw new Error(`Pool metadata not found for ${metadata.poolAddress}`);
+      }
+
+      const BASE_DECIMALS = poolMetadata.baseDecimals;
+      const QUOTE_DECIMALS = poolMetadata.quoteDecimals;
+
+      this.logger.info('Using pool-specific decimals for deposit', {
+        proposalId,
+        poolAddress: metadata.poolAddress,
+        baseDecimals: BASE_DECIMALS,
+        quoteDecimals: QUOTE_DECIMALS
+      });
+
+      // Step 1: Convert raw withdrawal amounts to UI units for DAMM API
+      // The withdrawal API returns raw amounts, but deposit API expects UI amounts
+      const tokenAAmountUI = metadata.tokenA / Math.pow(10, BASE_DECIMALS);
+      const tokenBAmountUI = metadata.tokenB / Math.pow(10, QUOTE_DECIMALS);
+
+      this.logger.info('Depositing withdrawal amounts (full precision)', {
+        proposalId,
+        tokenA: tokenAAmountUI,
+        tokenB: tokenBAmountUI,
+        rawTokenA: metadata.tokenA,
+        rawTokenB: metadata.tokenB,
+        poolAddress: metadata.poolAddress
+      });
+
+      // Step 2: Create transaction signer from authority keypair with validation
+      const authority = this.getAuthorityForPool(metadata.poolAddress);
+      const signTransaction = async (transaction: any) => {
+        // Validate fee payer matches authority wallet
+        if (!transaction.feePayer?.equals(authority.publicKey)) {
+          const error = `Fee payer mismatch: expected ${authority.publicKey.toBase58()}, got ${transaction.feePayer?.toBase58()}`;
+          this.logger.error('Transaction validation failed', { proposalId, error });
+          throw new Error(error);
+        }
+
+        this.logger.info('Transaction validated, signing with authority', {
+          proposalId,
+          feePayer: transaction.feePayer.toBase58(),
+          authority: authority.publicKey.toBase58(),
+          poolAddress: metadata.poolAddress
+        });
+
+        transaction.partialSign(authority);
+        return transaction;
+      };
+
+      // Step 4: Execute deposit with retry logic
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY_MS = 2000;
+      let lastError: Error | null = null;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          this.logger.info(`Attempting deposit-back (${attempt}/${MAX_RETRIES})`, {
+            proposalId,
+            tokenAAmount: tokenAAmountUI,
+            tokenBAmount: tokenBAmountUI,
+            poolAddress: metadata.poolAddress
+          });
+
+          // Execute deposit with original withdrawal amounts
+          const depositResult = await this.dammService.depositToDammPool(
+            tokenAAmountUI,
+            tokenBAmountUI,
+            signTransaction,
+            metadata.poolAddress
+          );
+
+          // Mark as deposited in database with actual amounts from API response
+          await this.persistenceService.markWithdrawalDeposited(
+            proposalId,
+            depositResult.signature,
+            depositResult.amounts.tokenA,
+            depositResult.amounts.tokenB
+          );
+
+          this.logger.info('Deposit-back completed successfully', {
+            proposalId,
+            attempt,
+            depositSignature: depositResult.signature,
+            requestedAmounts: {
+              tokenA: tokenAAmountUI,
+              tokenB: tokenBAmountUI
+            },
+            confirmedDeposit: {
+              tokenA: depositResult.amounts.tokenA,
+              tokenB: depositResult.amounts.tokenB
+            }
+          });
+
+          return; // Success, exit the method
+        } catch (depositError) {
+          lastError = depositError instanceof Error ? depositError : new Error(String(depositError));
+          this.logger.warn(`Deposit-back attempt ${attempt}/${MAX_RETRIES} failed`, {
+            proposalId,
+            attempt,
+            error: lastError.message
+          });
+
+          if (attempt < MAX_RETRIES) {
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          }
+        }
+      }
+
+      // All retries failed
+      this.logger.error('All deposit-back attempts failed', {
+        proposalId,
+        totalAttempts: MAX_RETRIES,
+        lastError: lastError?.message,
+        note: 'Tokens remain in authority wallet, needs_deposit_back=true for manual retry'
+      });
+      // Don't throw - tokens are safe in authority wallet, can be retried manually
+    } catch (error) {
+      // Log error but don't fail the finalization
+      this.logger.error('Failed to complete deposit-back', {
+        proposalId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      // Don't throw - we don't want deposit-back failures to prevent finalization
     }
   }
 }
