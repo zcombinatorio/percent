@@ -74,9 +74,7 @@ export default function Header() {
           </nav>
         </div>
         <a
-          href="https://zc.percent.markets/zc"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/zc"
           className="bg-white text-black px-4 py-1.5 font-medium hover:opacity-90 transition-opacity rounded-full"
         >
           Enter here
