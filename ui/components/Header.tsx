@@ -100,7 +100,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
               onClick={login}
               className="text-sm font-ibm-plex-mono font-medium cursor-pointer transition-colors"
               style={{ color: '#BEE8FC', fontFamily: 'IBM Plex Mono, monospace' }}
-              onMouseEnter={(e) => e.currentTarget.style.color = '#C56125'}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#BEE8FC'}
               onMouseLeave={(e) => e.currentTarget.style.color = '#BEE8FC'}
             >
               Click to log in

@@ -14,9 +14,7 @@ export default function CTASection() {
           Contribute to ZC today.
         </p>
         <a
-          href="https://zc.percent.markets/zc"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/zc"
           className="bg-white text-black px-6 py-2 font-medium hover:opacity-90 transition-opacity rounded-full animate-on-scroll-subtle delay-300 inline-block"
         >
           Enter here
