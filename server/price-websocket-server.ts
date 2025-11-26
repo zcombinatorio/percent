@@ -41,7 +41,7 @@ interface ClientSubscription {
 interface TradeEvent {
   type: 'TRADE';
   proposalId: number;
-  market: 'pass' | 'fail';
+  market: number;  // Market index: 0=fail, 1=pass (or higher for multi-market)
   userAddress: string;
   isBaseToQuote: boolean;
   amountIn: string;
@@ -495,16 +495,16 @@ class PriceWebSocketServer {
 
     let marketCapUsd: number;
 
-    // Check if this is a spot market price (already in USD) or pass/fail (in SOL)
-    if (market === 'spot') {
+    // Check if this is a spot market price (market=-1, already in USD) or conditional market (in SOL)
+    if (market === -1) {
       // Spot prices are already stored as market cap USD - no conversion needed
       marketCapUsd = priceValue;
       console.log(`[WebSocket Server] Spot market - price already in USD: $${marketCapUsd.toFixed(2)}`);
     } else {
-      // Pass/Fail prices are in SOL - calculate market cap USD: price (SOL) × actual supply × SOL/USD
+      // Conditional market prices are in SOL - calculate market cap USD: price (SOL) × actual supply × SOL/USD
       const actualSupply = await this.getProposalTotalSupply(proposalId);
       marketCapUsd = priceValue * actualSupply * this.solPrice;
-      console.log(`[WebSocket Server] ${market} market - converting: ${priceValue} SOL × ${actualSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
+      console.log(`[WebSocket Server] Market ${market} - converting: ${priceValue} SOL × ${actualSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
     }
 
     // Broadcast price update with BOTH formats for backwards compatibility
@@ -528,7 +528,7 @@ class PriceWebSocketServer {
         ws.send(JSON.stringify(trade));
       }
     });
-    console.log(`Trade broadcast for proposal ${trade.proposalId}: ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
+    console.log(`Trade broadcast for proposal ${trade.proposalId}: market ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
   }
 
   private broadcastPrice(priceUpdate: any) {
@@ -592,7 +592,7 @@ class PriceWebSocketServer {
       }
 
       const result = await this.pgClient.query(
-        'SELECT total_supply, base_decimals FROM i_proposals WHERE proposal_id = $1 LIMIT 1',
+        'SELECT total_supply, base_decimals FROM qm_proposals WHERE proposal_id = $1 LIMIT 1',
         [proposalId]
       );
 

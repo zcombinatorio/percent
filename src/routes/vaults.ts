@@ -381,20 +381,31 @@ router.get('/:id/getUserBalances', async (req, res, next) => {
       quoteVault.getUserBalances(userPubkey)
     ]);
 
+    // Convert BigInt balances to strings
+    // Return conditional balances as arrays indexed by market (0, 1, 2, ...)
+    const baseConditionalMints = baseVault.conditionalMints;
+    const quoteConditionalMints = quoteVault.conditionalMints;
+
+    // Map conditional balances to array in same order as conditionalMints
+    const baseConditionalBalances = baseConditionalMints.map(mint =>
+      baseBalances.conditional[mint.toString()]?.toString() || '0'
+    );
+    const quoteConditionalBalances = quoteConditionalMints.map(mint =>
+      quoteBalances.conditional[mint.toString()]?.toString() || '0'
+    );
+
     const balances = {
       proposalId,
       user: user as string,
       base: {
-        regularMint: baseVault.regularMint,
-        regularMintBalance: baseBalances.regular.toString(),
-        conditionalMints: baseVault.conditionalMints,
-        conditionalMintBalances: baseBalances.conditional,
+        regular: baseBalances.regular.toString(),
+        conditionalMints: baseConditionalMints.map(m => m.toString()),
+        conditionalBalances: baseConditionalBalances,
       },
       quote: {
-        regularMint: quoteVault.regularMint.toString(),
-        regularMintBalance: quoteBalances.regular.toString(),
-        conditionalMints: quoteVault.conditionalMints,
-        conditionalMintBalances: quoteBalances.conditional,
+        regular: quoteBalances.regular.toString(),
+        conditionalMints: quoteConditionalMints.map(m => m.toString()),
+        conditionalBalances: quoteConditionalBalances,
       },
     };
 

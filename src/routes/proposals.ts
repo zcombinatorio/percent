@@ -218,8 +218,8 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       return res.status(404).json({ error: 'Moderator not found' });
     }
 
-    // Validate required fields - now only title, description, proposalLength, creatorWallet required
-    if (body.title || !body.description == undefined || !body.markets || !body.proposalLength || !body.creatorWallet) {
+    // Validate required fields - title, description, proposalLength, creatorWallet required
+    if (!body.title || !body.description || !body.proposalLength || !body.creatorWallet) {
       logger.warn('[POST /] Missing required fields', {
         receivedFields: Object.keys(req.body),
         moderatorId
