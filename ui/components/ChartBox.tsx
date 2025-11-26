@@ -12,6 +12,7 @@ interface ChartBoxProps {
   tradesLoading: boolean;
   getTimeAgo: (timestamp: string) => string;
   getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => string;
+  moderatorId?: number;
 }
 
 export function ChartBox({
@@ -21,7 +22,8 @@ export function ChartBox({
   totalVolume,
   tradesLoading,
   getTimeAgo,
-  getTokenUsed
+  getTokenUsed,
+  moderatorId
 }: ChartBoxProps) {
   const [view, setView] = useState<'chart' | 'history'>('chart');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
@@ -90,11 +92,11 @@ export function ChartBox({
         <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px]">
           {/* Mobile: 400px */}
           <div className="md:hidden">
-            <MarketChart proposalId={proposalId} market={selectedMarket} height={480} />
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={480} moderatorId={moderatorId} />
           </div>
           {/* Desktop: 615px */}
           <div className="hidden md:block">
-            <MarketChart proposalId={proposalId} market={selectedMarket} height={615} />
+            <MarketChart proposalId={proposalId} market={selectedMarket} height={615} moderatorId={moderatorId} />
           </div>
         </div>
       ) : (

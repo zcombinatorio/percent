@@ -555,6 +555,7 @@ export default function HomePage() {
                         tradesLoading={tradesLoading}
                         getTimeAgo={getTimeAgo}
                         getTokenUsed={getTokenUsed}
+                        moderatorId={moderatorId ?? undefined}
                       />
                     </div>
                   </div>

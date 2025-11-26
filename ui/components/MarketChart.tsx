@@ -15,9 +15,10 @@ interface MarketChartProps {
   proposalId: number;
   market: 'pass' | 'fail';
   height?: number;
+  moderatorId?: number;
 }
 
-export default function MarketChart({ proposalId, market, height = 256 }: MarketChartProps) {
+export default function MarketChart({ proposalId, market, height = 256, moderatorId }: MarketChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +32,7 @@ export default function MarketChart({ proposalId, market, height = 256 }: Market
     const initChart = async () => {
       try {
         // Fetch proposal details to get token/pool addresses
-        const proposal = await api.getProposal(proposalId);
+        const proposal = await api.getProposal(proposalId, moderatorId);
         if (!proposal) {
           throw new Error('Failed to fetch proposal details');
         }
@@ -74,7 +75,7 @@ export default function MarketChart({ proposalId, market, height = 256 }: Market
         }
 
         // Create datafeed with spot pool address for overlay support
-        const datafeed = new ProposalMarketDatafeed(proposalId, market, proposal.spotPoolAddress);
+        const datafeed = new ProposalMarketDatafeed(proposalId, market, proposal.spotPoolAddress, moderatorId);
         datafeed.setAddresses(tokenAddress, poolAddress);
 
         // Clear any existing widget

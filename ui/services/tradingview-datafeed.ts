@@ -30,6 +30,7 @@ interface ChartDataPoint {
 export class ProposalMarketDatafeed implements IBasicDataFeed {
   private proposalId: number;
   private market: 'pass' | 'fail';
+  private moderatorId?: number;
   private tokenAddress: string | null = null;
   private poolAddress: string | null = null;
   private spotPoolAddress: string | null = null;
@@ -37,10 +38,11 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   // NOTE: solPrice and totalSupply no longer needed - backend calculates market cap USD
   // All prices (pass, fail, spot) and trade prices are pre-calculated as market cap USD
 
-  constructor(proposalId: number, market: 'pass' | 'fail', spotPoolAddress?: string) {
+  constructor(proposalId: number, market: 'pass' | 'fail', spotPoolAddress?: string, moderatorId?: number) {
     this.proposalId = proposalId;
     this.market = market;
     this.spotPoolAddress = spotPoolAddress || null;
+    this.moderatorId = moderatorId;
   }
 
   /**
@@ -154,7 +156,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         interval,
         from: fromDate,
         to: toDate
-      });
+      }, this.moderatorId);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -272,7 +274,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         interval,
         from: fromDate,
         to: toDate
-      });
+      }, this.moderatorId);
       const response = await fetch(url);
 
       if (!response.ok) {

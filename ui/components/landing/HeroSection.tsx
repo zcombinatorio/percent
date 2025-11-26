@@ -48,7 +48,7 @@ export default function HeroSection() {
       {/* Button */}
       <div className="flex justify-center hero-animate-subtle" style={{ animationDelay: '0.5s' }}>
         <a
-          href="https://zc.percent.markets"
+          href="https://zc.percent.markets/zc"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-white text-black px-4 py-1.5 font-medium hover:opacity-90 transition-opacity rounded-full inline-block"
