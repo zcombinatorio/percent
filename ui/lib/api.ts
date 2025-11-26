@@ -18,8 +18,9 @@
  */
 
 import { Connection } from '@solana/web3.js';
-import type { ProposalListResponse, ProposalListItem, ProposalDetailResponse, UserBalancesResponse } from '@/types/api';
+import type { ProposalListResponse, ProposalListItem, ProposalDetailResponse, UserBalancesResponse, RawUserBalancesResponse } from '@/types/api';
 import { buildApiUrl } from './api-utils';
+import { transformProposalListItem, transformProposalDetail, transformUserBalances, transformTWAPHistory, marketToIndex } from './api-adapter';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com';
@@ -38,7 +39,8 @@ class GovernanceAPI {
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposals');
       const data: ProposalListResponse = await response.json();
-      return data.proposals;
+      // Transform each proposal to UI format (Finalized -> Passed/Failed)
+      return data.proposals.map(transformProposalListItem);
     } catch (error) {
       console.error('Error fetching proposals:', error);
       return [];
@@ -104,7 +106,9 @@ class GovernanceAPI {
       const url = buildApiUrl(API_BASE_URL, `/api/proposals/${id}`, {}, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch proposal');
-      return await response.json();
+      const data = await response.json();
+      // Transform to UI format (Finalized -> Passed/Failed)
+      return transformProposalDetail(data);
     } catch (error) {
       console.error('Error fetching proposal:', error);
       return null;
@@ -116,7 +120,9 @@ class GovernanceAPI {
       const url = buildApiUrl(API_BASE_URL, `/api/vaults/${proposalId}/getUserBalances`, { user: userAddress }, moderatorId);
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch user balances');
-      return await response.json();
+      const data: RawUserBalancesResponse = await response.json();
+      // Transform to UI format with pass/fail named fields
+      return transformUserBalances(data);
     } catch (error) {
       console.error('Error fetching user balances:', error);
       return null;
@@ -132,13 +138,9 @@ class GovernanceAPI {
       }
       const data = await response.json();
 
-      // Get the most recent TWAP data (first element, matching LivePriceDisplay)
+      // Transform backend twaps[] array to UI passTwap/failTwap format
       if (data.data && data.data.length > 0) {
-        const latest = data.data[0];
-        return {
-          passTwap: parseFloat(latest.passTwap),
-          failTwap: parseFloat(latest.failTwap)
-        };
+        return transformTWAPHistory(data.data);
       }
       return null;
     } catch (error) {
@@ -194,12 +196,14 @@ class GovernanceAPI {
     outputMint: string;
   } | null> {
     try {
+      // Convert market string to numeric index for backend API
+      const marketIndex = marketToIndex(market);
       const params = {
         isBaseToQuote,
         amountIn,
         slippageBps
       };
-      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${market}/quote`, params, moderatorId);
+      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${marketIndex}/quote`, params, moderatorId);
 
       const response = await fetch(url);
       if (!response.ok) {

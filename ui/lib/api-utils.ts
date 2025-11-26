@@ -25,9 +25,10 @@ export function buildApiUrl(
 ): string {
   let url = `${baseUrl}${path}`;
 
-  // Only add moderatorId if explicitly provided (no fallback to env var)
-  const allParams = moderatorId !== undefined
-    ? { moderatorId: moderatorId.toString(), ...params }
+  // Use provided moderatorId or fall back to env var
+  const id = moderatorId?.toString() || process.env.NEXT_PUBLIC_MODERATOR_ID;
+  const allParams = id !== undefined
+    ? { moderatorId: id, ...params }
     : { ...params };
 
   // Build query string

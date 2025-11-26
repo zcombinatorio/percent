@@ -79,8 +79,9 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
         }
 
         // Extract pass and fail token addresses for display purposes
-        const passAddress = proposal.baseVaultState?.passConditionalMint || null;
-        const failAddress = proposal.baseVaultState?.failConditionalMint || null;
+        // Market index: 0 = fail, 1 = pass
+        const passAddress = proposal.baseVaultState?.conditionalMints?.[1] || null;
+        const failAddress = proposal.baseVaultState?.conditionalMints?.[0] || null;
 
         setTokenAddresses({
           pass: passAddress,
@@ -132,8 +133,9 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
           if (data.data && data.data.length > 0) {
             // Get the most recent prices for pass and fail markets
-            const passData = data.data.find((d: any) => d.market === 'pass');
-            const failData = data.data.find((d: any) => d.market === 'fail');
+            // Backend uses numeric market indices: 0 = fail, 1 = pass
+            const passData = data.data.find((d: any) => d.market === 1 || d.market === 'pass');
+            const failData = data.data.find((d: any) => d.market === 0 || d.market === 'fail');
 
             console.log('[LivePriceDisplay] Found market data:', {
               passData,
@@ -184,9 +186,10 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
           const data = await response.json();
           if (data.data && data.data.length > 0) {
             const latest = data.data[0];
+            // Backend returns twaps[] array: index 0 = fail, index 1 = pass
             const twap = {
-              passTwap: parseFloat(latest.passTwap),
-              failTwap: parseFloat(latest.failTwap)
+              passTwap: parseFloat(latest.twaps?.[1] || '0'),
+              failTwap: parseFloat(latest.twaps?.[0] || '0')
             };
             setTwapData(twap);
             // Notify parent component of TWAP update

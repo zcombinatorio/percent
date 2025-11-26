@@ -21,18 +21,10 @@ import { Decimal } from 'decimal.js';
 import { IAMM } from './amm.interface';
 
 /**
- * Enum representing the TWAP oracle status
- */
-export enum TWAPStatus {
-  Passing = 'Passing',   // Pass TWAP exceeds fail TWAP by threshold
-  Failing = 'Failing'     // Pass TWAP does not exceed threshold
-}
-
-/**
  * Configuration for TWAP oracle
  */
 export interface ITWAPConfig {
-  initialTwapValue: number;                     // Initial observation value for both AMMs
+  initialTwapValue: number;                     // Initial observation value for all AMMs
   twapMaxObservationChangePerUpdate: number | null;  // Maximum change allowed per update (null = no limit)
   twapStartDelay: number;                       // Delay in milliseconds before TWAP starts recording
   passThresholdBps: number;                     // Basis points threshold for proposal to pass
@@ -41,7 +33,7 @@ export interface ITWAPConfig {
 
 /**
  * Interface for Time-Weighted Average Price oracle
- * Tracks and aggregates prices from pass and fail AMMs
+ * Tracks and aggregates prices from multiple AMMs (2-5 markets)
  */
 export interface ITWAPOracle {
   readonly proposalId: number;                          // ID of associated proposal (immutable)
@@ -49,18 +41,20 @@ export interface ITWAPOracle {
   readonly twapMaxObservationChangePerUpdate: number | null;  // Max observation change per update (null = no limit) (immutable)
   readonly twapStartDelay: number;                      // Start delay in milliseconds (immutable)
   readonly passThresholdBps: number;                    // Pass threshold in basis points (immutable)
+  readonly minUpdateInterval: number;                   // Minimum interval between updates in milliseconds (immutable)
   readonly createdAt: number;                           // Creation timestamp in milliseconds (immutable)
   readonly finalizedAt: number;                         // Finalization timestamp in milliseconds (immutable)
-  
+  readonly markets: number;                             // Number of markets (2-5 inclusive) (immutable)
+
   /**
    * Sets the AMMs for the oracle to track
    * Must be called before any other oracle operations
-   * @param pAMM - Pass AMM instance
-   * @param fAMM - Fail AMM instance
-   * @throws Error if AMMs have already been set
+   * Should be in-order of the markets
+   * @param AMMs - Array of AMM instances
+   * @throws Error if AMMs have already been set or count doesn't match markets
    */
-  setAMMs(pAMM: IAMM, fAMM: IAMM): void;
-  
+  setAMMs(AMMs: IAMM[]): void;
+
   /**
    * Updates TWAP observations and aggregations based on current AMM prices
    * Respects start delay, finalization time, and minimum update interval
@@ -68,29 +62,25 @@ export interface ITWAPOracle {
    * @throws Error if AMMs are not set
    */
   crankTWAP(): Promise<void>;
-  
+
   /**
-   * Fetches current TWAP prices and aggregations
+   * Fetches current TWAP prices and aggregations for all markets
    * @returns Object containing:
-   *   - passTwap: Time-weighted average price for pass AMM
-   *   - failTwap: Time-weighted average price for fail AMM
-   *   - passAggregation: Cumulative weighted pass observations
-   *   - failAggregation: Cumulative weighted fail observations
-   * @throws Error if AMMs are not set
+   *   - twaps: Array of time-weighted average prices (one per AMM)
+   *   - aggregations: Array of cumulative weighted observations (one per AMM)
+   * @throws Error if AMMs are not set or no time has passed
    */
-  fetchTWAP(): Promise<{
-    passTwap: Decimal;
-    failTwap: Decimal;
-    passAggregation: number;
-    failAggregation: number;
-  }>;
-  
+  fetchTWAPs(): {
+    twaps: Decimal[];
+    aggregations: Decimal[];
+  };
+
   /**
-   * Determines proposal status based on TWAP prices
-   * @returns TWAPStatus.Passing if pass TWAP exceeds fail TWAP by threshold
+   * Determines the index of the highest TWAP
+   * @returns Index of the market with the highest TWAP
    * @throws Error if AMMs are not set
    */
-  fetchStatus(): Promise<TWAPStatus>;
+  fetchHighestTWAPIndex(): number;
 
   /**
    * Serializes the TWAP oracle state for persistence
@@ -114,19 +104,12 @@ export interface ITWAPOracleSerializedData {
   finalizedAt: number;
 
   // Current state
-  passObservation: number;
-  failObservation: number;
-  passAggregation: number;
-  failAggregation: number;
+  observations: Decimal[];
+  aggregations: Decimal[];
   lastUpdateTime: number;
 
-  // Note: AMMs are not serialized as they are set via setAMMs method after deserialization
-}
+  // Markets
+  markets: number;
 
-/**
- * Configuration for deserializing a TWAP oracle
- */
-export interface ITWAPOracleDeserializeConfig {
-  // No additional config needed as TWAPOracle doesn't require authority or services
-  // AMMs will be set using setAMMs method after deserialization
+  // Note: AMMs are not serialized as they are set via setAMMs method after deserialization
 }

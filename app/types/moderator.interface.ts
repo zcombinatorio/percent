@@ -17,9 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Transaction, PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
-import { IExecutionResult, Commitment } from './execution.interface';
+import { Commitment } from './execution.interface';
 import { IProposal } from './proposal.interface';
 import { ITWAPConfig } from './twap-oracle.interface';
 import { PersistenceService } from '@app/services/persistence.service';
@@ -28,11 +28,9 @@ import { PersistenceService } from '@app/services/persistence.service';
  * Enum representing the possible states of a proposal
  */
 export enum ProposalStatus {
-  Uninitialized = 'Uninitialized', // Proposal created but not yet initialized on-chain
+  Uninitialized = 'Uninitialized',  // Proposal created but not yet initialized on-chain
   Pending = 'Pending',              // Proposal is active and voting is ongoing
-  Passed = 'Passed',                // Proposal passed the threshold
-  Failed = 'Failed',                // Proposal failed to pass the threshold
-  Executed = 'Executed'             // Proposal has been executed
+  Finalized = 'Finalized',          // Proposal has been finalized
 }
 
 /**
@@ -59,14 +57,15 @@ export interface IModeratorInfo {
 export interface ICreateProposalParams {
   title: string;                                // Title of the proposal (required)
   description?: string;                         // Human-readable description of the proposal (optional)
-  transaction: Transaction;                     // Solana transaction to execute if passed
+  market_labels?: string[];                      // Labels for each market
+  markets: number;                              // Number of markets
   proposalLength: number;                       // Duration of voting period in seconds
   spotPoolAddress?: string;                     // Optional Meteora pool address for spot market charts
   totalSupply: number;                          // Total supply of conditional tokens for market cap calculation
   twap: ITWAPConfig;                            // TWAP oracle configuration
   amm: {
-    initialBaseAmount: BN;                      // Initial base token liquidity (same for both pass and fail AMMs)
-    initialQuoteAmount: BN;                     // Initial quote token liquidity (same for both pass and fail AMMs)
+    initialBaseAmount: BN;                      // Initial base token liquidity (same for all AMMs)
+    initialQuoteAmount: BN;                     // Initial quote token liquidity (same for all AMMs)
   };
 }
 
@@ -117,18 +116,9 @@ export interface IModerator {
   /**
    * Finalizes a proposal after voting period ends
    * @param id - The ID of the proposal to finalize
-   * @returns The status of the proposal after finalization
+   * @returns Tuple of [status, winningMarketIndex | null]
    */
-  finalizeProposal(id: number): Promise<ProposalStatus>;
-
-  /**
-   * Executes a passed proposal's transaction
-   * @param id - The ID of the proposal to execute
-   * @param signer - Keypair to sign the transaction
-   * @returns Execution result with signature and status
-   * @throws Error if proposal cannot be executed
-   */
-  executeProposal(id: number, signer: Keypair): Promise<IExecutionResult>;
+  finalizeProposal(id: number): Promise<[ProposalStatus, number | null]>;
 
   /**
    * Gets a proposal by ID from database (always fresh data)

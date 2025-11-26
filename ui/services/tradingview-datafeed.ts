@@ -172,8 +172,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       }
 
       // Filter data for the specific market (pass/fail/spot) and convert to bars
+      // Backend may return market as string ('pass'/'fail') or numeric index (0/1)
+      const marketIndex = marketType === 'pass' ? 1 : marketType === 'fail' ? 0 : -1;
       const bars: Bar[] = data.data
-        .filter((item: any) => item.market === marketType)
+        .filter((item: any) => item.market === marketType || item.market === marketIndex)
         .map((item: ChartDataPoint) => ({
           time: new Date(item.timestamp).getTime(),
           open: parseFloat(item.open),
@@ -288,8 +290,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       }
 
       // Find the last bar for this market
+      // Backend may return market as string ('pass'/'fail') or numeric index (0/1)
+      const marketIndex = marketType === 'pass' ? 1 : marketType === 'fail' ? 0 : -1;
       const lastBar = data.data
-        .filter((item: any) => item.market === marketType)
+        .filter((item: any) => item.market === marketType || item.market === marketIndex)
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
       if (lastBar) {

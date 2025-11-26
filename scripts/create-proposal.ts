@@ -46,6 +46,8 @@ async function createProposal() {
   const request: CreateProposalRequest = {
     title: 'Test Proposal',
     description: 'Should ZC execute on PR #42? https://github.com/zcombinatorio/zcombinator/pull/42',
+    markets: 2,
+    market_labels: ['pass', 'fail'],
     proposalLength: 86400, // 24 hours in seconds
     creatorWallet: CREATOR_WALLET, // Must be whitelisted
   };

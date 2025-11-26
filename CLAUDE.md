@@ -379,9 +379,8 @@ POST /:id/executeSwapTx          // Execute swap
 ```
 
 #### **Price Services**
-- **DevnetPriceService**: Meteora pool monitoring on devnet
-- **MainnetPriceService**: Production AMM price fetching
-- Automatic network detection and routing
+- **MainnetPriceService**: Meteora AMM price fetching
+- Pool-based price discovery
 - 5-second cache duration
 - SOL/USD price conversion
 

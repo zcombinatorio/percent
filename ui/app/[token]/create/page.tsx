@@ -133,7 +133,7 @@ export default function CreatePage() {
       toast.loading('Creating Decision Market...', { id: toastId });
 
       // Convert hours to seconds
-      const proposalLength = Math.floor(hours * 3600);
+      const proposalLength = 300;//Math.floor(hours * 3600);
 
       const requestBody = {
         title: title.trim(),

@@ -546,7 +546,11 @@ export default function HomePage() {
                       <ChartBox
                         proposalId={proposal.id}
                         selectedMarket={selectedMarket}
-                        trades={trades.filter(trade => trade.market === selectedMarket)}
+                        trades={trades.filter(trade => {
+                          // Handle both string ('pass'/'fail') and numeric (0/1) market values
+                          const marketIndex = selectedMarket === 'pass' ? 1 : 0;
+                          return trade.market === selectedMarket || trade.market === marketIndex;
+                        })}
                         totalVolume={totalVolume}
                         tradesLoading={tradesLoading}
                         getTimeAgo={getTimeAgo}

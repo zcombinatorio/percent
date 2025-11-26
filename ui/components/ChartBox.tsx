@@ -11,7 +11,7 @@ interface ChartBoxProps {
   totalVolume: number;
   tradesLoading: boolean;
   getTimeAgo: (timestamp: string) => string;
-  getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail') => string;
+  getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => string;
   moderatorId?: number;
 }
 

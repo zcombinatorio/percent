@@ -20,6 +20,8 @@
 import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { buildApiUrl, withModeratorId } from './api-utils';
+import { marketToIndex, transformUserBalances } from './api-adapter';
+import type { RawUserBalancesResponse } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -360,7 +362,9 @@ async function getUserBalances(proposalId: number, userAddress: string, moderato
   );
 
   if (balancesResponse.ok) {
-    return await balancesResponse.json();
+    const rawBalances: RawUserBalancesResponse = await balancesResponse.json();
+    // Transform to add passConditional/failConditional named fields
+    return transformUserBalances(rawBalances);
   }
 
   return null;
@@ -550,10 +554,13 @@ async function executeMarketSwap(
   moderatorId?: number
 ): Promise<void> {
 
+  // Convert market string to numeric index for backend API
+  const marketIndex = marketToIndex(market);
+
   // Build swap request
   const swapRequest = {
     user: userAddress,
-    market: market,
+    market: marketIndex,
     isBaseToQuote: isBaseToQuote,
     amountIn: amountIn,
     slippageBps: 2000 // 20% slippage for large swaps
@@ -586,7 +593,7 @@ async function executeMarketSwap(
     },
     body: JSON.stringify({
       transaction: Buffer.from(signedSwapTx.serialize({ requireAllSignatures: false })).toString('base64'),
-      market: market,
+      market: marketIndex,
       user: userAddress,
       isBaseToQuote: isBaseToQuote,
       amountIn: amountIn,

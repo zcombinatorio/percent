@@ -121,18 +121,18 @@ const Sidebar = memo(({ selectedProposal, onSelectProposal, proposals, loading }
                   <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
                     proposal.status === 'Pending'
                       ? 'bg-orange-400/20 text-orange-400 animate-pulse'
-                      : proposal.status === 'Passed' || proposal.status === 'Executed'
+                      : proposal.status === 'Passed'
                       ? 'bg-emerald-400/20 text-emerald-400'
                       : 'bg-rose-400/20 text-rose-400'
                   }`}>
-                    {proposal.status === 'Pending' ? 'Live' : proposal.status === 'Executed' ? 'Passed' : proposal.status}
+                    {proposal.status === 'Pending' ? 'Live' : proposal.status}
                     {proposal.status === 'Pending' && (
                       <span className="relative w-3 h-3 flex items-center justify-center">
                         <span className="absolute w-3 h-3 bg-orange-400 rounded-full animate-ping opacity-75"></span>
                         <span className="relative w-2 h-2 bg-orange-400 rounded-full"></span>
                       </span>
                     )}
-                    {(proposal.status === 'Passed' || proposal.status === 'Executed') && (
+                    {proposal.status === 'Passed' && (
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>

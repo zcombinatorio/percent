@@ -38,13 +38,11 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
         }
 
         // Get token and pool addresses based on market type
-        const tokenAddress = market === 'pass'
-          ? proposal.baseVaultState?.passConditionalMint
-          : proposal.baseVaultState?.failConditionalMint;
+        // Market index: 0 = fail, 1 = pass
+        const marketIndex = market === 'pass' ? 1 : 0;
 
-        const poolAddress = market === 'pass'
-          ? proposal.passAmmState?.pool
-          : proposal.failAmmState?.pool;
+        const tokenAddress = proposal.baseVaultState?.conditionalMints?.[marketIndex];
+        const poolAddress = proposal.ammData?.[marketIndex]?.pool;
 
         if (!tokenAddress || !poolAddress) {
           throw new Error(`Missing ${market} market addresses`);
