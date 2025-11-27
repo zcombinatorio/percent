@@ -107,7 +107,7 @@ export const POOL_METADATA: Record<string, PoolMetadata> = {
     quoteMint: 'So11111111111111111111111111111111111111112', // Wrapped SOL
     baseDecimals: 6,
     quoteDecimals: 9,
-    moderatorId: 1, // oogway Decision Markets
+    moderatorId: 3, // oogway Decision Markets
     icon: 'https://wsrv.nl/?w=128&h=128&default=1&url=https%3A%2F%2Folive-imaginative-aardvark-508.mypinata.cloud%2Fipfs%2FQmV4rzAgYREFBpDRyM5VmboewHUwS1Xu8ey2wrs9rJKcfE',
   },
 };
