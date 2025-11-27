@@ -203,7 +203,9 @@ export class TWAPOracle implements ITWAPOracle {
     const { twaps } = this.fetchTWAPs();
 
     // return index of the highest TWAP
-    return twaps.indexOf(twaps.reduce((max, twap) => twap.gt(max) ? twap : max, new Decimal(0)));
+    // Use twaps[0] as initial value instead of new Decimal(0) to ensure indexOf can find it
+    // (indexOf uses reference equality, so a new Decimal(0) won't match existing Decimal(0) values)
+    return twaps.indexOf(twaps.reduce((max, twap) => twap.gt(max) ? twap : max, twaps[0]));
   }
 
   /**

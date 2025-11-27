@@ -57,8 +57,8 @@ export default function HomePage() {
     shouldFetchProposals ? (poolAddress || undefined) : undefined,
     shouldFetchProposals ? moderatorId : undefined
   );
-  const [livePrices, setLivePrices] = useState<{ pass: number | null; fail: number | null }>({ pass: null, fail: null });
-  const [twapData, setTwapData] = useState<{ passTwap: number | null; failTwap: number | null }>({ passTwap: null, failTwap: null });
+  const [livePrices, setLivePrices] = useState<(number | null)[]>([]);
+  const [twapData, setTwapData] = useState<(number | null)[]>([]);
   const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
   const [isPassMode, setIsPassMode] = useState(true);
 
@@ -85,7 +85,7 @@ export default function HomePage() {
 
   // Fetch user balances for the selected proposal
   const { data: userBalances, refetch: refetchBalances } = useUserBalances(selectedProposalId, walletAddress, moderatorId ?? undefined);
-  const [selectedMarket, setSelectedMarket] = useState<'pass' | 'fail'>('pass');
+  const [selectedMarketIndex, setSelectedMarketIndex] = useState<number>(1); // Default to index 1 (first choice)
 
   // Reset selected proposal when token changes to prevent stale data display
   useEffect(() => {
@@ -116,30 +116,25 @@ export default function HomePage() {
 
   // Market caps are pre-calculated on the backend (price in SOL × total supply × SOL/USD)
   // WebSocket delivers market cap USD directly - no frontend calculation needed
+  // livePrices is now an array indexed by market (supports 2-4 markets)
   const marketCaps = useMemo(() => {
     console.log('[HomePage] Calculating marketCaps from livePrices:', livePrices);
-    const caps = {
-      pass: livePrices.pass,
-      fail: livePrices.fail,
-    };
-    console.log('[HomePage] marketCaps result:', caps);
-    return caps;
-  }, [livePrices.pass, livePrices.fail]);
+    return livePrices;
+  }, [livePrices]);
 
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
   }, []);
-  
-  const handleMarketChange = useCallback((market: 'pass' | 'fail') => {
-    setSelectedMarket(market);
-    // Also sync the mode toggle
-    setIsPassMode(market === 'pass');
-  }, []);
 
   const handleModeToggle = useCallback((newIsPassMode: boolean) => {
     setIsPassMode(newIsPassMode);
-    // Also sync the selected market
-    setSelectedMarket(newIsPassMode ? 'pass' : 'fail');
+    setSelectedMarketIndex(newIsPassMode ? 1 : 0);
+  }, []);
+
+  const handleMarketIndexSelect = useCallback((index: number) => {
+    setSelectedMarketIndex(index);
+    // Sync mode toggle for backward compatibility (index 0 = "no", others = "yes")
+    setIsPassMode(index > 0);
   }, []);
 
   const handleTimerEnd = useCallback(() => {
@@ -149,26 +144,29 @@ export default function HomePage() {
     }, 5000);
   }, [refetch]);
 
-  const handlePricesUpdate = useCallback((prices: { pass: number | null; fail: number | null }) => {
+  const handlePricesUpdate = useCallback((prices: (number | null)[]) => {
     console.log('[HomePage] handlePricesUpdate called with:', prices);
     setLivePrices(prices);
     console.log('[HomePage] livePrices state will be updated');
   }, []);
 
-  const handleTwapUpdate = useCallback((twap: { passTwap: number | null; failTwap: number | null }) => {
-    console.log('TWAP update from LivePriceDisplay:', twap);
-    setTwapData(twap);
+  const handleTwapUpdate = useCallback((twaps: (number | null)[]) => {
+    console.log('TWAP update from LivePriceDisplay:', twaps);
+    setTwapData(twaps);
   }, []);
 
-  // Calculate if user has any position
+  // Calculate if user has any position (N-ary market support)
   const hasPosition = useMemo(() => {
     if (!userBalances) return false;
-    return (
-      parseFloat(userBalances.base.passConditional || '0') > 0 ||
-      parseFloat(userBalances.base.failConditional || '0') > 0 ||
-      parseFloat(userBalances.quote.passConditional || '0') > 0 ||
-      parseFloat(userBalances.quote.failConditional || '0') > 0
+
+    const hasAnyBase = userBalances.base.conditionalBalances.some(
+      (b: string) => parseFloat(b || '0') > 0
     );
+    const hasAnyQuote = userBalances.quote.conditionalBalances.some(
+      (b: string) => parseFloat(b || '0') > 0
+    );
+
+    return hasAnyBase || hasAnyQuote;
   }, [userBalances]);
 
   // Check if user has any wallet balance
@@ -190,17 +188,19 @@ export default function HomePage() {
 
       setAmount(maxBalance?.toString() || '0');
     } else {
-      // Exit mode: calculate min of pass and fail for selected token
+      // Exit mode: calculate min across ALL conditional balances (N-ary support)
       if (userBalances) {
         let maxExitAmount = 0;
         if (selectedToken === 'sol') {
-          const passSol = parseFloat(userBalances.quote.passConditional || '0') / 1e9;
-          const failSol = parseFloat(userBalances.quote.failConditional || '0') / 1e9;
-          maxExitAmount = Math.min(passSol, failSol);
+          const quoteBalances = userBalances.quote.conditionalBalances.map(
+            (b: string) => parseFloat(b || '0') / 1e9
+          );
+          maxExitAmount = Math.min(...quoteBalances);
         } else {
-          const passZC = parseFloat(userBalances.base.passConditional || '0') / 1e6;
-          const failZC = parseFloat(userBalances.base.failConditional || '0') / 1e6;
-          maxExitAmount = Math.min(passZC, failZC);
+          const baseBalances = userBalances.base.conditionalBalances.map(
+            (b: string) => parseFloat(b || '0') / 1e6
+          );
+          maxExitAmount = Math.min(...baseBalances);
         }
         setAmount(maxExitAmount.toString());
       }
@@ -380,14 +380,19 @@ export default function HomePage() {
   */
 
   // Calculate PFG percentage to match backend logic
+  // Note: PFG (Pass-Fail Gap) is only meaningful for binary markets
+  // For N-ary markets (3+ options), this returns null
   const pfgPercentage = useMemo(() => {
     // Match backend calculation exactly from app/twap-oracle.ts
-    if (twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0) {
-      const percentage = ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100;
+    // twapData is now array: [0]=fail, [1]=pass, ...
+    const failTwap = twapData[0];
+    const passTwap = twapData[1];
+    if (passTwap !== null && failTwap !== null && failTwap > 0) {
+      const percentage = ((passTwap - failTwap) / failTwap) * 100;
       return percentage;
     }
     return null;
-  }, [twapData.passTwap, twapData.failTwap]);
+  }, [twapData]);
 
   // Show loading state while TokenContext or proposals are loading
   if (tokenContextLoading || loading) {
@@ -457,7 +462,7 @@ export default function HomePage() {
           <div className="flex-1 flex justify-center overflow-y-auto">
               <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8 pb-8 px-4 md:px-0">
                 <div className="mb-6">
-                  <h2 className="text-2xl font-medium" style={{ color: '#E9E9E3' }}>Live Proposal</h2>
+                  <h2 className="text-2xl font-medium" style={{ color: '#E9E9E3' }}>Live Quantum Market</h2>
                 </div>
 
                 {/* 2-column layout: 2/3 left, 1/3 right */}
@@ -490,10 +495,12 @@ export default function HomePage() {
                         const cardInner = (
                           <div className="flex flex-col justify-between h-full">
                             <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
-                              PROPOSAL {tokenSlug.toUpperCase()}-{proposal.id}
-                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                              </svg>
+                              QM {tokenSlug.toUpperCase()}-{proposal.id}
+                              {githubUrl && (
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                              )}
                             </h1>
                             <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
                               {content.title}
@@ -542,15 +549,12 @@ export default function HomePage() {
                     </div>
 
                     {/* Chart */}
-                    <div className="order-4 md:order-2">
+                    <div className="order-4 md:order-2 md:flex-1 md:flex md:flex-col">
                       <ChartBox
+                        className="md:flex-1"
                         proposalId={proposal.id}
-                        selectedMarket={selectedMarket}
-                        trades={trades.filter(trade => {
-                          // Handle both string ('pass'/'fail') and numeric (0/1) market values
-                          const marketIndex = selectedMarket === 'pass' ? 1 : 0;
-                          return trade.market === selectedMarket || trade.market === marketIndex;
-                        })}
+                        selectedMarketIndex={selectedMarketIndex}
+                        trades={trades.filter(trade => trade.market === selectedMarketIndex)}
                         totalVolume={totalVolume}
                         tradesLoading={tradesLoading}
                         getTimeAgo={getTimeAgo}
@@ -578,11 +582,10 @@ export default function HomePage() {
                     {/* Mode Toggle */}
                     <div className="order-3 md:order-2">
                       <ModeToggle
-                        isPassMode={isPassMode}
-                        onToggle={handleModeToggle}
-                        pfgPercentage={pfgPercentage}
-                        passMarketCap={marketCaps.pass}
-                        failMarketCap={marketCaps.fail}
+                        marketLabels={proposal.marketLabels || ['No', 'Yes']}
+                        marketCaps={marketCaps}
+                        selectedIndex={selectedMarketIndex}
+                        onSelect={handleMarketIndexSelect}
                       />
                     </div>
 
@@ -590,21 +593,21 @@ export default function HomePage() {
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 order-5 md:order-3">
                       <div className="text-white flex flex-col items-center">
                         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block w-full text-center" style={{ color: '#DDDDD7' }}>
-                          III. Trade {selectedMarket === 'pass' ? 'Pass' : 'Fail'} Coin
+                          III. Trade Coin {selectedMarketIndex + 1}
                         </span>
                         <div className="w-full">
                           <TradingInterface
                             proposalId={proposal.id}
-                            selectedMarket={selectedMarket}
-                            onMarketChange={handleMarketChange}
-                            passPrice={livePrices.pass || 0.5}
-                            failPrice={livePrices.fail || 0.5}
-                            proposalStatus="Pending"
+                            selectedMarketIndex={selectedMarketIndex}
+                            passPrice={livePrices[1] || 0.5}
+                            failPrice={livePrices[0] || 0.5}
+                            proposalStatus={proposal.status as 'Pending' | 'Passed' | 'Failed'}
                             userBalances={userBalances}
                             refetchBalances={refetchBalances}
                             onTradeSuccess={refetchTrades}
                             baseMint={baseMint}
                             tokenSymbol={tokenSymbol}
+                            winningMarketIndex={proposal.winningMarketIndex}
                           />
                         </div>
                       </div>
@@ -615,20 +618,16 @@ export default function HomePage() {
                     {(() => {
                       // Calculate if market expired and which tokens are losing
                       const isExpired = proposal.status !== 'Pending';
-                      const isShowingLosingTokens = (selectedMarket === 'pass' && proposal.status === 'Failed') ||
-                                                     (selectedMarket === 'fail' && proposal.status === 'Passed');
+                      // For quantum markets, the winning market index is stored in proposal.winningMarketIndex
+                      const isShowingLosingTokens = isExpired && proposal.winningMarketIndex !== selectedMarketIndex;
 
-                      // Calculate actual balances
+                      // Calculate actual balances using market index
                       const baseTokenBalance = userBalances ? parseFloat(
-                        selectedMarket === 'pass' ?
-                          userBalances.base.passConditional :
-                          userBalances.base.failConditional || '0'
+                        userBalances.base.conditionalBalances[selectedMarketIndex] || '0'
                       ) / 1e6 : 0;
 
                       const solBalance = userBalances ? parseFloat(
-                        selectedMarket === 'pass' ?
-                          userBalances.quote.passConditional :
-                          userBalances.quote.failConditional || '0'
+                        userBalances.quote.conditionalBalances[selectedMarketIndex] || '0'
                       ) / 1e9 : 0;
 
                       // Zero out if showing losing tokens on expired market
@@ -641,17 +640,15 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? `IV. If Pass ${tokenSymbol} Bal` : `IV. If Fail ${tokenSymbol} Bal`}
+                              {`IV. If Coin ${selectedMarketIndex + 1} Wins Balance`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
-                                {formatNumber(displayBaseTokenBalance, 0)} {selectedMarket === 'pass' ? 'PASS' : 'FAIL'}
+                                {formatNumber(displayBaseTokenBalance, 0)} {tokenSymbol}<sup className="text-xs">*</sup>
                               </span>
-                              {baseTokenPrice && (
-                                <span className="hidden group-hover:inline">
-                                  {formatCurrency(displayBaseTokenBalance * baseTokenPrice, 2)}
+                              <span className="hidden group-hover:inline">
+                                  {formatCurrency(displayBaseTokenBalance * (baseTokenPrice || 0), 2)}
                                 </span>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -660,16 +657,11 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {selectedMarket === 'pass' ? 'IV. If Pass SOL Bal' : 'IV. If Fail SOL Bal'}
+                              {`IV. If Coin ${selectedMarketIndex + 1} Wins Balance`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
-                              {/* Mobile: 3 decimals */}
-                              <span className="group-hover:hidden md:hidden">
-                                {formatNumber(displaySOLBalance, 3)} SOL
-                              </span>
-                              {/* Desktop: 6 decimals */}
-                              <span className="group-hover:hidden hidden md:inline">
-                                {formatNumber(displaySOLBalance, 6)} SOL
+                              <span className="group-hover:hidden">
+                                {formatNumber(displaySOLBalance, 3)} SOL<sup className="text-xs">*</sup>
                               </span>
                               {solPrice && (
                                 <span className="hidden group-hover:inline">
@@ -686,10 +678,12 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Hidden component for TWAP updates */}
+                {/* Hidden component for price and TWAP updates */}
                 <div className="hidden">
                   <LivePriceDisplay
                     proposalId={proposal.id}
+                    marketLabels={proposal.marketLabels || ['No', 'Yes']}
+                    marketCount={proposal.markets || 2}
                     onPricesUpdate={handlePricesUpdate}
                     onTwapUpdate={handleTwapUpdate}
                   />

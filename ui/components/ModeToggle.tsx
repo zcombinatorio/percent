@@ -3,137 +3,99 @@
 import { formatMarketCap } from '@/lib/formatters';
 
 interface ModeToggleProps {
-  isPassMode: boolean;
-  onToggle: (isPassMode: boolean) => void;
-  pfgPercentage: number | null;
-  passMarketCap: number | null;
-  failMarketCap: number | null;
+  marketLabels: string[];
+  marketCaps: (number | null)[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
 }
 
-export function ModeToggle({ isPassMode, onToggle, pfgPercentage, passMarketCap, failMarketCap }: ModeToggleProps) {
-  const handleToggleClick = () => {
-    onToggle(!isPassMode);
-  };
+// Parse label to extract display text and optional URL
+const parseLabel = (label: string): { displayText: string; url: string | null } => {
+  const urlRegex = /(https?:\/\/[^\s]+)/;
+  const match = label.match(urlRegex);
+  if (match) {
+    const url = match[1];
+    const displayText = label.replace(url, '').trim();
+    return { displayText: displayText || url, url };
+  }
+  return { displayText: label, url: null };
+};
 
-  const handleDarkClick = () => {
-    onToggle(true);
-  };
-
-  const handleLightClick = () => {
-    onToggle(false);
-  };
-
+export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect }: ModeToggleProps) {
   return (
-    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 transition-all duration-300">
+    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-1 md:gap-4">
         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2 text-center" style={{ color: '#DDDDD7' }}>
           II. Select Coin
         </span>
-        <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col items-center gap-1 md:gap-4">
-        <div className="inline-flex flex-row items-center select-none">
-        {/* Dark Label */}
-        <div className={`pl-0 md:pl-2 pr-7.5 md:pr-10 py-3 min-w-[48px] cursor-pointer ${
-          isPassMode
-            ? ''
-            : 'hover:[&>*]:text-[#404346] active:[&>*]:text-[#010101]'
-        }`} onClick={handleDarkClick}>
-          <h6
-            className={`text-md uppercase transition-colors duration-200 text-center ${
-              isPassMode
-                ? 'text-[#FFFFFF] pointer-events-none'
-                : 'text-[#5B5E62]'
-            }`}
-            style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
-          >
-            PASS COIN
-          </h6>
-          <div
-            className={`text-xs mt-1 transition-colors duration-200 text-center ${
-              isPassMode
-                ? 'text-[#FFFFFF]'
-                : 'text-[#5B5E62]'
-            }`}
-            style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-          >
-            {formatMarketCap(passMarketCap)}
-          </div>
+        <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
+          {marketLabels.map((label, index) => {
+            const isSelected = selectedIndex === index;
+            const marketCap = marketCaps[index];
+            const { displayText, url } = parseLabel(label);
+
+            const labelContent = (
+              <>
+                {index + 1}. {displayText} ({formatMarketCap(marketCap)})
+              </>
+            );
+
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-between cursor-pointer select-none"
+                onClick={() => onSelect(index)}
+              >
+                {/* Label with market cap - clickable if URL exists */}
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`text-lg uppercase transition-colors duration-200 truncate flex-1 min-w-0 mr-3 hover:underline ${
+                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62]'
+                    }`}
+                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
+                  >
+                    {labelContent}
+                  </a>
+                ) : (
+                  <div
+                    className={`text-lg uppercase transition-colors duration-200 truncate flex-1 min-w-0 mr-3 ${
+                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62]'
+                    }`}
+                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
+                  >
+                    {labelContent}
+                  </div>
+                )}
+
+                {/* Toggle Switch (scaled down) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(index);
+                  }}
+                  className="relative w-[48px] h-[28px] border-none outline-none overflow-hidden rounded-[14px] transition-all duration-200 cursor-pointer flex-shrink-0"
+                  style={{
+                    background: '#404346',
+                  }}
+                >
+                  {/* Circle */}
+                  <div
+                    className="absolute w-[20px] h-[20px] rounded-[12px] transition-all duration-200"
+                    style={{
+                      top: '4px',
+                      left: isSelected ? '24px' : '4px',
+                      background: isSelected ? '#DCE0E3' : '#5B5E62',
+                    }}
+                  />
+                </button>
+              </div>
+            );
+          })}
         </div>
-
-        {/* Toggle Switch */}
-        <button
-          onClick={handleToggleClick}
-          className="relative w-[72px] h-[42px] border-none outline-none overflow-hidden rounded-[21px] transition-all duration-200 cursor-pointer"
-          style={{
-            background: '#404346',
-          }}
-        >
-          {/* Circle */}
-          <div
-            className="absolute w-[30px] h-[30px] rounded-[18px] transition-all duration-200"
-            style={{
-              top: '6px',
-              left: isPassMode ? '6px' : '36px',
-              background: '#DCE0E3',
-            }}
-          />
-
-          {/* Decorative Element (after pseudo) - Only show in Fail mode */}
-          {!isPassMode && (
-            <div
-              className="absolute rounded-full transition-all duration-200"
-              style={{
-                top: '21px',
-                right: '3px',
-                width: '1.5px',
-                height: '1.5px',
-                borderRadius: '0.75px',
-                background: '#404346',
-              }}
-            />
-          )}
-        </button>
-
-        {/* Light Label */}
-        <div className={`pl-7.5 md:pl-10 pr-0 md:pr-2 py-3 min-w-[48px] cursor-pointer ${
-          isPassMode
-            ? 'hover:[&>*]:text-[#9B9E9F] active:[&>*]:text-[#8B8E8F]'
-            : ''
-        }`} onClick={handleLightClick}>
-          <h6
-            className={`text-md uppercase transition-colors duration-200 text-center ${
-              isPassMode
-                ? 'text-[#6B6E71]'
-                : 'text-[#FFFFFF] pointer-events-none'
-            }`}
-            style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
-          >
-            FAIL COIN
-          </h6>
-          <div
-            className={`text-xs mt-1 transition-colors duration-200 text-center ${
-              isPassMode
-                ? 'text-[#6B6E71]'
-                : 'text-[#FFFFFF]'
-            }`}
-            style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-          >
-            {formatMarketCap(failMarketCap)}
-          </div>
-        </div>
-      </div>
-
-      {/* PFG Value */}
-      <div
-        className="text-md pb-1"
-        style={{
-          fontFamily: 'IBM Plex Mono, monospace',
-          letterSpacing: '0em',
-          color: '#FFFFFF',
-        }}
-      >
-        TWAP PFG {pfgPercentage !== null ? pfgPercentage.toFixed(2) : '0.00'}%
-      </div>
-      </div>
       </div>
     </div>
   );

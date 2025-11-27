@@ -28,46 +28,28 @@ import { useTokenContext } from '@/providers/TokenContext';
 
 interface LivePriceDisplayProps {
   proposalId: number;
-  onPricesUpdate?: (prices: { pass: number | null; fail: number | null }) => void;
-  onTwapUpdate?: (twap: { passTwap: number | null; failTwap: number | null }) => void;
+  marketLabels: string[];      // Labels for each market from proposal
+  marketCount: number;         // Number of markets (2-4)
+  onPricesUpdate?: (prices: (number | null)[]) => void;  // Array by market index
+  onTwapUpdate?: (twaps: (number | null)[]) => void;     // Array by market index
 }
 
-interface TokenPrices {
-  pass: number | null;
-  fail: number | null;
-}
-
-interface TwapData {
-  passTwap: number | null;
-  failTwap: number | null;
-}
-
-export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, onPricesUpdate, onTwapUpdate }) => {
+export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, marketLabels, marketCount, onPricesUpdate, onTwapUpdate }) => {
   const { moderatorId } = useTokenContext();
-  const [prices, setPrices] = useState<TokenPrices>({
-    pass: null,
-    fail: null
-  });
-  
-  const [twapData, setTwapData] = useState<TwapData>({
-    passTwap: null,
-    failTwap: null
-  });
-  
-  const [tokenAddresses, setTokenAddresses] = useState<{
-    pass: string | null;
-    fail: string | null;
-    passPool: string | null;
-    failPool: string | null;
-  }>({
-    pass: null,
-    fail: null,
-    passPool: null,
-    failPool: null
-  });
-  
+
+  // Array-based state indexed by market
+  const [prices, setPrices] = useState<(number | null)[]>(() => Array(marketCount).fill(null));
+  const [twapData, setTwapData] = useState<(number | null)[]>(() => Array(marketCount).fill(null));
+  const [tokenAddresses, setTokenAddresses] = useState<string[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-initialize arrays when marketCount changes
+  useEffect(() => {
+    setPrices(Array(marketCount).fill(null));
+    setTwapData(Array(marketCount).fill(null));
+  }, [marketCount]);
 
   // Fetch proposal details, initial prices, and TWAP data
   useEffect(() => {
@@ -78,17 +60,9 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
           throw new Error('Failed to fetch proposal details');
         }
 
-        // Extract pass and fail token addresses for display purposes
-        // Market index: 0 = fail, 1 = pass
-        const passAddress = proposal.baseVaultState?.conditionalMints?.[1] || null;
-        const failAddress = proposal.baseVaultState?.conditionalMints?.[0] || null;
-
-        setTokenAddresses({
-          pass: passAddress,
-          fail: failAddress,
-          passPool: null,
-          failPool: null
-        });
+        // Extract all conditional mints as array (supports 2-4 markets)
+        const conditionalMints = proposal.baseVaultState?.conditionalMints || [];
+        setTokenAddresses(conditionalMints.slice(0, marketCount));
 
       } catch (error) {
         console.error('Error fetching proposal details:', error);
@@ -132,34 +106,22 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
           });
 
           if (data.data && data.data.length > 0) {
-            // Get the most recent prices for pass and fail markets
-            // Backend uses numeric market indices: 0 = fail, 1 = pass
-            const passData = data.data.find((d: any) => d.market === 1 || d.market === 'pass');
-            const failData = data.data.find((d: any) => d.market === 0 || d.market === 'fail');
+            // Group chart data by market index (supports 2-4 markets)
+            const newPrices: (number | null)[] = Array(marketCount).fill(null);
 
-            console.log('[LivePriceDisplay] Found market data:', {
-              passData,
-              failData
-            });
-
-            if (passData || failData) {
-              const newPrices = {
-                pass: passData ? parseFloat(passData.close) : null,
-                fail: failData ? parseFloat(failData.close) : null
-              };
-
-              console.log('[LivePriceDisplay] Setting initial prices:', newPrices);
-
-              setPrices(prev => ({
-                ...prev,
-                pass: newPrices.pass !== null ? newPrices.pass : prev.pass,
-                fail: newPrices.fail !== null ? newPrices.fail : prev.fail
-              }));
-
-              console.log('[LivePriceDisplay] Initial prices set successfully');
-            } else {
-              console.warn('[LivePriceDisplay] No pass or fail data found in chart response');
+            for (const d of data.data) {
+              const marketIndex = typeof d.market === 'number' ? d.market : null;
+              if (marketIndex !== null && marketIndex >= 0 && marketIndex < marketCount) {
+                // Use most recent close price for each market
+                newPrices[marketIndex] = parseFloat(d.close);
+              }
             }
+
+            console.log('[LivePriceDisplay] Setting initial prices:', newPrices);
+
+            setPrices(prev => newPrices.map((p, i) => p !== null ? p : prev[i]));
+
+            console.log('[LivePriceDisplay] Initial prices set successfully');
           } else {
             console.warn('[LivePriceDisplay] No chart data available');
           }
@@ -181,20 +143,24 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/twap`, undefined, moderatorId ?? undefined);
         const response = await fetch(url);
-        console.log(response);
         if (response.ok) {
           const data = await response.json();
           if (data.data && data.data.length > 0) {
             const latest = data.data[0];
-            // Backend returns twaps[] array: index 0 = fail, index 1 = pass
-            const twap = {
-              passTwap: parseFloat(latest.twaps?.[1] || '0'),
-              failTwap: parseFloat(latest.twaps?.[0] || '0')
-            };
-            setTwapData(twap);
+            // Backend returns twaps[] array - use directly (supports 2-4 markets)
+            const twaps: (number | null)[] = (latest.twaps || [])
+              .slice(0, marketCount)
+              .map((t: string) => parseFloat(t));
+
+            // Pad with nulls if needed
+            while (twaps.length < marketCount) {
+              twaps.push(null);
+            }
+
+            setTwapData(twaps);
             // Notify parent component of TWAP update
             if (onTwapUpdate) {
-              onTwapUpdate(twap);
+              onTwapUpdate(twaps);
             }
           }
         }
@@ -205,24 +171,29 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     
     fetchTwap();
 
-    // Poll for TWAP updates every 30 seconds
+    // Poll for TWAP updates every 10 seconds
     const interval = setInterval(fetchTwap, 10000);
 
     return () => clearInterval(interval);
-  }, [proposalId, moderatorId]);
+  }, [proposalId, moderatorId, marketCount]);
 
-  // Handle chart price updates for pass/fail markets
+  // Handle chart price updates for N-ary markets
   const handleChartPriceUpdate = useCallback((update: ChartPriceUpdate) => {
     console.log('[LivePriceDisplay] Chart price update:', update);
 
     // Use marketCapUsd if available (new backend), otherwise price field (legacy)
     const marketCapValue = update.marketCapUsd ?? update.price;
+    const marketIndex = typeof update.market === 'number' ? update.market : -1;
 
-    setPrices(prev => ({
-      ...prev,
-      [update.market]: marketCapValue
-    }));
-  }, []);
+    // Only update if valid market index within our range
+    if (marketIndex >= 0 && marketIndex < marketCount) {
+      setPrices(prev => {
+        const newPrices = [...prev];
+        newPrices[marketIndex] = marketCapValue;
+        return newPrices;
+      });
+    }
+  }, [marketCount]);
 
   // Set up chart price subscription for pass/fail markets
   useEffect(() => {
@@ -242,16 +213,15 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
   // Call the callback when prices update
   useEffect(() => {
     console.log('[LivePriceDisplay] Prices changed, calling onPricesUpdate:', {
-      pass: prices.pass,
-      fail: prices.fail,
+      prices,
       hasCallback: !!onPricesUpdate
     });
 
-    if (onPricesUpdate) {
-      onPricesUpdate({ pass: prices.pass, fail: prices.fail });
+    if (onPricesUpdate && prices.length > 0) {
+      onPricesUpdate(prices);
       console.log('[LivePriceDisplay] onPricesUpdate called successfully');
     }
-  }, [prices.pass, prices.fail, onPricesUpdate]);
+  }, [prices, onPricesUpdate]);
 
 
   if (error) {
@@ -262,39 +232,27 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     );
   }
 
+  // Dynamic grid columns based on market count
+  const gridColsClass = marketCount === 2 ? 'md:grid-cols-2' :
+                        marketCount === 3 ? 'md:grid-cols-3' :
+                        'md:grid-cols-4';
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3">
-      <TokenPriceBox
-        tokenName="Pass"
-        tokenSymbol={`PASS-${proposalId}`}
-        tokenAddress={tokenAddresses.pass || ''}
-        price={prices.pass}
-        isLoading={prices.pass === null}
-        tokenType="pass"
-      />
-
-      <TokenPriceBox
-        tokenName="Fail"
-        tokenSymbol={`FAIL-${proposalId}`}
-        tokenAddress={tokenAddresses.fail || ''}
-        price={prices.fail}
-        isLoading={prices.fail === null}
-        tokenType="fail"
-      />
-
-      <TokenPriceBox
-        tokenName="Pass-Fail Gap (PFG)"
-        tokenSymbol="TWAP"
-        price={
-          // Match backend calculation: (passTwap - failTwap) / failTwap * 100
-          // Backend uses this to compare against passThresholdBps/100
-          twapData.passTwap !== null && twapData.failTwap !== null && twapData.failTwap > 0
-            ? ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100
-            : null
-        }
-        isLoading={false}
-        tokenType="gap"
-      />
+    <div className={`grid grid-cols-1 ${gridColsClass}`}>
+      {marketLabels.slice(0, marketCount).map((label, index) => (
+        <TokenPriceBox
+          key={index}
+          tokenName={label}
+          tokenSymbol={`COIN${index + 1}-${proposalId}`}
+          tokenAddress={tokenAddresses[index] || ''}
+          price={prices[index] ?? null}
+          twap={twapData[index] ?? null}
+          isLoading={prices[index] === null}
+          tokenType="market"
+          marketIndex={index}
+          isLast={index === marketCount - 1}
+        />
+      ))}
     </div>
   );
 };

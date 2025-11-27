@@ -20,7 +20,7 @@
 import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { buildApiUrl, withModeratorId } from './api-utils';
-import { marketToIndex, transformUserBalances } from './api-adapter';
+import { transformUserBalances } from './api-adapter';
 import type { RawUserBalancesResponse } from '@/types/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -31,7 +31,7 @@ const SOL_DECIMALS = 9;
 
 export interface OpenPositionConfig {
   proposalId: number;
-  market: 'pass' | 'fail';  // Which AMM market to trade on
+  market: number;  // Which AMM market to trade on (0-3 for quantum markets)
   inputToken: 'sol' | 'baseToken';  // Which conditional token we're selling
   inputAmount: string;  // Amount of conditional tokens to sell
   userAddress: string;
@@ -42,7 +42,7 @@ export interface OpenPositionConfig {
 
 export interface ClosePositionConfig {
   proposalId: number;
-  positionType: 'pass' | 'fail';
+  marketIndex: number;  // Which market (0-3) to close position on
   percentageToClose: number; // 1-100
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
@@ -97,10 +97,10 @@ export async function openPosition(config: OpenPositionConfig): Promise<void> {
 }
 
 /**
- * Close a position (pass or fail) by a certain percentage
+ * Close a position on a specific market by a certain percentage
  */
 export async function closePosition(config: ClosePositionConfig): Promise<void> {
-  const { proposalId, positionType, percentageToClose, userAddress, signTransaction, moderatorId } = config;
+  const { proposalId, marketIndex, percentageToClose, userAddress, signTransaction, moderatorId } = config;
 
   if (percentageToClose <= 0 || percentageToClose > 100) {
     throw new Error('Percentage to close must be between 1 and 100');
@@ -115,13 +115,13 @@ export async function closePosition(config: ClosePositionConfig): Promise<void> 
       throw new Error('Failed to get current balances');
     }
 
-    // Step 2: Calculate amounts to close based on position type and percentage
-    const amountsToClose = calculateCloseAmounts(currentBalances, positionType, percentageToClose);
+    // Step 2: Calculate amounts to close based on market index and percentage
+    const amountsToClose = calculateCloseAmounts(currentBalances, marketIndex, percentageToClose);
 
     // Step 3: Execute reverse swaps to prepare for merging
     await executeReverseSwaps(
       proposalId,
-      positionType,
+      marketIndex,
       amountsToClose,
       userAddress,
       signTransaction,
@@ -159,99 +159,44 @@ export async function closePosition(config: ClosePositionConfig): Promise<void> 
 }
 
 /**
- * Calculate amounts to close based on current balances, position type, and percentage
+ * Calculate amounts to close based on current balances, market index, and percentage
+ * For N-ary quantum markets (2-4 options)
  */
-function calculateCloseAmounts(balances: any, positionType: 'pass' | 'fail', percentage: number): any {
+function calculateCloseAmounts(balances: any, marketIndex: number, percentage: number): any {
   const factor = percentage / 100;
-  
-  if (positionType === 'pass') {
-    // Pass position has pBase + fQuote, we want to swap back
-    const fQuoteAmount = parseFloat(balances.quote.failConditional || '0');
-    
-    return {
-      pBaseToSwap: "0",
-      fQuoteToSwap: Math.floor(fQuoteAmount * factor).toString()
-    };
-  } else {
-    // Fail position has fBase + pQuote, we want to swap back
-    const pQuoteAmount = parseFloat(balances.quote.passConditional || '0');
-    
-    return {
-      fBaseToSwap: "0",
-      pQuoteToSwap: Math.floor(pQuoteAmount * factor).toString()
-    };
-  }
+
+  // Get the quote (SOL) balance for the specific market from conditionalBalances array
+  const quoteBalance = parseFloat(balances.quote.conditionalBalances[marketIndex] || '0');
+
+  return {
+    quoteToSwap: Math.floor(quoteBalance * factor).toString(),
+    marketIndex: marketIndex
+  };
 }
 
 /**
  * Execute reverse swaps to prepare conditional tokens for merging
+ * For N-ary quantum markets - swaps on the specific market index
  */
 async function executeReverseSwaps(
   proposalId: number,
-  positionType: 'pass' | 'fail',
+  marketIndex: number,
   amountsToClose: any,
   userAddress: string,
   signTransaction: (transaction: Transaction) => Promise<Transaction>,
   moderatorId?: number
 ): Promise<void> {
-
-  if (positionType === 'pass') {
-    // Reverse pass position: pBase + fQuote → pQuote + fBase
-
-    // Swap pBase → pQuote on pass market
-    if (amountsToClose.pBaseToSwap && amountsToClose.pBaseToSwap !== '0') {
-      await executeMarketSwap(
-        proposalId,
-        'pass',
-        true, // base to quote
-        amountsToClose.pBaseToSwap,
-        userAddress,
-        signTransaction,
-        moderatorId
-      );
-    }
-
-    // Swap fQuote → fBase on fail market
-    if (amountsToClose.fQuoteToSwap && amountsToClose.fQuoteToSwap !== '0') {
-      await executeMarketSwap(
-        proposalId,
-        'fail',
-        false, // quote to base
-        amountsToClose.fQuoteToSwap,
-        userAddress,
-        signTransaction,
-        moderatorId
-      );
-    }
-
-  } else {
-    // Reverse fail position: fBase + pQuote → fQuote + pBase
-
-    // Swap fBase → fQuote on fail market
-    if (amountsToClose.fBaseToSwap && amountsToClose.fBaseToSwap !== '0') {
-      await executeMarketSwap(
-        proposalId,
-        'fail',
-        true, // base to quote
-        amountsToClose.fBaseToSwap,
-        userAddress,
-        signTransaction,
-        moderatorId
-      );
-    }
-
-    // Swap pQuote → pBase on pass market
-    if (amountsToClose.pQuoteToSwap && amountsToClose.pQuoteToSwap !== '0') {
-      await executeMarketSwap(
-        proposalId,
-        'pass',
-        false, // quote to base
-        amountsToClose.pQuoteToSwap,
-        userAddress,
-        signTransaction,
-        moderatorId
-      );
-    }
+  // Swap quote (SOL conditional) → base (ZC conditional) on the selected market
+  if (amountsToClose.quoteToSwap && amountsToClose.quoteToSwap !== '0') {
+    await executeMarketSwap(
+      proposalId,
+      marketIndex,  // Use numeric market index directly
+      false, // quote to base (SOL → ZC on this market)
+      amountsToClose.quoteToSwap,
+      userAddress,
+      signTransaction,
+      moderatorId
+    );
   }
 }
 
@@ -266,13 +211,13 @@ async function mergeConditionalTokens(
   moderatorId?: number
 ): Promise<void> {
 
-  const pBase = parseFloat(balances.base.passConditional || '0');
-  const fBase = parseFloat(balances.base.failConditional || '0');
-  const pQuote = parseFloat(balances.quote.passConditional || '0');
-  const fQuote = parseFloat(balances.quote.failConditional || '0');
+  // For N-ary markets, merge requires ALL conditional tokens
+  // Find the minimum across all conditional balances
+  const baseBalances = balances.base.conditionalBalances.map((b: string) => parseFloat(b || '0'));
+  const quoteBalances = balances.quote.conditionalBalances.map((b: string) => parseFloat(b || '0'));
 
-  // Merge base tokens if user has both pBase and fBase
-  const baseMergeAmount = Math.min(pBase, fBase);
+  // Merge base tokens - minimum of all markets
+  const baseMergeAmount = Math.min(...baseBalances);
   console.log("base merge amount:", baseMergeAmount);
   if (baseMergeAmount > 0) {
     await mergeTokens(
@@ -285,8 +230,8 @@ async function mergeConditionalTokens(
     );
   }
 
-  // Merge quote tokens if user has both pQuote and fQuote
-  const quoteMergeAmount = Math.min(pQuote, fQuote);
+  // Merge quote tokens - minimum of all markets
+  const quoteMergeAmount = Math.min(...quoteBalances);
   if (quoteMergeAmount > 0) {
     await mergeTokens(
       proposalId,
@@ -427,24 +372,16 @@ async function splitTokens(
 /**
  * Claim winnings from a finished proposal
  * Claims from BOTH vaults (base and quote) for the winning market
+ * For N-ary quantum markets (2-4 options)
  */
 export async function claimWinnings(config: {
   proposalId: number;
-  proposalStatus: 'Passed' | 'Failed';
-  userPosition: { type: 'pass' | 'fail' } | null;
+  winningMarketIndex: number;  // Which market won (from proposal.winningMarketIndex)
   userAddress: string;
   signTransaction: (transaction: Transaction) => Promise<Transaction>;
   moderatorId?: number;
 }): Promise<void> {
-  const { proposalId, proposalStatus, userAddress, signTransaction, moderatorId } = config;
-
-  // Check if user won
-  const didUserWin = (proposalStatus === 'Passed' && config.userPosition?.type === 'pass') ||
-                     (proposalStatus === 'Failed' && config.userPosition?.type === 'fail');
-
-  if (!didUserWin) {
-    throw new Error('Cannot claim - you did not win this market');
-  }
+  const { proposalId, winningMarketIndex, userAddress, signTransaction, moderatorId } = config;
 
   const toastId = toast.loading('Claiming winnings from both vaults...');
 
@@ -455,19 +392,10 @@ export async function claimWinnings(config: {
       throw new Error('Failed to get user balances');
     }
 
-    // Determine which conditional tokens the user has based on outcome
-    let hasBaseTokens = false;
-    let hasQuoteTokens = false;
-
-    if (proposalStatus === 'Passed') {
-      // Proposal passed - user can claim Pass conditional tokens
-      hasBaseTokens = parseFloat(balances.base.passConditional || '0') > 0;
-      hasQuoteTokens = parseFloat(balances.quote.passConditional || '0') > 0;
-    } else {
-      // Proposal failed - user can claim Fail conditional tokens
-      hasBaseTokens = parseFloat(balances.base.failConditional || '0') > 0;
-      hasQuoteTokens = parseFloat(balances.quote.failConditional || '0') > 0;
-    }
+    // Check if user has winning tokens in the winning market index
+    // Use conditionalBalances array for N-ary quantum markets
+    const hasBaseTokens = parseFloat(balances.base.conditionalBalances[winningMarketIndex] || '0') > 0;
+    const hasQuoteTokens = parseFloat(balances.quote.conditionalBalances[winningMarketIndex] || '0') > 0;
 
     const vaultsToRedeem: ('base' | 'quote')[] = [];
     if (hasBaseTokens) vaultsToRedeem.push('base');
@@ -542,11 +470,11 @@ export async function claimWinnings(config: {
 }
 
 /**
- * Execute a swap on pass or fail market
+ * Execute a swap on a specific market (0-3 for quantum markets)
  */
 async function executeMarketSwap(
   proposalId: number,
-  market: 'pass' | 'fail',
+  market: number,  // Numeric market index (0-3)
   isBaseToQuote: boolean,
   amountIn: string,
   userAddress: string,
@@ -554,13 +482,10 @@ async function executeMarketSwap(
   moderatorId?: number
 ): Promise<void> {
 
-  // Convert market string to numeric index for backend API
-  const marketIndex = marketToIndex(market);
-
-  // Build swap request
+  // Build swap request (market is already numeric)
   const swapRequest = {
     user: userAddress,
-    market: marketIndex,
+    market: market,
     isBaseToQuote: isBaseToQuote,
     amountIn: amountIn,
     slippageBps: 2000 // 20% slippage for large swaps
@@ -593,7 +518,7 @@ async function executeMarketSwap(
     },
     body: JSON.stringify({
       transaction: Buffer.from(signedSwapTx.serialize({ requireAllSignatures: false })).toString('base64'),
-      market: marketIndex,
+      market: market,
       user: userAddress,
       isBaseToQuote: isBaseToQuote,
       amountIn: amountIn,

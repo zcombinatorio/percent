@@ -29,7 +29,7 @@ interface ChartDataPoint {
  */
 export class ProposalMarketDatafeed implements IBasicDataFeed {
   private proposalId: number;
-  private market: 'pass' | 'fail';
+  private market: number;  // Numeric market index (0-3 for quantum markets)
   private moderatorId?: number;
   private tokenAddress: string | null = null;
   private poolAddress: string | null = null;
@@ -38,7 +38,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   // NOTE: solPrice and totalSupply no longer needed - backend calculates market cap USD
   // All prices (pass, fail, spot) and trade prices are pre-calculated as market cap USD
 
-  constructor(proposalId: number, market: 'pass' | 'fail', spotPoolAddress?: string, moderatorId?: number) {
+  constructor(proposalId: number, market: number, spotPoolAddress?: string, moderatorId?: number) {
     this.proposalId = proposalId;
     this.market = market;
     this.spotPoolAddress = spotPoolAddress || null;
@@ -87,7 +87,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     const displayName = isSpotMarket
       ? 'SPOT $ZC'
-      : `${this.market === 'pass' ? 'PASS' : 'FAIL'} $ZC`;
+      : `COIN ${this.market + 1} $ZC`;
 
     const symbolInfo: LibrarySymbolInfo = {
       name: displayName,
@@ -127,9 +127,9 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
       // Detect if this is a spot market request (check ticker, not name)
       const isSpotMarket = symbolInfo.ticker === 'SPOT-MARKET';
-      const marketType = isSpotMarket ? 'spot' : this.market;
+      const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
 
-      console.log(`[${marketType}] getBars called:`, {
+      console.log(`[${marketLabel}] getBars called:`, {
         from: new Date(from * 1000).toISOString(),
         to: new Date(to * 1000).toISOString(),
         countBack,
@@ -166,16 +166,15 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const data = await response.json();
 
       if (!data.data || data.data.length === 0) {
-        console.log(`[${marketType}] No data from API, returning noData=true`);
+        console.log(`[${marketLabel}] No data from API, returning noData=true`);
         onResult([], { noData: true });
         return;
       }
 
-      // Filter data for the specific market (pass/fail/spot) and convert to bars
-      // Backend may return market as string ('pass'/'fail') or numeric index (0/1)
-      const marketIndex = marketType === 'pass' ? 1 : marketType === 'fail' ? 0 : -1;
+      // Filter data for the specific market and convert to bars
+      // For spot market, use 'spot' string. For others, use numeric index.
       const bars: Bar[] = data.data
-        .filter((item: any) => item.market === marketType || item.market === marketIndex)
+        .filter((item: any) => isSpotMarket ? item.market === 'spot' : item.market === this.market)
         .map((item: ChartDataPoint) => ({
           time: new Date(item.timestamp).getTime(),
           open: parseFloat(item.open),
@@ -187,7 +186,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         .filter((bar: Bar) => !isNaN(bar.open) && !isNaN(bar.high) && !isNaN(bar.low) && !isNaN(bar.close))
         .sort((a: Bar, b: Bar) => a.time - b.time);
 
-      console.log(`[${marketType}] Returning ${bars.length} bars:`, {
+      console.log(`[${marketLabel}] Returning ${bars.length} bars:`, {
         firstBar: bars[0] ? new Date(bars[0].time).toISOString() : 'none',
         lastBar: bars[bars.length - 1] ? new Date(bars[bars.length - 1].time).toISOString() : 'none',
         requestedFrom: new Date(from * 1000).toISOString(),
@@ -196,7 +195,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       });
 
       if (bars.length === 0) {
-        console.log(`[${marketType}] No bars after filtering, returning noData=true`);
+        console.log(`[${marketLabel}] No bars after filtering, returning noData=true`);
         onResult([], { noData: true });
         return;
       }
@@ -220,9 +219,9 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   ): Promise<void> {
     // Detect if this is a spot market request (check ticker, not name)
     const isSpotMarket = symbolInfo.ticker === 'SPOT-MARKET';
-    const marketType = isSpotMarket ? 'spot' : this.market;
+    const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
 
-    console.log(`[${marketType}] subscribeBars called for resolution ${resolution}, listenerGuid: ${listenerGuid}`);
+    console.log(`[${marketLabel}] subscribeBars called for resolution ${resolution}, listenerGuid: ${listenerGuid}`);
 
     // Create bar aggregator for this resolution
     const aggregator = new BarAggregator(resolution);
@@ -232,20 +231,20 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     this.subscribers.set(listenerGuid, { callback: onTick, aggregator, isSpotMarket });
 
-    console.log(`[${marketType}] Subscribers count after add: ${this.subscribers.size}`);
+    console.log(`[${marketLabel}] Subscribers count after add: ${this.subscribers.size}`);
 
     // Subscribe to both trade and price updates via WebSocket
     const priceService = getPriceStreamService();
 
     if (!isSpotMarket) {
-      // Subscribe to trade updates for pass/fail markets
+      // Subscribe to trade updates for conditional markets
       priceService.subscribeToTrades(this.proposalId, this.handleTradeUpdate.bind(this));
-      console.log(`[${marketType}] Subscribed to real-time trade updates for proposal ${this.proposalId}`);
+      console.log(`[${marketLabel}] Subscribed to real-time trade updates for proposal ${this.proposalId}`);
     }
 
-    // Subscribe to chart price updates for all markets (pass, fail, and spot)
+    // Subscribe to chart price updates for all markets (conditional and spot)
     priceService.subscribeToChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
-    console.log(`[${marketType}] Subscribed to real-time price updates for proposal ${this.proposalId}`);
+    console.log(`[${marketLabel}] Subscribed to real-time price updates for proposal ${this.proposalId}`);
   }
 
   /**
@@ -253,7 +252,9 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
    */
   private async seedAggregatorWithLastBar(aggregator: BarAggregator, resolution: ResolutionString, isSpotMarket: boolean = false): Promise<void> {
     try {
-      const marketType = isSpotMarket ? 'spot' : this.market;
+      // For spot market use 'spot', otherwise use numeric market index
+      const marketFilter: number | 'spot' = isSpotMarket ? 'spot' : this.market;
+      const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
 
       // Map resolution to API interval format
       const intervalMap: Record<string, string> = {
@@ -278,29 +279,28 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const response = await fetch(url);
 
       if (!response.ok) {
-        console.warn(`[${marketType}] Failed to fetch last bar for seeding`);
+        console.warn(`[${marketLabel}] Failed to fetch last bar for seeding`);
         return;
       }
 
       const data = await response.json();
 
       if (!data.data || data.data.length === 0) {
-        console.log(`[${marketType}] No historical data to seed aggregator`);
+        console.log(`[${marketLabel}] No historical data to seed aggregator`);
         return;
       }
 
-      // Find the last bar for this market
-      // Backend may return market as string ('pass'/'fail') or numeric index (0/1)
-      const marketIndex = marketType === 'pass' ? 1 : marketType === 'fail' ? 0 : -1;
+      // Find the last bar for this market using direct comparison
+      // Backend returns market as numeric index (0-3) or 'spot' string
       const lastBar = data.data
-        .filter((item: any) => item.market === marketType || item.market === marketIndex)
+        .filter((item: any) => item.market === marketFilter)
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
       if (lastBar) {
         const lastPrice = parseFloat(lastBar.close);
         const lastTime = new Date(lastBar.timestamp).getTime();
 
-        console.log(`[${marketType}] Seeding aggregator with last bar:`, {
+        console.log(`[${marketLabel}] Seeding aggregator with last bar:`, {
           time: new Date(lastTime).toISOString(),
           close: lastPrice
         });
@@ -310,7 +310,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         aggregator.updateBar(lastPrice, 0, lastTime);
       }
     } catch (error) {
-      console.error(`[${this.market}] Error seeding aggregator:`, error);
+      console.error(`[market-${this.market}] Error seeding aggregator:`, error);
       // Continue without seeding - not critical
     }
   }

@@ -24,9 +24,11 @@ export default function CreatePage() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [choice1, setChoice1] = useState('');
+  const [choice2, setChoice2] = useState('');
+  const [choice3, setChoice3] = useState('');
   const [proposalLengthHours, setProposalLengthHours] = useState('24');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDescriptionFocused, setIsDescriptionFocused] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -60,8 +62,8 @@ export default function CreatePage() {
   const hasPermission = isAuthorized;
   const poolName = poolMetadata?.ticker?.toUpperCase() || tokenSlug.toUpperCase();
 
-  // Check if form is valid (title, description, and duration filled)
-  const isFormInvalid = !title.trim() || !description.trim() || parseFloat(proposalLengthHours) <= 0;
+  // Check if form is valid (title, description, choice1, and duration filled)
+  const isFormInvalid = !title.trim() || !description.trim() || !choice1.trim() || parseFloat(proposalLengthHours) <= 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +75,10 @@ export default function CreatePage() {
     }
     if (!description.trim()) {
       toast.error('Description is required');
+      return;
+    }
+    if (!choice1.trim()) {
+      toast.error('At least Choice 1 is required');
       return;
     }
     const hours = parseFloat(proposalLengthHours);
@@ -130,15 +136,23 @@ export default function CreatePage() {
       const creatorSignature = bs58.encode(signatureBytes);
 
       // Update loading message
-      toast.loading('Creating Decision Market...', { id: toastId });
+      toast.loading('Creating Quantum Market...', { id: toastId });
 
       // Convert hours to seconds
-      const proposalLength = 300;//Math.floor(hours * 3600);
+      const proposalLength = 600;//Math.floor(hours * 3600);
+
+      // Build market_labels array: index 0 = "No", then choices 1-3
+      const market_labels = ['No', choice1.trim()];
+      if (choice2.trim()) market_labels.push(choice2.trim());
+      if (choice3.trim()) market_labels.push(choice3.trim());
+      const markets = market_labels.length;
 
       const requestBody = {
         title: title.trim(),
         description: description.trim(),
         proposalLength,
+        markets,
+        market_labels,
         spotPoolAddress: poolAddress,
         creatorWallet: walletAddress,
         creatorSignature,
@@ -165,7 +179,7 @@ export default function CreatePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to create DM');
+        throw new Error(error.error || 'Failed to create QM');
       }
 
       const data = await response.json();
@@ -178,12 +192,15 @@ export default function CreatePage() {
       // Reset form
       setTitle('');
       setDescription('');
+      setChoice1('');
+      setChoice2('');
+      setChoice3('');
       setProposalLengthHours('24');
 
     } catch (error) {
-      console.error('Create DM failed:', error);
+      console.error('Create QM failed:', error);
       toast.error(
-        `Failed to create DM: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to create QM: ${error instanceof Error ? error.message : 'Unknown error'}`,
         { id: toastId }
       );
     } finally {
@@ -216,7 +233,7 @@ export default function CreatePage() {
             <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8 pb-8 px-4 md:px-0">
               <div className="mb-6">
                 <h2 className="text-2xl font-medium" style={{ color: '#E9E9E3' }}>
-                  Create Decision Market
+                  Create Quantum Market
                 </h2>
               </div>
 
@@ -232,14 +249,14 @@ export default function CreatePage() {
                     {/* Title Card */}
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
                       <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
-                        Title
+                        Proposal*
                       </span>
                       <input
                         id="title"
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="UI Redesign by Zhirtless"
+                        placeholder="Mint $ZC as reward for next Combinator founder?"
                         className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
                         style={{
                           WebkitAppearance: 'none',
@@ -254,21 +271,13 @@ export default function CreatePage() {
                     {/* Description Card */}
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 flex-1 flex flex-col relative">
                       <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
-                        Description
+                        Description*
                       </span>
                       <textarea
                         id="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        onFocus={() => setIsDescriptionFocused(true)}
-                        onBlur={() => setIsDescriptionFocused(false)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Tab' && !description.trim()) {
-                            e.preventDefault();
-                            setDescription(`Should ${poolName} merge PR #15? https://github.com/example/pull/15`);
-                          }
-                        }}
-                        placeholder={`Should ${poolName} merge PR #15? https://github.com/example/pull/15`}
+                        placeholder="For Combinator to be successful, it needs launchers. Providing a $ZC incentive will assist with this effort."
                         className="w-full flex-1 px-3 py-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono resize-none"
                         style={{
                           WebkitAppearance: 'none',
@@ -277,11 +286,72 @@ export default function CreatePage() {
                         }}
                         disabled={isSubmitting}
                       />
-                      {isDescriptionFocused && !description.trim() && (
-                        <span className="absolute bottom-6 right-7 text-sm pointer-events-none" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
-                          Press [TAB] to fill
+                    </div>
+
+                    {/* Choice Cards Row */}
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* Choice 1 Card */}
+                      <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
+                        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
+                          Choice 1*
                         </span>
-                      )}
+                        <input
+                          type="text"
+                          value={choice1}
+                          onChange={(e) => setChoice1(e.target.value)}
+                          placeholder="1.5M $ZC"
+                          className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                          style={{
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'textfield',
+                            fontFamily: 'IBM Plex Mono, monospace',
+                            letterSpacing: '0em'
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      {/* Choice 2 Card */}
+                      <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
+                        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
+                          Choice 2
+                        </span>
+                        <input
+                          type="text"
+                          value={choice2}
+                          onChange={(e) => setChoice2(e.target.value)}
+                          placeholder="3M $ZC"
+                          className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                          style={{
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'textfield',
+                            fontFamily: 'IBM Plex Mono, monospace',
+                            letterSpacing: '0em'
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+                      {/* Choice 3 Card */}
+                      <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
+                        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
+                          Choice 3
+                        </span>
+                        <input
+                          type="text"
+                          value={choice3}
+                          onChange={(e) => setChoice3(e.target.value)}
+                          placeholder="5M $ZC"
+                          className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                          style={{
+                            WebkitAppearance: 'none',
+                            MozAppearance: 'textfield',
+                            fontFamily: 'IBM Plex Mono, monospace',
+                            letterSpacing: '0em'
+                          }}
+                          disabled={isSubmitting}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -290,7 +360,7 @@ export default function CreatePage() {
                     {/* Proposal Length Card */}
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
                       <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block text-center" style={{ color: '#DDDDD7' }}>
-                        Duration
+                        Duration*
                       </span>
 
                       {/* Bordered Container for Flip Cards */}
@@ -347,7 +417,7 @@ export default function CreatePage() {
                         >
                           {!hasPermission
                             ? 'NOT AUTHORIZED'
-                            : (isSubmitting ? `Creating ${poolName} DM...` : `CREATE ${poolName} DM`)}
+                            : (isSubmitting ? `Creating ${poolName} QM...` : `CREATE ${poolName} QM`)}
                         </button>
                       </div>
                     </div>

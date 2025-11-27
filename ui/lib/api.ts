@@ -20,7 +20,7 @@
 import { Connection } from '@solana/web3.js';
 import type { ProposalListResponse, ProposalListItem, ProposalDetailResponse, UserBalancesResponse, RawUserBalancesResponse } from '@/types/api';
 import { buildApiUrl } from './api-utils';
-import { transformProposalListItem, transformProposalDetail, transformUserBalances, transformTWAPHistory, marketToIndex } from './api-adapter';
+import { transformProposalListItem, transformProposalDetail, transformUserBalances, transformTWAPHistory } from './api-adapter';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com';
@@ -179,7 +179,7 @@ class GovernanceAPI {
 
   async getSwapQuote(
     proposalId: number,
-    market: 'pass' | 'fail',
+    market: number,  // Numeric market index (0-3 for quantum markets)
     isBaseToQuote: boolean,
     amountIn: string,
     slippageBps: number = 2000,
@@ -196,14 +196,13 @@ class GovernanceAPI {
     outputMint: string;
   } | null> {
     try {
-      // Convert market string to numeric index for backend API
-      const marketIndex = marketToIndex(market);
+      // Market is already a numeric index, pass directly to backend
       const params = {
         isBaseToQuote,
         amountIn,
         slippageBps
       };
-      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${marketIndex}/quote`, params, moderatorId);
+      const url = buildApiUrl(API_BASE_URL, `/api/swap/${proposalId}/${market}/quote`, params, moderatorId);
 
       const response = await fetch(url);
       if (!response.ok) {
