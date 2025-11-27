@@ -13,8 +13,8 @@ declare global {
 
 interface MarketChartProps {
   proposalId: number;
-  market: 'pass' | 'fail';
-  height?: number;
+  market: number;  // Numeric market index (0-3 for quantum markets)
+  height?: number | string;
   moderatorId?: number;
 }
 
@@ -37,15 +37,13 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
           throw new Error('Failed to fetch proposal details');
         }
 
-        // Get token and pool addresses based on market type
-        // Market index: 0 = fail, 1 = pass
-        const marketIndex = market === 'pass' ? 1 : 0;
-
-        const tokenAddress = proposal.baseVaultState?.conditionalMints?.[marketIndex];
-        const poolAddress = proposal.ammData?.[marketIndex]?.pool;
+        // Get token and pool addresses based on market index
+        // Market is now a numeric index (0-3 for quantum markets)
+        const tokenAddress = proposal.baseVaultState?.conditionalMints?.[market];
+        const poolAddress = proposal.ammData?.[market]?.pool;
 
         if (!tokenAddress || !poolAddress) {
-          throw new Error(`Missing ${market} market addresses`);
+          throw new Error(`Missing market ${market} addresses`);
         }
 
         // Wait for TradingView library to load with timeout
@@ -86,7 +84,7 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
           container: containerRef.current,
           library_path: '/charting_library/charting_library/',
           datafeed: datafeed,
-          symbol: `${market.toUpperCase()}-MARKET`,
+          symbol: `MARKET-${market}`,
           interval: '1' as any,
           timezone: 'Etc/UTC',
           theme: 'dark',
@@ -167,7 +165,7 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
 
         // Wait for chart to be ready before hiding loading state
         widget.onChartReady(async () => {
-          console.log(`[Chart ${market}] Chart ready`);
+          console.log(`[Chart market-${market}] Chart ready`);
           const chart = widget.chart();
 
           setIsLoading(false);
@@ -176,7 +174,7 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
           // Note: Compare study automatically switches to percentage mode
           if (proposal.spotPoolAddress) {
             try {
-              console.log(`[Chart ${market}] Adding spot price overlay for pool ${proposal.spotPoolAddress}`);
+              console.log(`[Chart market-${market}] Adding spot price overlay for pool ${proposal.spotPoolAddress}`);
 
               // Use the chart's createStudy method to add a line overlay
               // The 'Compare' study allows adding additional price series
@@ -198,9 +196,9 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
                 }
               );
 
-              console.log(`[Chart ${market}] ✅ Spot price overlay added (study ID: ${studyId}, color: #9ca3af)`);
+              console.log(`[Chart market-${market}] ✅ Spot price overlay added (study ID: ${studyId}, color: #9ca3af)`);
             } catch (error) {
-              console.error(`[Chart ${market}] ❌ Failed to add spot price overlay:`, error);
+              console.error(`[Chart market-${market}] ❌ Failed to add spot price overlay:`, error);
               // Don't throw - chart should still work without overlay
             }
           }
@@ -215,20 +213,20 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
 
               if (rightScales && rightScales.length > 0) {
                 const currentMode = rightScales[0].getMode();
-                console.log(`[Chart ${market}] Current price scale mode (after Compare): ${currentMode}`);
+                console.log(`[Chart market-${market}] Current price scale mode (after Compare): ${currentMode}`);
 
                 // Mode 0 = Normal, 1 = Log, 2 = Percentage, 3 = IndexedTo100
                 if (currentMode !== 0) {
                   rightScales[0].setMode(0); // Set to Normal mode
                   const newMode = rightScales[0].getMode();
-                  console.log(`[Chart ${market}] ✅ Forced Normal mode (was ${currentMode}, now ${newMode})`);
+                  console.log(`[Chart market-${market}] ✅ Forced Normal mode (was ${currentMode}, now ${newMode})`);
                 } else {
-                  console.log(`[Chart ${market}] Price scale already in Normal mode`);
+                  console.log(`[Chart market-${market}] Price scale already in Normal mode`);
                 }
               }
             }
           } catch (e) {
-            console.error(`[Chart ${market}] Failed to set price scale mode:`, e);
+            console.error(`[Chart market-${market}] Failed to set price scale mode:`, e);
           }
         });
       } catch (err) {
@@ -254,12 +252,12 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
   }, [proposalId, market]);
 
   return (
-    <div style={{ position: 'relative', height: `${height}px`, width: '100%' }}>
+    <div style={{ position: 'relative', height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}>
       {/* Chart container - always rendered so ref is attached */}
       <div
         ref={containerRef}
         style={{
-          height: `${height}px`,
+          height: typeof height === 'number' ? `${height}px` : height,
           width: '100%',
           background: '#121212'
         }}

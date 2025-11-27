@@ -23,20 +23,18 @@ import { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useTokenPrices } from '@/hooks/useTokenPrices';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
-import { openPosition, claimWinnings } from '@/lib/trading';
+import { openPosition } from '@/lib/trading';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import { Transaction } from '@solana/web3.js';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getDecimals, toDecimal, toSmallestUnits } from '@/lib/constants/tokens';
-import { PayoutCard } from './trading/PayoutCard';
 import type { UserBalancesResponse } from '@/types/api';
 import { useTokenContext } from '@/providers/TokenContext';
 
 interface TradingInterfaceProps {
   proposalId: number;
-  selectedMarket: 'pass' | 'fail';
-  onMarketChange: (market: 'pass' | 'fail') => void;
+  selectedMarketIndex: number;  // Numeric market index (0-3) for quantum markets
   passPrice: number;
   failPrice: number;
   proposalStatus?: 'Pending' | 'Passed' | 'Failed';
@@ -46,12 +44,12 @@ interface TradingInterfaceProps {
   visualFocusClassName?: string;
   baseMint?: string | null;
   tokenSymbol?: string;
+  winningMarketIndex?: number | null;  // For claiming winnings
 }
 
 const TradingInterface = memo(({
   proposalId,
-  selectedMarket,
-  onMarketChange,
+  selectedMarketIndex,
   passPrice,
   failPrice,
   proposalStatus = 'Pending',
@@ -60,7 +58,8 @@ const TradingInterface = memo(({
   onTradeSuccess,
   visualFocusClassName = '',
   baseMint,
-  tokenSymbol = 'ZC'
+  tokenSymbol = 'ZC',
+  winningMarketIndex
 }: TradingInterfaceProps) => {
   const { moderatorId } = useTokenContext();
   const { authenticated, walletAddress, login } = usePrivyWallet();
@@ -70,7 +69,6 @@ const TradingInterface = memo(({
   const [percentage, setPercentage] = useState('');
   const [sellingToken, setSellingToken] = useState<'sol' | 'baseToken'>('sol');
   const [isEditingQuickAmounts, setIsEditingQuickAmounts] = useState(false);
-  const [hoveredPayout, setHoveredPayout] = useState<string | null>(null);
   
   // Load saved values from localStorage or use defaults
   const [solQuickAmounts, setSolQuickAmounts] = useState(() => {
@@ -101,86 +99,81 @@ const TradingInterface = memo(({
   const [tempZCAmounts, setTempZCAmounts] = useState(['10000', '100000', '1000000', '10000000']);
   const [tempPercentAmounts, setTempPercentAmounts] = useState(['10', '25', '50', '100']);
 
-  // Calculate user's position from balances
+  // Calculate user's position from balances (N-ary market support)
   const userPosition = useMemo(() => {
     if (!userBalances) return null;
 
-    const basePassConditional = parseFloat(userBalances.base.passConditional || '0');
-    const baseFailConditional = parseFloat(userBalances.base.failConditional || '0');
-    const quotePassConditional = parseFloat(userBalances.quote.passConditional || '0');
-    const quoteFailConditional = parseFloat(userBalances.quote.failConditional || '0');
+    // Parse all conditional balances (supports 2-4 markets)
+    const baseBalances = userBalances.base.conditionalBalances.map((b: string) => parseFloat(b || '0'));
+    const quoteBalances = userBalances.quote.conditionalBalances.map((b: string) => parseFloat(b || '0'));
 
-    // For finished proposals, only consider winning tokens
-    if (proposalStatus === 'Passed') {
-      // Only Pass tokens are claimable
-      const hasWinningTokens = basePassConditional > 0 || quotePassConditional > 0;
+    // For finished proposals, only winning market tokens matter
+    if ((proposalStatus === 'Passed' || proposalStatus === 'Failed') && winningMarketIndex !== null && winningMarketIndex !== undefined) {
+      const hasWinningTokens = baseBalances[winningMarketIndex] > 0 || quoteBalances[winningMarketIndex] > 0;
       if (!hasWinningTokens) return null;
 
       return {
-        type: 'pass' as const,
-        passZCAmount: basePassConditional,
-        passSolAmount: quotePassConditional,
-        failZCAmount: 0, // Losing tokens don't count
-        failSolAmount: 0
-      };
-    } else if (proposalStatus === 'Failed') {
-      // Only Fail tokens are claimable
-      const hasWinningTokens = baseFailConditional > 0 || quoteFailConditional > 0;
-      if (!hasWinningTokens) return null;
-
-      return {
-        type: 'fail' as const,
-        passZCAmount: 0, // Losing tokens don't count
-        passSolAmount: 0,
-        failZCAmount: baseFailConditional,
-        failSolAmount: quoteFailConditional
+        marketIndex: winningMarketIndex,
+        type: winningMarketIndex === 0 ? 'fail' as const : 'pass' as const, // Legacy compat
+        balances: baseBalances.map((base, i) => ({
+          base: i === winningMarketIndex ? base : 0,
+          quote: i === winningMarketIndex ? quoteBalances[i] : 0
+        })),
+        // Legacy fields for backward compat
+        passZCAmount: baseBalances[1] || 0,
+        passSolAmount: quoteBalances[1] || 0,
+        failZCAmount: baseBalances[0] || 0,
+        failSolAmount: quoteBalances[0] || 0
       };
     }
 
     // For pending proposals, check if user has ANY conditional tokens
-    const hasAnyPassTokens = basePassConditional > 0 || quotePassConditional > 0;
-    const hasAnyFailTokens = baseFailConditional > 0 || quoteFailConditional > 0;
+    const hasAnyTokens = baseBalances.some(b => b > 0) || quoteBalances.some(b => b > 0);
+    if (!hasAnyTokens) return null;
 
-    if (!hasAnyPassTokens && !hasAnyFailTokens) {
-      return null;
+    // Find market with highest total value
+    let maxMarketIndex = 0;
+    let maxValue = 0;
+    for (let i = 0; i < baseBalances.length; i++) {
+      const value = baseBalances[i] + quoteBalances[i];
+      if (value > maxValue) {
+        maxValue = value;
+        maxMarketIndex = i;
+      }
     }
 
-    // Determine position type based on which tokens they have more of
-    // This handles both traditional positions and post-swap positions
-    const totalPassValue = basePassConditional + quotePassConditional;
-    const totalFailValue = baseFailConditional + quoteFailConditional;
-
-    const positionType = totalPassValue >= totalFailValue ? 'pass' : 'fail';
-
     // Track individual token amounts and types for payout display
-    // Base = ZC, Quote = SOL
     return {
-      type: positionType as 'pass' | 'fail',
-      passZCAmount: basePassConditional,
-      passSolAmount: quotePassConditional,
-      failZCAmount: baseFailConditional,
-      failSolAmount: quoteFailConditional
+      marketIndex: maxMarketIndex,
+      type: maxMarketIndex === 0 ? 'fail' as const : 'pass' as const, // Legacy compat
+      balances: baseBalances.map((base, i) => ({
+        base,
+        quote: quoteBalances[i]
+      })),
+      // Legacy fields for backward compat
+      passZCAmount: baseBalances[1] || 0,
+      passSolAmount: quoteBalances[1] || 0,
+      failZCAmount: baseBalances[0] || 0,
+      failSolAmount: quoteBalances[0] || 0
     };
-  }, [userBalances, proposalStatus]);
+  }, [userBalances, proposalStatus, winningMarketIndex]);
 
-  // Check if user has zero balances across all conditional tokens
+  // Check if user has zero balances across all conditional tokens (N-ary support)
   const hasZeroBalances = useMemo(() => {
     if (!userBalances) return true;
 
-    const basePassConditional = parseFloat(userBalances.base.passConditional || '0');
-    const baseFailConditional = parseFloat(userBalances.base.failConditional || '0');
-    const quotePassConditional = parseFloat(userBalances.quote.passConditional || '0');
-    const quoteFailConditional = parseFloat(userBalances.quote.failConditional || '0');
+    const hasAnyBase = userBalances.base.conditionalBalances.some(
+      (b: string) => parseFloat(b || '0') > 0
+    );
+    const hasAnyQuote = userBalances.quote.conditionalBalances.some(
+      (b: string) => parseFloat(b || '0') > 0
+    );
 
-    return basePassConditional === 0 &&
-           baseFailConditional === 0 &&
-           quotePassConditional === 0 &&
-           quoteFailConditional === 0;
+    return !hasAnyBase && !hasAnyQuote;
   }, [userBalances]);
 
   const { wallets } = useSolanaWallets();
   const [isTrading, setIsTrading] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
 
   // Transaction signer helper
   const createTransactionSigner = useCallback(() => {
@@ -234,7 +227,7 @@ const TradingInterface = memo(({
         // Fetch quote from API
         const quoteData = await api.getSwapQuote(
           proposalId,
-          selectedMarket,
+          selectedMarketIndex,
           isBaseToQuote,
           amountInSmallestUnits.toString(),
           2000, // 20% slippage
@@ -264,34 +257,16 @@ const TradingInterface = memo(({
         clearTimeout(quoteTimeoutRef.current);
       }
     };
-  }, [amount, sellingToken, selectedMarket, proposalId]);
+  }, [amount, sellingToken, selectedMarketIndex, proposalId]);
 
   // Handle MAX button click - set amount to user's balance for selected market and token
   const handleMaxClick = useCallback(() => {
     if (!userBalances) return;
 
-    let balance: string;
-
-    // Get the correct balance based on selectedMarket and sellingToken
-    if (selectedMarket === 'pass') {
-      // Pass market
-      if (sellingToken === 'baseToken') {
-        // Selling Pass-ZC
-        balance = userBalances.base.passConditional;
-      } else {
-        // Selling Pass-SOL
-        balance = userBalances.quote.passConditional;
-      }
-    } else {
-      // Fail market
-      if (sellingToken === 'baseToken') {
-        // Selling Fail-ZC
-        balance = userBalances.base.failConditional;
-      } else {
-        // Selling Fail-SOL
-        balance = userBalances.quote.failConditional;
-      }
-    }
+    // Get balance for the selected market index (0-3)
+    const balance = sellingToken === 'baseToken'
+      ? userBalances.base.conditionalBalances[selectedMarketIndex] || '0'
+      : userBalances.quote.conditionalBalances[selectedMarketIndex] || '0';
 
     // Convert from smallest units to human-readable
     const maxAmount = toDecimal(parseFloat(balance), sellingToken);
@@ -299,9 +274,9 @@ const TradingInterface = memo(({
     if (maxAmount > 0) {
       setAmount(maxAmount.toString());
     } else {
-      toast.error(`No ${selectedMarket}-${sellingToken.toUpperCase()} balance available`);
+      toast.error(`No market ${selectedMarketIndex}-${sellingToken.toUpperCase()} balance available`);
     }
-  }, [userBalances, selectedMarket, sellingToken]);
+  }, [userBalances, selectedMarketIndex, sellingToken]);
 
   // Check if amount exceeds available balance
   const balanceError = useMemo(() => {
@@ -310,22 +285,10 @@ const TradingInterface = memo(({
     const inputAmount = parseFloat(amount);
     if (isNaN(inputAmount) || inputAmount <= 0) return null;
 
-    let balance: string;
-
-    // Get the correct balance based on selectedMarket and sellingToken
-    if (selectedMarket === 'pass') {
-      if (sellingToken === 'baseToken') {
-        balance = userBalances.base.passConditional;
-      } else {
-        balance = userBalances.quote.passConditional;
-      }
-    } else {
-      if (sellingToken === 'baseToken') {
-        balance = userBalances.base.failConditional;
-      } else {
-        balance = userBalances.quote.failConditional;
-      }
-    }
+    // Get balance for the selected market index (0-3)
+    const balance = sellingToken === 'baseToken'
+      ? userBalances.base.conditionalBalances[selectedMarketIndex] || '0'
+      : userBalances.quote.conditionalBalances[selectedMarketIndex] || '0';
 
     const maxAmount = toDecimal(parseFloat(balance), sellingToken);
 
@@ -334,7 +297,7 @@ const TradingInterface = memo(({
     }
 
     return null;
-  }, [amount, userBalances, selectedMarket, sellingToken]);
+  }, [amount, userBalances, selectedMarketIndex, sellingToken]);
 
   const handleTrade = useCallback(async () => {
     if (!isConnected) {
@@ -357,7 +320,7 @@ const TradingInterface = memo(({
     try {
       await openPosition({
         proposalId,
-        market: selectedMarket, // Which AMM market (pass or fail)
+        market: selectedMarketIndex, // Which AMM market (0-3)
         inputToken: sellingToken, // Which conditional token we're selling
         inputAmount: amount,
         userAddress: walletAddress,
@@ -381,51 +344,7 @@ const TradingInterface = memo(({
     } finally {
       setIsTrading(false);
     }
-  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarket, sellingToken, wallets, refetchBalances, onTradeSuccess]);
-  
-  const handleClaim = useCallback(async () => {
-    if (!isConnected) {
-      login();
-      return;
-    }
-    
-    if (!walletAddress) {
-      toast.error('No wallet address found');
-      return;
-    }
-    
-    if (!userPosition) {
-      toast.error('No position to claim');
-      return;
-    }
-    
-    if (proposalStatus !== 'Passed' && proposalStatus !== 'Failed') {
-      toast.error('Cannot claim from pending proposal');
-      return;
-    }
-    
-    setIsClaiming(true);
-    
-    try {
-      await claimWinnings({
-        proposalId,
-        proposalStatus: proposalStatus as 'Passed' | 'Failed',
-        userPosition,
-        userAddress: walletAddress,
-        signTransaction: createTransactionSigner(),
-        moderatorId: moderatorId || undefined
-      });
-
-      // Refresh user balances after claiming
-      refetchBalances();
-
-    } catch (error) {
-      console.error('Claim failed:', error);
-      // Error toast is already shown by claimWinnings function
-    } finally {
-      setIsClaiming(false);
-    }
-  }, [isConnected, login, walletAddress, userPosition, proposalStatus, proposalId, wallets, refetchBalances]);
+  }, [isConnected, login, walletAddress, amount, proposalId, selectedMarketIndex, sellingToken, wallets, refetchBalances, onTradeSuccess]);
 
   // Quick amount buttons - depends on selling token
   const quickAmounts = useMemo(() => {
@@ -485,13 +404,8 @@ const TradingInterface = memo(({
   const handlePercentageClick = useCallback((percentValue: string) => {
     if (!userBalances) return;
 
-    // Get the ZC balance based on selectedMarket
-    let balance: string;
-    if (selectedMarket === 'pass') {
-      balance = userBalances.base.passConditional;
-    } else {
-      balance = userBalances.base.failConditional;
-    }
+    // Get the ZC balance based on selectedMarketIndex (0-3)
+    const balance = userBalances.base.conditionalBalances[selectedMarketIndex] || '0';
 
     // Convert from smallest units to decimal
     const maxAmount = toDecimal(parseFloat(balance), 'zc');
@@ -505,21 +419,16 @@ const TradingInterface = memo(({
       setPercentage(percentValue);
       setAmount(calculatedAmount.toString());
     } else {
-      toast.error(`No ${selectedMarket} ZC balance available`);
+      toast.error(`No market ${selectedMarketIndex} ZC balance available`);
     }
-  }, [userBalances, selectedMarket]);
+  }, [userBalances, selectedMarketIndex]);
 
   // Handle SOL quick amount click (with auto-cap to max balance)
   const handleSolQuickAmountClick = useCallback((quickValue: string) => {
     if (!userBalances) return;
 
-    // Get the SOL balance based on selectedMarket
-    let balance: string;
-    if (selectedMarket === 'pass') {
-      balance = userBalances.quote.passConditional;
-    } else {
-      balance = userBalances.quote.failConditional;
-    }
+    // Get the SOL balance based on selectedMarketIndex (0-3)
+    const balance = userBalances.quote.conditionalBalances[selectedMarketIndex] || '0';
 
     // Convert from smallest units to decimal
     const maxAmount = toDecimal(parseFloat(balance), 'sol');
@@ -536,104 +445,11 @@ const TradingInterface = memo(({
     } else {
       setAmount(quickValue); // If no balance, still allow setting the value
     }
-  }, [userBalances, selectedMarket]);
+  }, [userBalances, selectedMarketIndex]);
 
   return (
     <div>
-      {/* Payouts Section - Only show for finished proposals with user position */}
-      {userPosition && (proposalStatus === 'Passed' || proposalStatus === 'Failed') && (
-        <div className="mb-8">
-          <div className="text-xs text-gray-400 mb-2">
-            Payout
-          </div>
-          <div className="space-y-2">
-            {proposalStatus === 'Passed' && (
-              <>
-                {userPosition.passZCAmount > 0 && (
-                  <PayoutCard
-                    status="pass"
-                    label="Passed (ZC)"
-                    amount={userPosition.passZCAmount}
-                    token="zc"
-                    tokenPrice={baseTokenPrice}
-                    isHovered={hoveredPayout === 'pass-zc'}
-                    onHover={setHoveredPayout}
-                    hoverId="pass-zc"
-                  />
-                )}
-                {userPosition.passSolAmount > 0 && (
-                  <PayoutCard
-                    status="pass"
-                    label="Passed (SOL)"
-                    amount={userPosition.passSolAmount}
-                    token="sol"
-                    tokenPrice={solPrice}
-                    isHovered={hoveredPayout === 'pass-sol'}
-                    onHover={setHoveredPayout}
-                    hoverId="pass-sol"
-                  />
-                )}
-              </>
-            )}
-            {proposalStatus === 'Failed' && (
-              <>
-                {userPosition.failZCAmount > 0 && (
-                  <PayoutCard
-                    status="fail"
-                    label="Failed (ZC)"
-                    amount={userPosition.failZCAmount}
-                    token="zc"
-                    tokenPrice={baseTokenPrice}
-                    isHovered={hoveredPayout === 'fail-zc'}
-                    onHover={setHoveredPayout}
-                    hoverId="fail-zc"
-                  />
-                )}
-                {userPosition.failSolAmount > 0 && (
-                  <PayoutCard
-                    status="fail"
-                    label="Failed (SOL)"
-                    amount={userPosition.failSolAmount}
-                    token="sol"
-                    tokenPrice={solPrice}
-                    isHovered={hoveredPayout === 'fail-sol'}
-                    onHover={setHoveredPayout}
-                    hoverId="fail-sol"
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-        
-      {/* Claim section for closed proposals */}
-      {proposalStatus !== 'Pending' && (
-        <div className="mt-4">
-          {userPosition ? (
-            /* Claim Button */
-            <button
-                onClick={handleClaim}
-                disabled={isClaiming}
-                className={`w-full py-3 rounded-lg font-semibold transition cursor-pointer ${
-                  isClaiming
-                    ? 'bg-gray-500 cursor-not-allowed'
-                    : 'bg-[#4CBBF4] hover:bg-[#3AA5E3]'
-                } text-[#181818]`}
-              >
-                {isClaiming ? 'Claiming...' : 'Claim'}
-              </button>
-            ) : (
-              <div className="text-center py-6 text-gray-400 text-sm">
-                Nothing to claim
-              </div>
-            )}
-        </div>
-      )}
-
-      {/* Only show betting interface for pending proposals */}
-      {proposalStatus === 'Pending' && (
-        <div className={visualFocusClassName}>
+      <div className={visualFocusClassName}>
       {/* Buy/Sell toggle */}
       <div className="flex flex-row flex-1 min-h-[40px] max-h-[40px] gap-[2px] p-[3px] justify-center items-center rounded-[6px] mb-2 border border-[#191919]">
         <button
@@ -650,7 +466,7 @@ const TradingInterface = memo(({
           style={sellingToken === 'sol' ? { backgroundColor: '#6ECC94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
           <span className="text-[12px] leading-[16px]">
-            {selectedMarket === 'pass' ? 'BUY' : 'BUY'}
+            BUY
           </span>
         </button>
         <button
@@ -667,7 +483,7 @@ const TradingInterface = memo(({
           style={sellingToken === 'baseToken' ? { backgroundColor: '#FF6F94', fontFamily: 'IBM Plex Mono, monospace' } : { fontFamily: 'IBM Plex Mono, monospace' }}
         >
           <span className="text-[12px] leading-[16px]">
-            {selectedMarket === 'pass' ? 'SELL' : 'SELL'}
+            SELL
           </span>
         </button>
       </div>
@@ -691,9 +507,7 @@ const TradingInterface = memo(({
                   // Update percentage and calculate amount
                   setPercentage(value);
                   if (value && userBalances) {
-                    const balance = selectedMarket === 'pass'
-                      ? userBalances.base.passConditional
-                      : userBalances.base.failConditional;
+                    const balance = userBalances.base.conditionalBalances[selectedMarketIndex] || '0';
                     const maxAmount = toDecimal(parseFloat(balance), 'zc');
                     const calculatedAmount = (maxAmount * parseFloat(value)) / 100;
                     setAmount(calculatedAmount.toString());
@@ -863,7 +677,7 @@ const TradingInterface = memo(({
           <span>
             {(() => {
               const action = sellingToken === 'sol' ? 'BUY' : 'SELL';
-              const market = selectedMarket === 'pass' ? 'PASS' : 'FAIL';
+              const coinLabel = `COIN ${selectedMarketIndex + 1}`;
               const token = sellingToken === 'sol' ? 'SOL' : tokenSymbol;
 
               // Format amount with K/M notation for ZC
@@ -879,13 +693,12 @@ const TradingInterface = memo(({
                 }
               }
 
-              return `${action} ${market} ${formattedAmount} ${token}`;
+              return `${action} ${coinLabel} ${formattedAmount} ${token}`;
             })()}
           </span>
         )}
       </button>
-        </div>
-      )}
+      </div>
     </div>
   );
 });

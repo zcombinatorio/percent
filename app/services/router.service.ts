@@ -182,7 +182,7 @@ export class RouterService implements IRouterService {
     const pool = getPool();
 
     try {
-      // Get the next available ID from i_moderators table
+      // Get the next available ID from qm_moderators table
       const idResult = await pool.query<{ max: number }>(
         'SELECT COALESCE(MAX(id), 0) as max FROM qm_moderators'
       );

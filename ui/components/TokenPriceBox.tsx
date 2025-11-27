@@ -8,9 +8,12 @@ interface TokenPriceBoxProps {
   tokenSymbol: string;
   tokenAddress?: string;
   price: number | null;
+  twap?: number | null;           // TWAP for N-ary markets
   priceChange24h?: number;
   isLoading?: boolean;
-  tokenType?: 'governance' | 'pass' | 'fail' | 'gap';
+  tokenType?: 'governance' | 'pass' | 'fail' | 'gap' | 'market';
+  marketIndex?: number;           // For N-ary market coloring
+  isLast?: boolean;               // For border styling on last item
 }
 
 export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
@@ -18,9 +21,12 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
   tokenSymbol,
   tokenAddress,
   price,
+  twap,
   priceChange24h,
   isLoading = false,
-  tokenType = 'governance'
+  tokenType = 'governance',
+  marketIndex,
+  isLast = false
 }) => {
   const [copied, setCopied] = useState(false);
   
@@ -33,6 +39,12 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
   };
   const getTypeStyles = () => {
     const baseStyles = 'border-t border-l border-b border-[#282828]';
+
+    // For N-ary markets, add right border only on last item
+    if (tokenType === 'market') {
+      return isLast ? `${baseStyles} border-r` : baseStyles;
+    }
+
     switch (tokenType) {
       case 'governance':
         return baseStyles;
@@ -42,10 +54,25 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
         return baseStyles;
       case 'gap':
         return `${baseStyles} border-r`;
+      default:
+        return baseStyles;
     }
   };
 
   const getTypeIcon = () => {
+    // For N-ary markets, use index-based colored numbered circles
+    if (tokenType === 'market' && marketIndex !== undefined) {
+      const colors = ['#f87171', '#34d399', '#60a5fa', '#fbbf24']; // red, green, blue, yellow
+      return (
+        <div
+          className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white"
+          style={{ backgroundColor: colors[marketIndex % colors.length] }}
+        >
+          {marketIndex + 1}
+        </div>
+      );
+    }
+
     switch (tokenType) {
       case 'pass':
         return (
@@ -63,9 +90,9 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
         return <CgSpaceBetween className="w-5 h-5 text-theme-text-secondary" />;
       default:
         return (
-          <img 
-            src="https://www.oogway.xyz/icon.jpeg" 
-            alt="ZC" 
+          <img
+            src="https://www.oogway.xyz/icon.jpeg"
+            alt="ZC"
             className="w-5 h-5 rounded-full"
           />
         );
@@ -139,6 +166,12 @@ export const TokenPriceBox: React.FC<TokenPriceBoxProps> = ({
             {priceChange24h !== undefined && (
               <div className="text-sm mt-1">
                 {formatPriceChange(priceChange24h)}
+              </div>
+            )}
+            {/* TWAP display for N-ary markets */}
+            {tokenType === 'market' && twap !== null && (
+              <div className="text-sm mt-1" style={{ color: '#9ca3af' }}>
+                TWAP: {(twap * 100).toFixed(2)}%
               </div>
             )}
           </>

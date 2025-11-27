@@ -6,24 +6,26 @@ import type { Trade } from '@/hooks/useTradeHistory';
 
 interface ChartBoxProps {
   proposalId: number;
-  selectedMarket: 'pass' | 'fail';
+  selectedMarketIndex: number;  // Numeric market index (0-3 for quantum markets)
   trades: Trade[];
   totalVolume: number;
   tradesLoading: boolean;
   getTimeAgo: (timestamp: string) => string;
-  getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => string;
+  getTokenUsed: (isBaseToQuote: boolean, market: number) => string;
   moderatorId?: number;
+  className?: string;
 }
 
 export function ChartBox({
   proposalId,
-  selectedMarket,
+  selectedMarketIndex,
   trades,
   totalVolume,
   tradesLoading,
   getTimeAgo,
   getTokenUsed,
-  moderatorId
+  moderatorId,
+  className
 }: ChartBoxProps) {
   const [view, setView] = useState<'chart' | 'history'>('chart');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
@@ -42,14 +44,14 @@ export function ChartBox({
   };
 
   return (
-    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
+    <div className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 flex flex-col ${className || ''}`}>
       {/* Header with inline toggle and volume */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase text-left" style={{ color: '#DDDDD7' }}>
             {view === 'chart'
-              ? selectedMarket === 'pass' ? 'Chart: Pass Coin' : 'Chart: Fail Coin'
-              : selectedMarket === 'pass' ? 'Trades: Pass Coin' : 'Trades: Fail Coin'
+              ? `Chart: Coin ${selectedMarketIndex + 1}`
+              : `Trades: Coin ${selectedMarketIndex + 1}`
             }
           </span>
           <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
@@ -89,18 +91,18 @@ export function ChartBox({
 
       {/* Conditional Content */}
       {view === 'chart' ? (
-        <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px]">
+        <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px] flex-1 flex flex-col">
           {/* Mobile: 400px */}
           <div className="md:hidden">
-            <MarketChart proposalId={proposalId} market={selectedMarket} height={480} moderatorId={moderatorId} />
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} height={480} moderatorId={moderatorId} />
           </div>
-          {/* Desktop: 615px */}
-          <div className="hidden md:block">
-            <MarketChart proposalId={proposalId} market={selectedMarket} height={615} moderatorId={moderatorId} />
+          {/* Desktop: fills available height */}
+          <div className="hidden md:flex md:flex-1">
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} height="100%" moderatorId={moderatorId} />
           </div>
         </div>
       ) : (
-        <div className="h-[480px] md:h-[615px] overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
+        <div className="h-[480px] md:h-auto md:flex-1 overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
           <table className="w-full text-sm">
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>
@@ -173,7 +175,7 @@ export function ChartBox({
                       </a>
                     </div>
                   </td>
-                  <td className="hidden md:table-cell py-3 font-medium uppercase w-[100px]">{trade.market}</td>
+                  <td className="hidden md:table-cell py-3 font-medium uppercase w-[100px]">{trade.market + 1}</td>
                   <td className="py-3 w-[100px]">
                     <span style={{ color: trade.isBaseToQuote ? '#FF6F94' : '#6ECC94' }}>
                       {trade.isBaseToQuote ? 'Sell' : 'Buy'}

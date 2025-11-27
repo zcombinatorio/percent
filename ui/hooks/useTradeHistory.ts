@@ -11,7 +11,7 @@ export interface Trade {
   id: number;
   timestamp: string;
   proposalId: number;
-  market: 'pass' | 'fail' | 0 | 1;  // Backend may return string or numeric index
+  market: number;  // Numeric market index (0-3 for quantum markets)
   userAddress: string;
   isBaseToQuote: boolean;
   amountIn: string;
@@ -240,14 +240,14 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   }, []);
 
   // Memoized helper function to determine token used
-  const getTokenUsed = useCallback((isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => {
-    // Both pass and fail markets use the same token pairs:
+  const getTokenUsed = useCallback((isBaseToQuote: boolean, market: number) => {
+    // All markets use the same token pairs:
     // base = token (ZC/OOGWAY/etc), quote = SOL
     return isBaseToQuote ? `$${tokenSymbol || 'ZC'}` : 'SOL';
   }, [tokenSymbol]);
 
   // Memoized helper function to calculate volume in USD
-  const calculateVolume = useCallback((amountIn: string, isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => {
+  const calculateVolume = useCallback((amountIn: string, isBaseToQuote: boolean, market: number) => {
     const amount = parseFloat(amountIn);
     const token = getTokenUsed(isBaseToQuote, market);
 

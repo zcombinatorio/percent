@@ -78,7 +78,7 @@ router.post('/:id/buildSwapTx', async (req, res, next) => {
     // Validate request body
     const { user, market, isBaseToQuote, amountIn, slippageBps } = req.body;
 
-    if (!user || !market || isBaseToQuote === undefined || amountIn === undefined) {
+    if (!user || market === undefined || isBaseToQuote === undefined || amountIn === undefined) {
       logger.warn('[POST /:id/buildSwapTx] Missing required fields', {
         proposalId,
         receivedFields: Object.keys(req.body)
@@ -185,7 +185,7 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
 
     // Validate request body
     const { transaction, market, user, isBaseToQuote, amountIn, amountOut } = req.body;
-    if (!transaction || !market || !user || isBaseToQuote === undefined || !amountIn) {
+    if (!transaction || market === undefined || !user || isBaseToQuote === undefined || !amountIn) {
       logger.warn('[POST /:id/executeSwapTx] Missing required fields', {
         proposalId,
         receivedFields: Object.keys(req.body)

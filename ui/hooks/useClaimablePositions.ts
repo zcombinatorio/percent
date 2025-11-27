@@ -8,7 +8,7 @@ export interface ClaimablePosition {
   proposalId: number;
   proposalDescription: string;
   proposalStatus: 'Passed' | 'Failed';
-  positionType: 'pass' | 'fail';
+  winningMarketIndex: number;  // Which market won (for N-ary quantum markets)
   isWinner: boolean;
   claimableAmount: number; // Amount of tokens to claim
   claimableToken: 'sol' | 'zc'; // Which token they'll receive
@@ -86,30 +86,16 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
       const proposal = proposals.find(p => p.id === proposalId);
       if (!proposal || (proposal.status !== 'Passed' && proposal.status !== 'Failed')) return;
 
-      const basePassConditional = parseFloat(balances.base.passConditional || '0');
-      const baseFailConditional = parseFloat(balances.base.failConditional || '0');
-      const quotePassConditional = parseFloat(balances.quote.passConditional || '0');
-      const quoteFailConditional = parseFloat(balances.quote.failConditional || '0');
+      // Get winning market index from proposal (for N-ary quantum markets)
+      const winningIndex = proposal.winningMarketIndex;
+      if (winningIndex === null || winningIndex === undefined) return;
 
-      // Determine if user has winning tokens to claim
-      const proposalPassed = proposal.status === 'Passed';
+      // Get winning tokens from conditionalBalances array using winningMarketIndex
+      const baseWinningTokens = parseFloat(balances.base.conditionalBalances[winningIndex] || '0');
+      const quoteWinningTokens = parseFloat(balances.quote.conditionalBalances[winningIndex] || '0');
 
-      // For base vault (ZC):
-      // - If proposal passed, pass conditional tokens win (can redeem for ZC)
-      // - If proposal failed, fail conditional tokens win (can redeem for ZC)
-      const baseWinningTokens = proposalPassed ? basePassConditional : baseFailConditional;
-
-      // For quote vault (SOL):
-      // - If proposal passed, pass conditional tokens win (can redeem for SOL)
-      // - If proposal failed, fail conditional tokens win (can redeem for SOL)
-      const quoteWinningTokens = proposalPassed ? quotePassConditional : quoteFailConditional;
-
-      // Simplified logic: Check if user has ANY winning tokens to claim
-      // Users who have traded may have mixed positions, so we check each token type independently
+      // Check if user has ANY winning tokens to claim
       if (baseWinningTokens > 0 || quoteWinningTokens > 0) {
-        // Determine position type based on which winning tokens they have
-        const positionType = proposalPassed ? 'pass' : 'fail';
-
         // Check base vault winning tokens (ZC)
         if (baseWinningTokens > 0) {
           const value = (baseWinningTokens / 1e6) * baseTokenPrice;
@@ -117,7 +103,7 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
             proposalId,
             proposalDescription: proposal.description,
             proposalStatus: proposal.status as 'Passed' | 'Failed',
-            positionType,
+            winningMarketIndex: winningIndex,
             isWinner: true,
             claimableAmount: baseWinningTokens / 1e6,
             claimableToken: 'zc',
@@ -133,7 +119,7 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
             proposalId,
             proposalDescription: proposal.description,
             proposalStatus: proposal.status as 'Passed' | 'Failed',
-            positionType,
+            winningMarketIndex: winningIndex,
             isWinner: true,
             claimableAmount: quoteWinningTokens / 1e9,
             claimableToken: 'sol',

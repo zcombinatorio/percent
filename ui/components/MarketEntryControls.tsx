@@ -11,8 +11,8 @@ interface MarketEntryControlsProps {
   solBalance: number | null;
   zcBalance: number | null;
   userBalances: {
-    base: { passConditional: string; failConditional: string };
-    quote: { passConditional: string; failConditional: string };
+    base: { conditionalBalances: string[] };
+    quote: { conditionalBalances: string[] };
   } | null;
   onMarketModeChange: (mode: MarketMode) => void;
   onAmountChange: (amount: string) => void;

@@ -5,7 +5,7 @@ interface TradeHistoryTableProps {
   loading: boolean;
   getTimeAgo: (timestamp: string) => string;
   formatAddress: (address: string) => string;
-  getTokenUsed: (isBaseToQuote: boolean, market: 'pass' | 'fail' | 0 | 1) => string;
+  getTokenUsed: (isBaseToQuote: boolean, market: number) => string;
 }
 
 export function TradeHistoryTable({
@@ -121,7 +121,7 @@ export function TradeHistoryTable({
                   </a>
                 </td>
                 <td className="py-3 uppercase" style={{ color: '#DDDDD7' }}>
-                  {trade.market === 'pass' || trade.market === 1 ? 'Pass' : 'Fail'}
+                  {trade.market + 1}
                 </td>
                 <td className="py-3" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
                   {isBuy ? 'Buy' : 'Sell'}

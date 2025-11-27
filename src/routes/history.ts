@@ -312,7 +312,7 @@ router.get('/:id/chart', async (req, res, next) => {
 
       return {
         timestamp: new Date(point.timestamp).toISOString(),
-        market: point.market,
+        market: point.market === -1 ? 'spot' : point.market,
         open: (point.open * multiplier).toString(),
         high: (point.high * multiplier).toString(),
         low: (point.low * multiplier).toString(),
