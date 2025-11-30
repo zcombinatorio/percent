@@ -436,10 +436,8 @@ export class SchedulerService implements ISchedulerService {
       const solPrice = await solPriceService.getSolPrice();
 
       // Convert to market cap USD: price × actual supply × SOL/USD
-      // Note: totalSupply is raw (includes decimals), so we divide to get actual token count
-      const totalSupply = proposal.config.totalSupply;
-      const baseDecimals = proposal.config.baseDecimals || 6;
-      const actualSupply = totalSupply / Math.pow(10, baseDecimals);
+      // Note: totalSupply is already decimal-adjusted when stored in database
+      const actualSupply = proposal.config.totalSupply;
       const marketCapUSD = spotPriceInSol * actualSupply * solPrice;
 
       // Record to database
