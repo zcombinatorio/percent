@@ -38,7 +38,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">Twitter</span>
             </a>
             <a
-              href="http://discord.gg/zcombinator"
+              href="https://discord.gg/Vf38Mqhxu5"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
@@ -60,7 +60,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">GitHub</span>
             </a>
             <a
-              href="https://docs.percent.markets/"
+              href="https://docs.zcombinator.io/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"

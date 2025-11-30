@@ -179,7 +179,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
           <span className="text-sm">$ZC</span>
         </a>
         <a
-          href="https://docs.percent.markets/"
+          href="https://docs.zcombinator.io/"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"
@@ -205,7 +205,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
           <span className="hidden sm:inline text-sm">Github</span>
         </a>
         <a
-          href="http://discord.gg/zcombinator"
+          href="https://discord.gg/Vf38Mqhxu5"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"

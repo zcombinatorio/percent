@@ -47,7 +47,7 @@ export default function Footer() {
             <div>
               <h5 className="text-white text-sm font-medium mb-4">Info</h5>
               <ul className="space-y-2">
-                <li><a href="https://docs.percent.markets/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
+                <li><a href="https://docs.zcombinator.io/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
                 <li><a href="https://github.com/zcombinatorio/zcombinator" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">GitHub</a></li>
               </ul>
             </div>
@@ -57,7 +57,7 @@ export default function Footer() {
               <h5 className="text-white text-sm font-medium mb-4">Contact</h5>
               <ul className="space-y-2">
                 <li><a href="https://x.com/percentmarkets" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Twitter</a></li>
-                <li><a href="http://discord.gg/zcombinator" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Discord</a></li>
+                <li><a href="https://discord.gg/Vf38Mqhxu5" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Discord</a></li>
               </ul>
             </div>
           </div>
