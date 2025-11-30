@@ -14,16 +14,12 @@ export default function Footer() {
           {/* Logo, Tagline, and Button */}
           <div className="flex flex-col">
             <div className="mb-4">
-              <div className="text-2xl font-semibold flex items-baseline gap-2">
-                <Image
-                  src="/landing/assets/z-logo-white.png"
-                  alt="Z"
-                  width={19}
-                  height={19}
-                  className="mb-0"
-                />
-                <span style={{ color: '#E9E9E4' }}>Combinator</span>
-              </div>
+              <Image
+                src="/combinator-long.svg"
+                alt="Z Combinator"
+                width={180}
+                height={16}
+              />
             </div>
             <p className="text-gray-400 text-sm mb-4 -mt-2.5">Zero to Infinity</p>
           </div>

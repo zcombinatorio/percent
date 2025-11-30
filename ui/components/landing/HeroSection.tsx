@@ -8,12 +8,9 @@ export default function HeroSection() {
         <img src="/landing/assets/cityscape-mobile.png" alt="" className="w-full h-auto sm:hidden" />
         <img src="/landing/assets/cityscape.png" alt="" className="w-full h-auto hidden sm:block" />
         {/* Z Combinator Logo Strip */}
-        <div className="w-[calc(100%+3rem)] h-12 flex items-center -ml-6 gap-3 mt-2 overflow-hidden">
+        <div className="w-[calc(100%+3rem)] h-12 flex items-center -ml-6 gap-8 mt-2 overflow-hidden">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="flex items-center gap-2 flex-shrink-0">
-              <img src="/landing/assets/z-logo-white.png" alt="" className="h-11" />
-              <span className="font-semibold text-6xl whitespace-nowrap" style={{ color: '#E9E9E4' }}>Combinator</span>
-            </div>
+            <img key={i} src="/combinator-long.svg" alt="" className="h-11 flex-shrink-0" />
           ))}
         </div>
       </div>

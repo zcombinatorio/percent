@@ -10,15 +10,20 @@ export default function Header() {
             href="/"
             className="hover:opacity-80 transition-opacity"
           >
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Image
-                src="/landing/assets/z-logo-white.png"
-                alt="Z"
-                width={20}
-                height={20}
-              />
-              <span className="hidden md:inline" style={{ color: '#E9E9E4' }}>Combinator</span>
-            </h1>
+            <Image
+              src="/combinator-long.svg"
+              alt="Z Combinator"
+              width={180}
+              height={16}
+              className="hidden md:block"
+            />
+            <Image
+              src="/combinator-icon.svg"
+              alt="Z Combinator"
+              width={24}
+              height={28}
+              className="md:hidden"
+            />
           </a>
           <nav className="flex items-center gap-3 sm:gap-6">
             <a
