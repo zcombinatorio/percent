@@ -145,22 +145,12 @@ export default function CreatePage() {
         attestationMessage
       };
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
-
-      if (!API_KEY) {
-        toast.error('API key not configured', { id: toastId });
-        setIsSubmitting(false);
-        return;
-      }
-
-      const response = await fetch(`${API_URL}/api/proposals?moderatorId=${moderatorId}`, {
+      const response = await fetch(`/api/proposals?moderatorId=${moderatorId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': API_KEY
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
