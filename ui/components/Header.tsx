@@ -168,7 +168,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
         )}
         {/* ZC link (always show) */}
         <a
-          href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad"
+          href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"

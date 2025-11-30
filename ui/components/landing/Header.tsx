@@ -69,7 +69,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">Docs</span>
             </a>
             <a
-              href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad?chain=sol"
+              href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
