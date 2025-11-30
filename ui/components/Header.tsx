@@ -80,15 +80,20 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             href="/"
             className="hover:opacity-80 transition-opacity"
           >
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Image
-                src="/z-logo-white.png"
-                alt="Z"
-                width={18}
-                height={18}
-              />
-              <span className="hidden md:inline" style={{ color: '#E9E9E4' }}>Combinator</span>
-            </h1>
+            <Image
+              src="/combinator-long.svg"
+              alt="Z Combinator"
+              width={180}
+              height={16}
+              className="hidden md:block"
+            />
+            <Image
+              src="/combinator-icon.svg"
+              alt="Z Combinator"
+              width={24}
+              height={28}
+              className="md:hidden"
+            />
           </a>
         <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
         {!authenticated && login && (

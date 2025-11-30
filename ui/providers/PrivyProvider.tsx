@@ -27,7 +27,7 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
         appearance: {
           theme: 'dark',
           accentColor: '#f97316', // Orange color matching your UI
-          logo: '/percent-logo-big.svg',
+          logo: '/combinator-icon.svg',
           walletChainType: 'solana-only', // Show only Solana options
         },
         // Login methods - email and social logins
