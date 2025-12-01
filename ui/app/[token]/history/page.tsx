@@ -13,8 +13,7 @@ import { Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { getProposalContent } from '@/lib/proposalContent';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CheckCircle2, XCircle } from 'lucide-react';
-import { api } from '@/lib/api';
+import { CheckCircle2 } from 'lucide-react';
 import { claimWinnings } from '@/lib/trading';
 import Masonry from 'react-masonry-css';
 import { ProposalVolume } from '@/components/ProposalVolume';
@@ -25,7 +24,6 @@ export default function HistoryPage() {
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
   const { proposals, loading, refetch } = useProposals(poolAddress || undefined, moderatorId || undefined);
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
-  const [proposalPfgs, setProposalPfgs] = useState<Record<number, number>>({});
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
 
   // Fetch wallet balances for current token
@@ -56,8 +54,7 @@ export default function HistoryPage() {
   // Handle claim from history card
   const handleClaimFromHistory = useCallback(async (
     proposalId: number,
-    proposalStatus: 'Passed' | 'Failed',
-    proposalRewards: Array<{ claimableToken: 'sol' | 'zc', claimableAmount: number, positionType: 'pass' | 'fail' }>
+    winningMarketIndex: number
   ) => {
     if (!authenticated) {
       login();
@@ -69,22 +66,12 @@ export default function HistoryPage() {
       return;
     }
 
-    if (proposalRewards.length === 0) {
-      toast.error('No position to claim');
-      return;
-    }
-
-    // Determine user position type from rewards
-    const userPositionType = proposalRewards[0].positionType;
-    const userPosition = { type: userPositionType };
-
     setClaimingProposalId(proposalId);
 
     try {
       await claimWinnings({
         proposalId,
-        proposalStatus,
-        userPosition,
+        winningMarketIndex,
         userAddress: walletAddress,
         signTransaction: createTransactionSigner(),
         moderatorId: moderatorId || undefined
@@ -99,36 +86,13 @@ export default function HistoryPage() {
     } finally {
       setClaimingProposalId(null);
     }
-  }, [authenticated, login, walletAddress, createTransactionSigner, refetchClaimable]);
+  }, [authenticated, login, walletAddress, createTransactionSigner, refetchClaimable, moderatorId]);
 
   // Memoize sorted proposals
   const sortedProposals = useMemo(() =>
     [...proposals].sort((a, b) => b.finalizedAt - a.finalizedAt),
     [proposals]
   );
-
-  // Fetch TWAP data for all finalized proposals
-  useEffect(() => {
-    if (sortedProposals.length > 0) {
-      const fetchPfgs = async () => {
-        const pfgMap: Record<number, number> = {};
-
-        for (const proposal of sortedProposals) {
-          if (proposal.status === 'Passed' || proposal.status === 'Failed') {
-            const twapData = await api.getTWAP(proposal.id, moderatorId || undefined);
-            if (twapData && twapData.failTwap > 0) {
-              const pfg = ((twapData.passTwap - twapData.failTwap) / twapData.failTwap) * 100;
-              pfgMap[proposal.id] = pfg;
-            }
-          }
-        }
-
-        setProposalPfgs(pfgMap);
-      };
-
-      fetchPfgs();
-    }
-  }, [sortedProposals]);
 
   // Calculate total balance
   const hasWalletBalance = (solBalance > 0 || baseTokenBalance > 0);
@@ -205,11 +169,10 @@ export default function HistoryPage() {
                     onMouseEnter={() => setHoveredProposalId(proposal.id)}
                     onMouseLeave={() => setHoveredProposalId(null)}
                     onClick={() => {
-                      if (hasClaimableRewards && !isCurrentlyClaiming) {
+                      if (hasClaimableRewards && !isCurrentlyClaiming && proposal.winningMarketIndex !== null && proposal.winningMarketIndex !== undefined) {
                         handleClaimFromHistory(
                           proposal.id,
-                          proposal.status as 'Passed' | 'Failed',
-                          proposalRewards
+                          proposal.winningMarketIndex
                         );
                       }
                     }}
@@ -221,21 +184,10 @@ export default function HistoryPage() {
                       <div className="flex items-center justify-between gap-2 mb-6">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>
-                          {proposal.status === 'Passed' && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#6ECC9433', color: '#6ECC94' }}>
-                              Pass
+                          {proposal.winningMarketLabel && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#BEE8FC33', color: '#BEE8FC' }}>
+                              {proposal.winningMarketLabel}
                               <CheckCircle2 className="w-3 h-3" />
-                            </span>
-                          )}
-                          {proposal.status === 'Failed' && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#FF6F9433', color: '#FF6F94' }}>
-                              Fail
-                              <XCircle className="w-3 h-3" />
-                            </span>
-                          )}
-                          {proposalPfgs[proposal.id] !== undefined && (
-                            <span className="px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#BEE8FC33', color: '#BEE8FC' }}>
-                              PFG: {proposalPfgs[proposal.id].toFixed(1)}%
                             </span>
                           )}
                           <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} />
@@ -351,11 +303,10 @@ export default function HistoryPage() {
                       onMouseEnter={() => setHoveredProposalId(proposal.id)}
                       onMouseLeave={() => setHoveredProposalId(null)}
                       onClick={() => {
-                        if (hasClaimableRewards && !isCurrentlyClaiming) {
+                        if (hasClaimableRewards && !isCurrentlyClaiming && proposal.winningMarketIndex !== null && proposal.winningMarketIndex !== undefined) {
                           handleClaimFromHistory(
                             proposal.id,
-                            proposal.status as 'Passed' | 'Failed',
-                            proposalRewards
+                            proposal.winningMarketIndex
                           );
                         }
                       }}
@@ -367,21 +318,10 @@ export default function HistoryPage() {
                         <div className="flex items-center justify-between gap-2 mb-6">
                           <div className="flex items-center gap-2 flex-wrap">
                             <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>
-                            {proposal.status === 'Passed' && (
-                              <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#6ECC9433', color: '#6ECC94' }}>
-                                Pass
+                            {proposal.winningMarketLabel && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#BEE8FC33', color: '#BEE8FC' }}>
+                                {proposal.winningMarketLabel}
                                 <CheckCircle2 className="w-3 h-3" />
-                              </span>
-                            )}
-                            {proposal.status === 'Failed' && (
-                              <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#FF6F9433', color: '#FF6F94' }}>
-                                Fail
-                                <XCircle className="w-3 h-3" />
-                              </span>
-                            )}
-                            {proposalPfgs[proposal.id] !== undefined && (
-                              <span className="px-2 py-0.5 text-xs font-normal rounded-full" style={{ backgroundColor: '#BEE8FC33', color: '#BEE8FC' }}>
-                                PFG: {proposalPfgs[proposal.id].toFixed(1)}%
                               </span>
                             )}
                             <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} />

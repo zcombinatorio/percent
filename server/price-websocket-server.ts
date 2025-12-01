@@ -19,7 +19,6 @@
 
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
-import { getDevnetPriceService } from './devnet-price-service';
 import { getMainnetPriceService } from './mainnet-price-service';
 import { Client } from 'pg';
 import * as dotenv from 'dotenv';
@@ -30,7 +29,7 @@ interface PriceData {
   tokenAddress: string;
   price: number;
   timestamp: number;
-  source?: 'dexscreener' | 'devnet-amm' | 'mainnet-amm';
+  source?: 'dexscreener' | 'mainnet-amm';
 }
 
 interface ClientSubscription {
@@ -42,7 +41,7 @@ interface ClientSubscription {
 interface TradeEvent {
   type: 'TRADE';
   proposalId: number;
-  market: 'pass' | 'fail';
+  market: number;  // Market index: 0=fail, 1=pass (or higher for multi-market)
   userAddress: string;
   isBaseToQuote: boolean;
   amountIn: string;
@@ -63,11 +62,8 @@ class PriceWebSocketServer {
   private prices: Map<string, PriceData> = new Map();
   private priceUpdateInterval: NodeJS.Timeout | null = null;
   private subscribedTokens: Set<string> = new Set();
-  private devnetService = getDevnetPriceService();
   private mainnetService = getMainnetPriceService();
-  private devnetTokens: Set<string> = new Set(); // Track which tokens are on devnet
   private mainnetPools: Set<string> = new Set(); // Track which pools are on mainnet
-  private poolMonitors: Map<string, number> = new Map(); // poolAddress -> subscriptionId
   private pgClient: Client | null = null;
   private subscribedProposals: Set<number> = new Set();
   private solPrice: number = 150; // Default SOL price in USD
@@ -145,18 +141,12 @@ class PriceWebSocketServer {
                   client.poolAddresses = new Map();
                 }
                 client.poolAddresses.set(token, pool);
-                this.devnetTokens.add(token); // Mark as devnet token
               }
             }
 
             client.tokens.add(token);
             this.subscribedTokens.add(token);
 
-            // If this is a devnet token with a pool, set up real-time monitoring
-            if (pool && !this.poolMonitors.has(pool)) {
-              this.startPoolMonitoring(token, pool);
-            }
-            
             // Fetch price immediately for new subscription
             this.fetchTokenPrice(token, pool);
             
@@ -252,23 +242,8 @@ class PriceWebSocketServer {
         }
       }
 
-      // If we already know it's a devnet token, fetch from devnet directly
-      if (this.devnetTokens.has(tokenAddress) && poolAddress) {
-        const devnetPrice = await this.devnetService.getTokenPrice(tokenAddress, poolAddress);
-        if (devnetPrice && !isNaN(devnetPrice.price) && isFinite(devnetPrice.price)) {
-          this.updatePrice({
-            tokenAddress,
-            price: devnetPrice.price,
-            timestamp: Date.now(),
-            source: 'devnet-amm'
-          });
-          return;
-        }
-      }
-      
-      // If we have a pool address but don't know which network it's on, try to detect
+      // If we have a pool address but don't know if it's cached, try mainnet
       if (poolAddress && !this.mainnetPools.has(poolAddress)) {
-        // First try mainnet (most common)
         const mainnetPrice = await this.mainnetService.getTokenPrice(tokenAddress, poolAddress);
         if (mainnetPrice && !isNaN(mainnetPrice.price) && isFinite(mainnetPrice.price)) {
           this.mainnetPools.add(poolAddress);
@@ -277,19 +252,6 @@ class PriceWebSocketServer {
             price: mainnetPrice.price,
             timestamp: Date.now(),
             source: 'mainnet-amm'
-          });
-          return; // Exit early if found on mainnet
-        }
-
-        // If not on mainnet, try devnet
-        const devnetPrice = await this.devnetService.getTokenPrice(tokenAddress, poolAddress);
-        if (devnetPrice && !isNaN(devnetPrice.price) && isFinite(devnetPrice.price)) {
-          this.devnetTokens.add(tokenAddress);
-          this.updatePrice({
-            tokenAddress,
-            price: devnetPrice.price,
-            timestamp: Date.now(),
-            source: 'devnet-amm'
           });
           return;
         }
@@ -327,9 +289,8 @@ class PriceWebSocketServer {
           }
         }
       } else if (response.status === 404) {
-        // Token not found on DexScreener, try AMM pools
+        // Token not found on DexScreener, try AMM pools on mainnet
         if (poolAddress) {
-          // First try mainnet (most common)
           const mainnetPrice = await this.mainnetService.getTokenPrice(tokenAddress, poolAddress);
           if (mainnetPrice && !isNaN(mainnetPrice.price) && isFinite(mainnetPrice.price)) {
             this.mainnetPools.add(poolAddress);
@@ -338,19 +299,6 @@ class PriceWebSocketServer {
               price: mainnetPrice.price,
               timestamp: Date.now(),
               source: 'mainnet-amm'
-            });
-            return; // Exit early if found on mainnet
-          }
-
-          // If not on mainnet, try devnet
-          const devnetPrice = await this.devnetService.getTokenPrice(tokenAddress, poolAddress);
-          if (devnetPrice && !isNaN(devnetPrice.price) && isFinite(devnetPrice.price)) {
-            this.devnetTokens.add(tokenAddress);
-            this.updatePrice({
-              tokenAddress,
-              price: devnetPrice.price,
-              timestamp: Date.now(),
-              source: 'devnet-amm'
             });
           }
         }
@@ -418,34 +366,6 @@ class PriceWebSocketServer {
     });
   }
 
-  private async startPoolMonitoring(tokenAddress: string, poolAddress: string) {
-    try {
-      // Set up real-time monitoring for this pool
-      const subscriptionId = await this.devnetService.monitorPool(
-        poolAddress,
-        (priceData) => {
-          // When pool state changes, update price
-          if (priceData && priceData.price) {
-            this.updatePrice({
-              tokenAddress,
-              price: priceData.price,
-              timestamp: Date.now(),
-              source: 'devnet-amm'
-            });
-            console.log(`Real-time update: ${tokenAddress.substring(0, 8)}... = ${priceData.price}`);
-          }
-        },
-        tokenAddress // Pass the token mint so we get the right price
-      );
-      
-      this.poolMonitors.set(poolAddress, subscriptionId);
-      console.log(`Started real-time monitoring for pool ${poolAddress.substring(0, 8)}...`);
-    } catch (error) {
-      console.error(`Failed to start pool monitoring for ${poolAddress}:`, error);
-    }
-  }
-
-
   private updateSubscribedProposals() {
     // Update the set of all subscribed proposals across all clients
     const allProposals = new Set<number>();
@@ -469,12 +389,13 @@ class PriceWebSocketServer {
       console.log('Connected to PostgreSQL for trade and price notifications');
 
       // Listen for both trade and price notifications
-      await this.pgClient.query('LISTEN i_new_trade');
-      await this.pgClient.query('LISTEN i_new_price');
+      // Channel names must match schema_vqm.sql triggers
+      await this.pgClient.query('LISTEN new_trade');
+      await this.pgClient.query('LISTEN qm_new_price');
 
       this.pgClient.on('notification', (msg) => {
         console.log('PostgreSQL notification received:', msg.channel, msg.payload);
-        if (msg.channel === 'i_new_trade' && msg.payload) {
+        if (msg.channel === 'new_trade' && msg.payload) {
           try {
             const tradeData = JSON.parse(msg.payload);
             console.log('Parsed trade data:', tradeData);
@@ -482,7 +403,7 @@ class PriceWebSocketServer {
           } catch (error) {
             console.error('Error parsing trade notification:', error);
           }
-        } else if (msg.channel === 'i_new_price' && msg.payload) {
+        } else if (msg.channel === 'qm_new_price' && msg.payload) {
           try {
             const priceData = JSON.parse(msg.payload);
             console.log('Parsed price data:', priceData);
@@ -507,10 +428,11 @@ class PriceWebSocketServer {
 
     try {
       // Get trades from last 5 seconds for all subscribed proposals
+      // Table name must match schema_vqm.sql: qm_trade_history
       if (this.subscribedProposals.size > 0) {
         const proposalIds = Array.from(this.subscribedProposals).join(',');
         const query = `
-          SELECT * FROM i_trade_history
+          SELECT * FROM qm_trade_history
           WHERE proposal_id IN (${proposalIds})
           AND timestamp > NOW() - INTERVAL '5 seconds'
           ORDER BY timestamp DESC
@@ -575,16 +497,16 @@ class PriceWebSocketServer {
 
     let marketCapUsd: number;
 
-    // Check if this is a spot market price (already in USD) or pass/fail (in SOL)
-    if (market === 'spot') {
+    // Check if this is a spot market price (market=-1, already in USD) or conditional market (in SOL)
+    if (market === -1) {
       // Spot prices are already stored as market cap USD - no conversion needed
       marketCapUsd = priceValue;
       console.log(`[WebSocket Server] Spot market - price already in USD: $${marketCapUsd.toFixed(2)}`);
     } else {
-      // Pass/Fail prices are in SOL - calculate market cap USD: price (SOL) × actual supply × SOL/USD
+      // Conditional market prices are in SOL - calculate market cap USD: price (SOL) × actual supply × SOL/USD
       const actualSupply = await this.getProposalTotalSupply(proposalId);
       marketCapUsd = priceValue * actualSupply * this.solPrice;
-      console.log(`[WebSocket Server] ${market} market - converting: ${priceValue} SOL × ${actualSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
+      console.log(`[WebSocket Server] Market ${market} - converting: ${priceValue} SOL × ${actualSupply} supply × $${this.solPrice} = $${marketCapUsd.toFixed(2)}`);
     }
 
     // Broadcast price update with BOTH formats for backwards compatibility
@@ -608,7 +530,7 @@ class PriceWebSocketServer {
         ws.send(JSON.stringify(trade));
       }
     });
-    console.log(`Trade broadcast for proposal ${trade.proposalId}: ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
+    console.log(`Trade broadcast for proposal ${trade.proposalId}: market ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
   }
 
   private broadcastPrice(priceUpdate: any) {
@@ -672,7 +594,7 @@ class PriceWebSocketServer {
       }
 
       const result = await this.pgClient.query(
-        'SELECT total_supply, base_decimals FROM i_proposals WHERE proposal_id = $1 LIMIT 1',
+        'SELECT total_supply, base_decimals FROM qm_proposals WHERE proposal_id = $1 LIMIT 1',
         [proposalId]
       );
 
@@ -702,12 +624,6 @@ class PriceWebSocketServer {
   }
 
   public async shutdown() {
-    // Stop all pool monitors
-    for (const [, subscriptionId] of this.poolMonitors) {
-      await this.devnetService.unmonitor(subscriptionId);
-    }
-    this.poolMonitors.clear();
-
     if (this.priceUpdateInterval) {
       clearInterval(this.priceUpdateInterval);
     }

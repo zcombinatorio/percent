@@ -36,10 +36,10 @@ router.use(requireModeratorId);
  * Helper function to get AMM from proposal
  * @param moderatorId - The moderator ID
  * @param proposalId - The proposal ID
- * @param market - Either 'pass' or 'fail' to select the AMM
+ * @param market - Market index (0, 1, 2, 3)
  * @returns The requested AMM instance
  */
-async function getAMM(moderatorId: number, proposalId: number, market: string): Promise<IAMM> {
+async function getAMM(moderatorId: number, proposalId: number, market: number): Promise<IAMM> {
   const moderator = getModerator(moderatorId);
 
   // Get proposal from database (always fresh data)
@@ -50,15 +50,13 @@ async function getAMM(moderatorId: number, proposalId: number, market: string): 
   }
 
   // Use the proposal's getAMMs() method which handles initialization checks
-  const [pAMM, fAMM] = proposal.getAMMs();
+  const amms = proposal.getAMMs();
 
-  if (market === 'pass') {
-    return pAMM;
-  } else if (market === 'fail') {
-    return fAMM;
-  } else {
-    throw new Error('Invalid market type. Must be "pass" or "fail"');
+  if (market < 0 || market >= amms.length) {
+    throw new Error(`Invalid market index. Must be 0-${amms.length - 1}`);
   }
+
+  return amms[market];
 }
 
 /**
@@ -67,7 +65,7 @@ async function getAMM(moderatorId: number, proposalId: number, market: string): 
  * 
  * Body:
  * - user: string - User's public key who is swapping tokens
- * - market: string - Market to swap in ('pass' or 'fail')
+ * - market: number - Market index (0, 1, 2, 3)
  * - isBaseToQuote: boolean - Direction of swap (true: base->quote, false: quote->base)
  * - amountIn: string - Amount of input tokens to swap (as string to preserve precision)
  * - slippageBps?: number - Optional slippage tolerance in basis points (default: 50 = 0.5%)
@@ -80,7 +78,7 @@ router.post('/:id/buildSwapTx', async (req, res, next) => {
     // Validate request body
     const { user, market, isBaseToQuote, amountIn, slippageBps } = req.body;
 
-    if (!user || !market || isBaseToQuote === undefined || amountIn === undefined) {
+    if (!user || market === undefined || isBaseToQuote === undefined || amountIn === undefined) {
       logger.warn('[POST /:id/buildSwapTx] Missing required fields', {
         proposalId,
         receivedFields: Object.keys(req.body)
@@ -92,14 +90,14 @@ router.post('/:id/buildSwapTx', async (req, res, next) => {
       });
     }
 
-    // Validate market is valid
-    if (market !== 'pass' && market !== 'fail') {
+    // Validate market is a number
+    if (typeof market !== 'number' || market < 0) {
       logger.warn('[POST /:id/buildSwapTx] Invalid market', {
         proposalId,
         market
       });
       return res.status(400).json({
-        error: 'Invalid market: must be "pass" or "fail"'
+        error: 'Invalid market: must be a non-negative number (market index)'
       });
     }
 
@@ -174,7 +172,7 @@ router.post('/:id/buildSwapTx', async (req, res, next) => {
  * 
  * Body:
  * - transaction: string - Base64 encoded signed transaction
- * - market: string - Market to swap in ('pass' or 'fail')
+ * - market: number - Market index (0, 1, 2, 3)
  * - user: string - User's public key (for trade logging)
  * - isBaseToQuote: boolean - Direction of swap
  * - amountIn: string - Amount of input tokens
@@ -187,7 +185,7 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
 
     // Validate request body
     const { transaction, market, user, isBaseToQuote, amountIn, amountOut } = req.body;
-    if (!transaction || !market || !user || isBaseToQuote === undefined || !amountIn) {
+    if (!transaction || market === undefined || !user || isBaseToQuote === undefined || !amountIn) {
       logger.warn('[POST /:id/executeSwapTx] Missing required fields', {
         proposalId,
         receivedFields: Object.keys(req.body)
@@ -199,14 +197,14 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
       });
     }
 
-    // Validate market is valid
-    if (market !== 'pass' && market !== 'fail') {
+    // Validate market is a number
+    if (typeof market !== 'number' || market < 0) {
       logger.warn('[POST /:id/executeSwapTx] Invalid market', {
         proposalId,
         market
       });
       return res.status(400).json({
-        error: 'Invalid market: must be "pass" or "fail"'
+        error: 'Invalid market: must be a non-negative number (market index)'
       });
     }
 
@@ -264,7 +262,7 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
       await HistoryService.recordTrade({
         moderatorId,
         proposalId,
-        market: market as 'pass' | 'fail',
+        market,
         userAddress: user,
         isBaseToQuote: isBaseToQuote,
         amountIn: amountInDecimal,
@@ -286,7 +284,7 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
         await HistoryService.recordPrice({
           moderatorId,
           proposalId,
-          market: market as 'pass' | 'fail',
+          market: market,
           price: newPrice,
         });
 
@@ -330,7 +328,10 @@ router.post('/:id/executeSwapTx', async (req, res, next) => {
 /**
  * Get quote from conditional AMM
  * GET /:id/:market/quote
- * 
+ *
+ * Path params:
+ * - market: number - Market index (0, 1, 2, 3)
+ *
  * Query params:
  * - isBaseToQuote: boolean - Direction of swap (true: base->quote, false: quote->base)
  * - amountIn: string - Amount of input tokens (as string to preserve precision)
@@ -340,16 +341,16 @@ router.get('/:id/:market/quote', async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;
     const proposalId = getProposalId(req);
-    const market = req.params.market;
+    const market = parseInt(req.params.market);
 
     // Validate market
-    if (market !== 'pass' && market !== 'fail') {
+    if (isNaN(market) || market < 0) {
       logger.warn('[GET /:id/:market/quote] Invalid market', {
         proposalId,
-        market
+        market: req.params.market
       });
       return res.status(400).json({
-        error: 'Invalid market: must be "pass" or "fail"'
+        error: 'Invalid market: must be a non-negative number (market index)'
       });
     }
 
@@ -426,7 +427,7 @@ router.get('/:id/:market/quote', async (req, res, next) => {
 
     res.json({
       proposalId,
-      market: market as 'pass' | 'fail',
+      market,
       isBaseToQuote: direction,
       swapInAmount: quote.swapInAmount.toString(),
       consumedInAmount: quote.consumedInAmount.toString(),

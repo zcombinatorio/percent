@@ -17,6 +17,7 @@ export const POOL_WHITELIST: Record<string, string[]> = {
   '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': [
     '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',
     'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',
+    'FgACAue3FuWPrL7xSqXWtUdHLne52dvVsKyKxjwqPYtr',
   ],
 };
 

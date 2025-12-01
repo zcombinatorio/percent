@@ -39,15 +39,15 @@ export function DepositCard({ proposalId, solBalance, baseTokenBalance, userBala
       // Reserve gas for SOL deposits
       return selectedToken === 'sol' ? Math.max(0, balance - SOL_GAS_RESERVE) : balance;
     } else {
-      // Withdraw mode: can only merge min(pass, fail) pairs
+      // Withdraw mode: can only merge min of ALL conditional token balances
       if (!userBalances) return 0;
 
       const decimals = selectedToken === 'sol' ? SOL_DECIMALS : ZC_DECIMALS;
       const vault = selectedToken === 'sol' ? userBalances.quote : userBalances.base;
 
-      const passBalance = parseFloat(vault.passConditional);
-      const failBalance = parseFloat(vault.failConditional);
-      const minBalance = Math.min(passBalance, failBalance);
+      // Find minimum across all conditional balances (supports 2-4 coins)
+      const balances = vault.conditionalBalances.map(b => parseFloat(b));
+      const minBalance = Math.min(...balances);
 
       // Convert from smallest units to decimal
       return minBalance / Math.pow(10, decimals);

@@ -267,17 +267,15 @@ export class SchedulerService implements ISchedulerService {
     const twapOracle = proposal.twapOracle;
     await twapOracle.crankTWAP();
     this.logger.info('TWAP cranked successfully', { moderatorId, proposalId });
-    
+
     // Record TWAP data to history
-    const twapData = await twapOracle.fetchTWAP();
-    
+    const twapData = twapOracle.fetchTWAPs();
+
     await HistoryService.recordTWAP({
       moderatorId,
       proposalId,
-      passTwap: new Decimal(twapData.passTwap.toString()),
-      failTwap: new Decimal(twapData.failTwap.toString()),
-      passAggregation: new Decimal(twapData.passAggregation.toString()),
-      failAggregation: new Decimal(twapData.failAggregation.toString()),
+      twaps: twapData.twaps.map(t => new Decimal(t.toString())),
+      aggregations: twapData.aggregations.map(a => new Decimal(a.toString())),
     });
     
     // Save updated proposal state to database
@@ -326,43 +324,25 @@ export class SchedulerService implements ISchedulerService {
       return;
     }
 
-    const [pAMM, fAMM] = proposal.getAMMs();
+    const amms = proposal.getAMMs();
 
-    // Record pass market price if AMM is trading
-    if (pAMM && pAMM.state === AMMState.Trading) {
-      try {
-        const passPriceInSol = await pAMM.fetchPrice();
+    // Record prices for all markets
+    for (let marketIndex = 0; marketIndex < amms.length; marketIndex++) {
+      const amm = amms[marketIndex];
 
-        await HistoryService.recordPrice({
-          moderatorId,
-          proposalId,
-          market: 'pass',
-          price: passPriceInSol,
-        });
-
-        this.logger.debug(`Pass price: ${passPriceInSol} SOL`);
-      } catch (error) {
-        this.logger.error(`Failed to record pass market price for proposal #${proposalId}:`, error);
-        // Continue to try recording fail price even if pass fails
-      }
-    }
-
-    // Record fail market price if AMM is trading
-    if (fAMM && fAMM.state === AMMState.Trading) {
-      try {
-        const failPriceInSol = await fAMM.fetchPrice();
-
-        await HistoryService.recordPrice({
-          moderatorId,
-          proposalId,
-          market: 'fail',
-          price: failPriceInSol,
-        });
-
-        this.logger.debug(`Fail price: ${failPriceInSol} SOL`);
-      } catch (error) {
-        this.logger.error(`Failed to record fail market price for proposal #${proposalId}:`, error);
-        // Continue even if fail price recording fails
+      if (amm && amm.state === AMMState.Trading) {
+        try {
+          const price = await amm.fetchPrice();
+          await HistoryService.recordPrice({
+            moderatorId,
+            proposalId,
+            market: marketIndex,
+            price: price,
+          });
+        } catch (error) {
+          this.logger.error(`Failed to record market ${marketIndex} price for proposal #${proposalId}:`, error);
+          // Continue to next market even if this one fails
+        }
       }
     }
 
@@ -437,14 +417,14 @@ export class SchedulerService implements ISchedulerService {
 
       // Convert to market cap USD: price × actual supply × SOL/USD
       // Note: totalSupply is already decimal-adjusted when stored in database
-      const actualSupply = proposal.config.totalSupply;
-      const marketCapUSD = spotPriceInSol * actualSupply * solPrice;
+      const totalSupply = proposal.config.totalSupply;
+      const marketCapUSD = spotPriceInSol * totalSupply * solPrice;
 
-      // Record to database
+      // Record to database (market: -1 for spot)
       await HistoryService.recordPrice({
         moderatorId,
         proposalId,
-        market: 'spot',
+        market: -1,
         price: new Decimal(marketCapUSD),
       });
 

@@ -17,16 +17,27 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-export type ProposalStatus = 'Pending' | 'Passed' | 'Failed' | 'Executed';
+// Backend status (what API returns)
+export type BackendProposalStatus = 'Uninitialized' | 'Pending' | 'Finalized';
+
+// UI status (what components expect) - transformed from backend status
+export type UIProposalStatus = 'Pending' | 'Passed' | 'Failed';
+
+// Keep ProposalStatus as alias for backward compatibility (uses UI format)
+export type ProposalStatus = UIProposalStatus;
 
 export interface ProposalListItem {
   id: number;
   title: string;
   description: string;
   status: ProposalStatus;
+  winningMarketIndex: number | null;
+  winningMarketLabel: string | null;
   createdAt: number;
   finalizedAt: number;
   passThresholdBps: number;
+  markets: number;
+  marketLabels?: string[];
   totalSupply?: number;
   poolAddress?: string | null;
   poolName?: string;
@@ -42,37 +53,65 @@ export interface ProposalDetailResponse {
   title: string;
   description: string;
   status: ProposalStatus;
+  winningMarketIndex: number | null;
+  winningMarketLabel: string | null;
+  winningBaseConditionalMint: string | null;
+  winningQuoteConditionalMint: string | null;
   createdAt: number;
   finalizedAt: number;
-  proposalStatus: ProposalStatus;
   proposalLength: number;
   baseMint: string;
   quoteMint: string;
-  authority: string;
   spotPoolAddress?: string;
   totalSupply?: number;
+  markets: number;
+  marketLabels?: string[];
   ammConfig: {
     initialBaseAmount: string;
     initialQuoteAmount: string;
   } | null;
-  passAmmState: any | null;
-  failAmmState: any | null;
+  ammData: any | null;
   baseVaultState: any | null;
   quoteVaultState: any | null;
   twapOracleState: any | null;
 }
 
+// Raw balance response from backend (index-based arrays)
+export interface RawUserBalancesResponse {
+  proposalId: number;
+  user: string;
+  base: {
+    regular: string;
+    conditionalMints: string[];
+    conditionalBalances: string[];  // indexed: 0=fail, 1=pass
+  };
+  quote: {
+    regular: string;
+    conditionalMints: string[];
+    conditionalBalances: string[];  // indexed: 0=fail, 1=pass
+  };
+}
+
+// Transformed balance response with named pass/fail fields for UI
 export interface UserBalancesResponse {
   proposalId: number;
   user: string;
   base: {
     regular: string;
+    // Named fields for legacy UI compatibility
     passConditional: string;
     failConditional: string;
+    // Array format for forward compatibility
+    conditionalMints: string[];
+    conditionalBalances: string[];
   };
   quote: {
     regular: string;
+    // Named fields for legacy UI compatibility
     passConditional: string;
     failConditional: string;
+    // Array format for forward compatibility
+    conditionalMints: string[];
+    conditionalBalances: string[];
   };
 }

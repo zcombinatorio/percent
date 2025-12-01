@@ -89,10 +89,8 @@ router.get('/:id/twap', async (req, res, next) => {
       data: twapData.map(twap => ({
         id: twap.id,
         timestamp: twap.timestamp.toISOString(),
-        passTwap: twap.passTwap.toString(),
-        failTwap: twap.failTwap.toString(),
-        passAggregation: twap.passAggregation.toString(),
-        failAggregation: twap.failAggregation.toString(),
+        twaps: twap.twaps.map(t => t.toString()),
+        aggregations: twap.aggregations.map(a => a.toString()),
       }))
     });
   } catch (error) {
@@ -295,9 +293,9 @@ router.get('/:id/chart', async (req, res, next) => {
 
     // Get proposal to access totalSupply and baseDecimals
     const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
-    const proposal = await persistenceService.getProposalForFrontend(proposalId);
-    const totalSupply = proposal?.total_supply || 1000000000;
-    const baseDecimals = proposal?.base_decimals || 6;
+    const proposal = await persistenceService.loadProposal(proposalId);
+    const totalSupply = proposal?.config.totalSupply || 1000000000;
+    const baseDecimals = proposal?.config.baseDecimals || 6;
     // totalSupply is already decimal-adjusted when stored in database
     const actualSupply = totalSupply;
 
@@ -309,12 +307,12 @@ router.get('/:id/chart', async (req, res, next) => {
     // Transform data to USD market cap (price × actual supply × SOL price) and ISO strings for JSON serialization
     // Note: Spot prices are already in USD market cap, so don't convert them
     const formattedData = chartData.map(point => {
-      // Spot prices are already market cap USD, pass/fail need conversion
-      const multiplier = point.market === 'spot' ? 1 : (actualSupply * solPrice);
+      // Spot prices are already market cap USD, other markets need conversion
+      const multiplier = point.market === -1 ? 1 : (actualSupply * solPrice);
 
       return {
         timestamp: new Date(point.timestamp).toISOString(),
-        market: point.market,
+        market: point.market === -1 ? 'spot' : point.market,
         open: (point.open * multiplier).toString(),
         high: (point.high * multiplier).toString(),
         low: (point.low * multiplier).toString(),

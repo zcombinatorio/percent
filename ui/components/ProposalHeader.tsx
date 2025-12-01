@@ -2,8 +2,8 @@ import { StatusBadge } from './StatusBadge';
 import { CountdownTimer } from './CountdownTimer';
 import { getProposalContent } from '@/lib/proposalContent';
 import { IoMdStopwatch } from 'react-icons/io';
+import type { ProposalStatus } from '@/types/api';
 
-type ProposalStatus = 'Pending' | 'Passed' | 'Failed' | 'Executed';
 type TabType = 'trade' | 'description';
 
 interface ProposalHeaderProps {

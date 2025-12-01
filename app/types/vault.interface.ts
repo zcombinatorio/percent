@@ -52,8 +52,9 @@ export enum TokenType {
  */
 export interface ITokenBalance {
   regular: bigint;        // Regular token balance (base or quote)
-  passConditional: bigint;   // Pass conditional token balance
-  failConditional: bigint;   // Fail conditional token balance
+  conditional: {
+    [mint: string]: bigint;
+  };
 }
 
 /**
@@ -62,6 +63,7 @@ export interface ITokenBalance {
 export interface IVaultConfig {
   proposalId: number;        // Associated proposal ID
   vaultType: VaultType;      // Base or Quote vault
+  markets: number;           // Number of markets
   regularMint: PublicKey;    // SPL token mint for regular token (base or quote)
   decimals: number;          // Number of decimals for conditional tokens
   authority: Keypair;        // Vault authority keypair (payer and mint authority)
@@ -71,7 +73,7 @@ export interface IVaultConfig {
 
 /**
  * Interface for vault managing 1:1 token exchange in prediction markets
- * Each vault manages both pass and fail conditional tokens for a single regular token type
+ * Each vault manages multiple conditional tokens (N markets) for a single regular token type
  */
 export interface IVault {
   // Immutable properties
@@ -79,14 +81,14 @@ export interface IVault {
   readonly vaultType: VaultType;            // Base or Quote vault type
   readonly regularMint: PublicKey;          // Regular token mint (base or quote)
   readonly decimals: number;                // Number of decimals for conditional tokens
-  readonly passConditionalMint: PublicKey;  // Pass conditional token mint (created on init)
-  readonly failConditionalMint: PublicKey;  // Fail conditional token mint (created on init)
+  readonly markets: number;                 // Number of markets (2-5 inclusive)
+  readonly conditionalMints: PublicKey[];   // Array of conditional token mints (created on init)
   readonly escrow: PublicKey;               // Escrow holding regular tokens
   readonly state: VaultState;               // Current operational state of the vault
 
   /**
    * Builds a transaction for initializing the vault
-   * Creates both pass and fail conditional token mints and escrow account
+   * Creates N conditional token mints and escrow account
    * Transaction is always pre-signed with authority and mint keypairs
    * @returns Pre-signed transaction ready for execution
    * @throws Error if vault is already initialized
@@ -100,127 +102,96 @@ export interface IVault {
   initialize(): Promise<void>;
 
   /**
-   * Builds transaction for splitting regular tokens into BOTH pass and fail conditional tokens
-   * User receives equal amounts of both conditional tokens for each regular token
+   * Builds transaction for splitting regular tokens into N conditional tokens
+   * User receives equal amounts of each conditional token for each regular token
    * Automatically handles SOL wrapping if needed (mainnet + quote vault)
    * @param user - User's public key who is splitting tokens
    * @param amount - Amount to split in smallest units
-   * @param presign - Whether to pre-sign with authority (default: false)
-   * @returns Transaction with blockhash and fee payer set, ready for user signature (pre-signed if requested)
+   * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if insufficient balance or vault is finalized
    */
   buildSplitTx(
     user: PublicKey,
-    amount: bigint,
-    presign?: boolean
+    amount: bigint
   ): Promise<Transaction>;
-  
+
   /**
-   * Builds transaction for merging BOTH pass and fail conditional tokens back to regular tokens
-   * Requires equal amounts of both conditional tokens to receive regular tokens
+   * Builds transaction for merging ALL conditional tokens back to regular tokens
+   * Requires equal amounts of all conditional tokens to receive regular tokens
    * Automatically handles SOL unwrapping if needed (mainnet + quote vault)
    * @param user - User's public key who is merging tokens
    * @param amount - Amount to merge in smallest units (of each conditional token)
-   * @param presign - Whether to pre-sign with escrow (default: false)
-   * @returns Transaction with blockhash and fee payer set, ready for user signature (pre-signed if requested)
-   * @throws Error if insufficient balance of either conditional token or vault is finalized
+   * @returns Transaction with blockhash and fee payer set, ready for user signature
+   * @throws Error if insufficient balance of any conditional token or vault is finalized
    */
   buildMergeTx(
     user: PublicKey,
-    amount: bigint,
-    presign?: boolean
+    amount: bigint
   ): Promise<Transaction>;
-  
+
   /**
    * Executes a split transaction
    * @param transaction - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with authority (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  executeSplitTx(transaction: Transaction, presigned?: boolean): Promise<string>;
+  executeSplitTx(transaction: Transaction): Promise<string>;
 
   /**
    * Executes a merge transaction
    * @param transaction - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  executeMergeTx(transaction: Transaction, presigned?: boolean): Promise<string>;
+  executeMergeTx(transaction: Transaction): Promise<string>;
   
   /**
    * Gets regular token balance for a user
    * @param user - User's public key
    * @returns Balance in smallest units
    */
-  getBalance(user: PublicKey): Promise<bigint>;
-  
+  getRegularBalance(user: PublicKey): Promise<bigint>;
+
   /**
-   * Gets pass conditional token balance for a user
+   * Gets conditional token balance for a user for a specific mint
    * @param user - User's public key
+   * @param mint - Conditional token mint
    * @returns Balance in smallest units
    */
-  getPassConditionalBalance(user: PublicKey): Promise<bigint>;
-  
-  /**
-   * Gets fail conditional token balance for a user
-   * @param user - User's public key
-   * @returns Balance in smallest units
-   */
-  getFailConditionalBalance(user: PublicKey): Promise<bigint>;
-  
+  getConditionalBalance(user: PublicKey, mint: PublicKey): Promise<bigint>;
+
   /**
    * Gets all token balances for a user
    * @param user - User's public key
    * @returns Complete balance snapshot
    */
   getUserBalances(user: PublicKey): Promise<ITokenBalance>;
-  
+
   /**
-   * Gets total supply of regular tokens held in escrow
-   * @returns Total supply in smallest units
-   */
-  getTotalSupply(): Promise<bigint>;
-  
-  /**
-   * Gets total supply of pass conditional tokens issued
-   * @returns Total supply in smallest units
-   */
-  getPassConditionalTotalSupply(): Promise<bigint>;
-  
-  /**
-   * Gets total supply of fail conditional tokens issued
-   * @returns Total supply in smallest units
-   */
-  getFailConditionalTotalSupply(): Promise<bigint>;
-  
-  /**
-   * Finalizes vault when proposal ends, storing the proposal status
+   * Finalizes vault when proposal ends, storing the winning conditional mint
    * After finalization, split/merge are blocked and only redemption is allowed
-   * @param proposalStatus - The final status of the proposal (Passed or Failed)
+   * @param winningConditionalMint - The winning conditional mint
+   * @throws Error if vault not active or mint is invalid
    */
-  finalize(proposalStatus: ProposalStatus): Promise<void>;
-  
+  finalize(winningConditionalMint: PublicKey): Promise<void>;
+
   /**
    * Builds a transaction to redeem winning conditional tokens for regular tokens
-   * Only the winning conditional tokens (pass if passed, fail if failed) can be redeemed
+   * Only the winning conditional tokens can be redeemed
    * Automatically handles SOL unwrapping if needed (mainnet + quote vault)
    * @param user - User's public key
-   * @param presign - Whether to pre-sign with escrow (default: false)
-   * @returns Transaction with blockhash and fee payer set, ready for user signature (pre-signed if requested)
+   * @returns Transaction with blockhash and fee payer set, ready for user signature
    * @throws Error if vault not finalized or no winning tokens to redeem
    */
-  buildRedeemWinningTokensTx(user: PublicKey, presign?: boolean): Promise<Transaction>;
-  
+  buildRedeemWinningTokensTx(user: PublicKey): Promise<Transaction>;
+
   /**
    * Executes a redeem winning tokens transaction
    * @param transaction - Transaction signed by user
-   * @param presigned - Whether the transaction is already pre-signed with escrow (default: false)
    * @returns Transaction signature
    * @throws Error if transaction execution fails
    */
-  executeRedeemWinningTokensTx(transaction: Transaction, presigned?: boolean): Promise<string>;
+  executeRedeemWinningTokensTx(transaction: Transaction): Promise<string>;
 
   /**
    * Serializes the vault state for persistence
@@ -236,11 +207,12 @@ export interface IVaultSerializedData {
   // Core identifiers
   proposalId: number;
   vaultType: VaultType;
+  markets: number;
 
   // Token mints (stored as base58 strings)
   regularMint: string;
-  passConditionalMint: string;
-  failConditionalMint: string;
+  conditionalMints: string[];
+  winningConditionalMint: string;
 
   // State - escrow is deterministic and doesn't need to be stored
   state: VaultState;

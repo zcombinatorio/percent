@@ -26,7 +26,7 @@ export interface PriceUpdate {
 
 export interface TradeUpdate {
   proposalId: number;
-  market: 'pass' | 'fail';
+  market: number;  // Numeric market index (0-3 for quantum markets)
   userAddress: string;
   amountIn: number;
   amountOut: number;
@@ -37,7 +37,7 @@ export interface TradeUpdate {
 
 export interface ChartPriceUpdate {
   proposalId: number;
-  market: 'pass' | 'fail' | 'spot';
+  market: number | 'spot';  // Numeric market index or 'spot' for spot market
   price: number; // OLD: price in SOL (legacy backend)
   marketCapUsd?: number; // NEW: pre-calculated market cap USD (updated backend)
   timestamp: number;

@@ -17,14 +17,14 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ITWAPOracle, ITWAPConfig, TWAPStatus, ITWAPOracleSerializedData, ITWAPOracleDeserializeConfig } from './types/twap-oracle.interface';
+import { ITWAPOracle, ITWAPConfig, ITWAPOracleSerializedData } from './types/twap-oracle.interface';
 import { IAMM } from './types/amm.interface';
 import { Decimal } from 'decimal.js';
 
 
 /**
  * TWAP Oracle implementation for tracking time-weighted average prices
- * Aggregates prices from both pass and fail AMMs to determine proposal outcome
+ * Aggregates prices from conditional AMMs to determine proposal outcome
  */
 export class TWAPOracle implements ITWAPOracle {
   public readonly proposalId: number;
@@ -35,25 +35,25 @@ export class TWAPOracle implements ITWAPOracle {
   public readonly minUpdateInterval: number;
   public readonly createdAt: number;
   public readonly finalizedAt: number;
+  public readonly markets: number;
 
-  private _passObservation: number;
-  private _failObservation: number;
-  private _passAggregation: number;
-  private _failAggregation: number;
+  private _observations: Decimal[];
+  private _aggregations: Decimal[];
   private _lastUpdateTime: number;
-  private _pAMM: IAMM | null = null;
-  private _fAMM: IAMM | null = null;
+  private _AMMs: IAMM[] | null = null;
 
   /**
    * Creates a new TWAP Oracle instance
    * @param proposalId - ID of the associated proposal
    * @param config - TWAP configuration parameters
+   * @param markets - Number of markets
    * @param createdAt - Proposal creation timestamp
    * @param finalizedAt - Proposal finalization timestamp
    */
   constructor(
     proposalId: number,
     config: ITWAPConfig,
+    markets: number,
     createdAt: number,
     finalizedAt: number
   ) {
@@ -65,26 +65,27 @@ export class TWAPOracle implements ITWAPOracle {
     this.minUpdateInterval = config.minUpdateInterval;
     this.createdAt = createdAt;
     this.finalizedAt = finalizedAt;
+    this.markets = markets;
 
     // Initialize observations and aggregations with the initial value
-    this._passObservation = config.initialTwapValue;
-    this._failObservation = config.initialTwapValue;
-    this._passAggregation = 0;  // Aggregations start at 0
-    this._failAggregation = 0;  // Aggregations start at 0
+    this._observations = Array(markets).fill(config.initialTwapValue);
+    this._aggregations = Array(markets).fill(null).map(() => new Decimal(0));
     this._lastUpdateTime = createdAt;
   }
 
   /**
    * Sets the AMMs for the oracle to track
-   * @param pAMM - Pass AMM instance
-   * @param fAMM - Fail AMM instance
+   * Should be in-order of the markets
+   * @param AMMs - Array of AMM instances
    */
-  setAMMs(pAMM: IAMM, fAMM: IAMM): void {
-    if (this._pAMM || this._fAMM) {
+  setAMMs(AMMs: IAMM[]): void {
+    if (this._AMMs) {
       throw new Error('AMMs have already been set');
     }
-    this._pAMM = pAMM;
-    this._fAMM = fAMM;
+    if (AMMs.length !== this.markets) {
+      throw new Error('Number of AMMs must match number of markets');
+    }
+    this._AMMs = AMMs;
   }
 
   /**
@@ -100,7 +101,7 @@ export class TWAPOracle implements ITWAPOracle {
       return; // Don't update aggregations after finalization
     }
 
-    if (!this._pAMM || !this._fAMM) {
+    if (!this._AMMs) {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
@@ -109,37 +110,27 @@ export class TWAPOracle implements ITWAPOracle {
       return; // Not enough time has passed since last update
     }
 
-    // Fetch current prices from both AMMs
-    const passPrice = await this._pAMM.fetchPrice();
-    const failPrice = await this._fAMM.fetchPrice();
+    // Fetch current prices from all AMMs
+    const prices = await Promise.all(
+      this._AMMs.map(amm => amm.fetchPrice())
+    );
 
     // Update observations with optional clamping to max change
     const maxChange = this.twapMaxObservationChangePerUpdate;
     
-    const passPriceNum = passPrice.toNumber();
-    const failPriceNum = failPrice.toNumber();
-    
     if (maxChange === null) {
       // No max change - set observations directly to prices
-      this._passObservation = passPriceNum;
-      this._failObservation = failPriceNum;
+      this._observations = prices.map(price => new Decimal(price));
     } else {
-      // Update pass observation with clamping
-      if (passPriceNum > this._passObservation) {
-        const maxObservation = this._passObservation + maxChange;
-        this._passObservation = Math.min(passPriceNum, maxObservation);
-      } else {
-        const minObservation = Math.max(0, this._passObservation - maxChange);
-        this._passObservation = Math.max(passPriceNum, minObservation);
-      }
-
-      // Update fail observation with clamping
-      if (failPriceNum > this._failObservation) {
-        const maxObservation = this._failObservation + maxChange;
-        this._failObservation = Math.min(failPriceNum, maxObservation);
-      } else {
-        const minObservation = Math.max(0, this._failObservation - maxChange);
-        this._failObservation = Math.max(failPriceNum, minObservation);
+      // Update observations with clamping
+      for (let i = 0; i < this.markets; i++) {
+        if (prices[i] > this._observations[i]) {
+          const maxObservation = this._observations[i].add(maxChange);
+          this._observations[i] = Decimal.min(prices[i], maxObservation);
+        } else {
+          const minObservation = Decimal.max(0, this._observations[i].sub(maxChange));
+          this._observations[i] = Decimal.max(prices[i], minObservation);
+        }
       }
     }
 
@@ -153,8 +144,7 @@ export class TWAPOracle implements ITWAPOracle {
 
       if (timeElapsed > 0) {
         // Add weighted observations to aggregations
-        this._passAggregation += this._passObservation * timeElapsed;
-        this._failAggregation += this._failObservation * timeElapsed;
+        this._aggregations = this._observations.map(observation => observation.mul(timeElapsed));
       }
     }
 
@@ -163,33 +153,28 @@ export class TWAPOracle implements ITWAPOracle {
   }
 
   /**
-   * Fetches the current TWAP prices and aggregations
-   * @returns Object containing pass/fail TWAPs and aggregations
+   * @returns Object containing TWAPs and aggregations
    * @throws Error if AMMs are not set or no time has passed
    */
-  async fetchTWAP(): Promise<{
-    passTwap: Decimal;
-    failTwap: Decimal;
-    passAggregation: number;
-    failAggregation: number;
-  }> {
-    if (!this._pAMM || !this._fAMM) {
+  fetchTWAPs(): {
+    twaps: Decimal[];
+    aggregations: Decimal[];
+  } {
+    if (!this._AMMs) {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
     const twapStartTime = this.createdAt + this.twapStartDelay;
     const currentTime = Math.min(Date.now(), this.finalizedAt);
-    
+
     // Calculate time passed since TWAP started
     if (currentTime <= twapStartTime) {
-      // TWAP hasn't started yet, return initial values
-      return {
-        passTwap: new Decimal(this.initialTwapValue),
-        failTwap: new Decimal(this.initialTwapValue),
-        passAggregation: 0,
-        failAggregation: 0
-      };
-    }
+        // TWAP hasn't started yet, return initial values
+        return {
+          twaps: this._observations,
+          aggregations: this._aggregations,
+        };
+      }
 
     const timePassed = currentTime - twapStartTime;
     if (timePassed <= 0) {
@@ -197,43 +182,30 @@ export class TWAPOracle implements ITWAPOracle {
     }
 
     // Calculate TWAP prices by dividing aggregations by time passed
-    const passTwap = new Decimal(this._passAggregation).div(timePassed);
-    const failTwap = new Decimal(this._failAggregation).div(timePassed);
+    const twaps = this._aggregations.map(agg => agg.div(timePassed));
 
     return {
-      passTwap,
-      failTwap,
-      passAggregation: this._passAggregation,
-      failAggregation: this._failAggregation
+      twaps,
+      aggregations: this._aggregations,
     };
   }
 
   /**
-   * Determines the current status based on TWAP prices
-   * @returns TWAPStatus indicating if proposal is passing or failing
+   * Determines the index of the highest TWAP
+   * @returns Index of the highest TWAP
    * @throws Error if AMMs are not set
    */
-  async fetchStatus(): Promise<TWAPStatus> {
-    if (!this._pAMM || !this._fAMM) {
+  fetchHighestTWAPIndex(): number {
+    if (!this._AMMs) {
       throw new Error('AMMs not set - call setAMMs first');
     }
 
-    const { passTwap, failTwap } = await this.fetchTWAP();
-    
-    // Calculate the difference between pass and fail TWAP prices
-    const passTwapNum = passTwap.toNumber();
-    const failTwapNum = failTwap.toNumber();
-    const difference = passTwapNum - failTwapNum;
-    
-    // Calculate threshold in absolute terms
-    const threshold = (failTwapNum * this.passThresholdBps) / 10000;
-    
-    // Proposal is passing if pass TWAP exceeds fail TWAP by threshold
-    if (difference > threshold) {
-      return TWAPStatus.Passing;
-    } else {
-      return TWAPStatus.Failing;
-    }
+    const { twaps } = this.fetchTWAPs();
+
+    // return index of the highest TWAP
+    // Use twaps[0] as initial value instead of new Decimal(0) to ensure indexOf can find it
+    // (indexOf uses reference equality, so a new Decimal(0) won't match existing Decimal(0) values)
+    return twaps.indexOf(twaps.reduce((max, twap) => twap.gt(max) ? twap : max, twaps[0]));
   }
 
   /**
@@ -253,11 +225,12 @@ export class TWAPOracle implements ITWAPOracle {
       finalizedAt: this.finalizedAt,
 
       // Current state
-      passObservation: this._passObservation,
-      failObservation: this._failObservation,
-      passAggregation: this._passAggregation,
-      failAggregation: this._failAggregation,
+      observations: this._observations,
+      aggregations: this._aggregations,
       lastUpdateTime: this._lastUpdateTime,
+
+      // Markets
+      markets: this.markets,
 
       // Note: AMMs are not serialized as they need to be set via setAMMs after deserialization
     };
@@ -266,11 +239,10 @@ export class TWAPOracle implements ITWAPOracle {
   /**
    * Deserializes TWAP oracle data and restores the oracle state
    * @param data - Serialized TWAP oracle data from database
-   * @param config - Configuration for reconstructing the oracle (currently unused)
    * @returns Restored TWAP oracle instance
    * @note AMMs must be set using setAMMs() after deserialization
    */
-  static deserialize(data: ITWAPOracleSerializedData, config?: ITWAPOracleDeserializeConfig): TWAPOracle {
+  static deserialize(data: ITWAPOracleSerializedData): TWAPOracle {
     // Create configuration from serialized data
     const twapConfig: ITWAPConfig = {
       initialTwapValue: data.initialTwapValue,
@@ -284,16 +256,15 @@ export class TWAPOracle implements ITWAPOracle {
     const oracle = new TWAPOracle(
       data.proposalId,
       twapConfig,
+      data.markets,
       data.createdAt,
       data.finalizedAt
     );
 
     // Restore the internal state
     // These are private fields that need to be restored for a fully functional oracle
-    oracle._passObservation = data.passObservation;
-    oracle._failObservation = data.failObservation;
-    oracle._passAggregation = data.passAggregation;
-    oracle._failAggregation = data.failAggregation;
+    oracle._observations = data.observations.map((obs: any) => new Decimal(obs));
+    oracle._aggregations = data.aggregations.map((agg: any) => new Decimal(agg));
     oracle._lastUpdateTime = data.lastUpdateTime;
 
     // AMMs will be set via setAMMs() method after deserialization

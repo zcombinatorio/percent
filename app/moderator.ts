@@ -17,11 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Keypair, Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
-import { CpAmm } from '@meteora-ag/cp-amm-sdk';
+import { Keypair } from '@solana/web3.js';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
-import { IExecutionConfig, IExecutionResult, PriorityFeeMode, Commitment, ExecutionStatus } from './types/execution.interface';
+import { IExecutionConfig, PriorityFeeMode, Commitment } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
 import { Proposal } from './proposal';
 import { SchedulerService } from './services/scheduler.service';
@@ -29,7 +27,6 @@ import { PersistenceService } from './services/persistence.service';
 import { ExecutionService } from './services/execution.service';
 import { LoggerService } from './services/logger.service';
 import { DammService } from './services/damm.service';
-import { getNetworkFromConnection} from './utils/network';
 import { POOL_METADATA } from '../src/config/whitelist';
 //import { BlockEngineUrl, JitoService } from '@slateos/jito';
 
@@ -180,7 +177,8 @@ export class Moderator implements IModerator {
         moderatorId: this.id,
         title: params.title,
         description: params.description,
-        transaction: params.transaction,
+        market_labels: params.market_labels,
+        markets: params.markets,
         createdAt: Date.now(),
         proposalLength: params.proposalLength,
         baseMint: this.config.baseMint,
@@ -236,13 +234,13 @@ export class Moderator implements IModerator {
 
   /**
    * Finalizes a proposal after the voting period has ended
-   * Determines if proposal passed or failed based on votes
+   * Determines winning market by highest TWAP
    * Uses Jito bundles on mainnet if UUID is configured
    * @param id - The ID of the proposal to finalize
-   * @returns The status of the proposal after finalization
+   * @returns Tuple of [status, winningMarketIndex | null]
    * @throws Error if proposal with given ID doesn't exist
    */
-  async finalizeProposal(id: number): Promise<ProposalStatus> {
+  async finalizeProposal(id: number): Promise<[ProposalStatus, number | null]> {
     // Get proposal from cache or database
     this.logger.info('Finalizing proposal');
     const proposal = await this.getProposal(id);
@@ -250,71 +248,19 @@ export class Moderator implements IModerator {
       throw new Error(`Proposal with ID ${id} does not exist`);
     }
 
-    const status = await proposal.finalize();
+    const [status, winningIndex] = await proposal.finalize();
     await this.saveProposal(proposal);
 
-    // Wait for RPC to sync after finalization
-    this.logger.info('Waiting for RPC to sync after finalization', { proposalId: id });
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (status == ProposalStatus.Finalized) {
+      this.logger.info('Proposal finalized', { winningIndex });
+      // Wait for RPC to sync after finalization
+      this.logger.info('Waiting for RPC to sync after finalization', { proposalId: id });
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Handle deposit-back for proposals with DAMM withdrawals
-    await this.handleDepositBack(id);
-
-    if (status === ProposalStatus.Passed) {
-      this.logger.info('Proposal finalized and passed');
-    } else if (status === ProposalStatus.Failed) {
-      this.logger.info('Proposal finalized and failed');
-    } else {
-      this.logger.warn('Proposal failed to finalize', { status: status });
+      // Handle deposit-back for proposals with DAMM withdrawals
+      await this.handleDepositBack(id);
     }
-    return status;
-  }
-
-  /**
-   * Executes the transaction of a passed proposal
-   * Only callable for proposals with Passed status
-   * @param id - The ID of the proposal to execute
-   * @param signer - Keypair to sign the transaction
-   * @returns Execution result with signature and status
-   * @throws Error if proposal doesn't exist, is pending, already executed, or failed
-   */
-  async executeProposal(
-    id: number,
-    signer: Keypair
-  ): Promise<IExecutionResult> {
-    this.logger.info('Executing proposal');
-
-    try {
-      // Get proposal from cache or database
-      const proposal = await this.getProposal(id);
-      if (!proposal) {
-        throw new Error(`Proposal with ID ${id} does not exist`);
-      }
-
-      // Only Passed status can be executed
-      if (proposal.status !== ProposalStatus.Passed) {
-        throw new Error(`Cannot execute proposal #${id}: status is ${proposal.status}`);
-      }
-
-      const result = await proposal.execute(signer);
-
-      // Always save state to database
-      await this.saveProposal(proposal);
-
-      if (result.status === ExecutionStatus.Failed) {
-        this.logger.error('Proposal execution failed', { result: result });
-        throw new Error(`Failed to execute proposal #${id}: ${result.error}`);
-      }
-
-      this.logger.info('Proposal executed successfully', { result: result });
-
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to execute proposal', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
+    return [status, winningIndex];
   }
 
   /**

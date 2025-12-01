@@ -2,7 +2,8 @@ import { formatNumber, formatCurrency } from '@/lib/formatters';
 import { toDecimal } from '@/lib/constants/tokens';
 
 interface PayoutCardProps {
-  status: 'pass' | 'fail';
+  marketIndex: number;  // Which market this payout is for (0-3)
+  isWinning: boolean;   // Whether this was the winning market
   label: string;
   amount: number;
   token: 'sol' | 'zc';
@@ -18,23 +19,33 @@ const SolIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const StatusIcon = ({ status }: { status: 'pass' | 'fail' }) => {
-  if (status === 'pass') {
+// Market colors for N-ary quantum markets (supports 2-4 options)
+const MARKET_COLORS = ['#f87171', '#34d399', '#60a5fa', '#fbbf24']; // red, green, blue, yellow
+
+const StatusIcon = ({ isWinning, marketIndex }: { isWinning: boolean; marketIndex: number }) => {
+  const color = isWinning ? '#6ECC94' : MARKET_COLORS[marketIndex % MARKET_COLORS.length];
+
+  if (isWinning) {
     return (
-      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" style={{ color: '#6ECC94' }}>
+      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" style={{ color }}>
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
       </svg>
     );
   }
+  // Show market number for non-winning markets
   return (
-    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20" style={{ color: '#FF6F94' }}>
-      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-    </svg>
+    <div
+      className="w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+      style={{ backgroundColor: color }}
+    >
+      {marketIndex + 1}
+    </div>
   );
 };
 
 export function PayoutCard({
-  status,
+  marketIndex,
+  isWinning,
   label,
   amount,
   token,
@@ -45,7 +56,8 @@ export function PayoutCard({
 }: PayoutCardProps) {
   const decimalAmount = toDecimal(amount, token);
   const usdValue = decimalAmount * tokenPrice;
-  const statusColor = status === 'pass' ? '#6ECC94' : '#FF6F94';
+  // Use green for winners, market-specific color otherwise
+  const statusColor = isWinning ? '#6ECC94' : MARKET_COLORS[marketIndex % MARKET_COLORS.length];
 
   return (
     <div
@@ -55,7 +67,7 @@ export function PayoutCard({
     >
       <div className="flex items-center gap-1">
         <span className="text-xs" style={{ color: statusColor }}>{label}</span>
-        <StatusIcon status={status} />
+        <StatusIcon isWinning={isWinning} marketIndex={marketIndex} />
       </div>
       <div className="text-base font-medium text-theme-text">
         {isHovered ? (

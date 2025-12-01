@@ -38,7 +38,7 @@ export class HistoryService {
    * @param data - Price history data excluding auto-generated fields
    * @param data.moderatorId - ID of the moderator
    * @param data.proposalId - Global proposal ID
-   * @param data.market - Which AMM market ('pass' or 'fail')
+   * @param data.market - Market index (-1 for spot, 0+ for market index)
    * @param data.price - Current price at this point
    * @throws Error if database insert fails
    */
@@ -47,7 +47,7 @@ export class HistoryService {
 
     // We store moderatorId redundantly for faster queries without joins
     const query = `
-      INSERT INTO i_price_history (
+      INSERT INTO qm_price_history (
         moderator_id, proposal_id, market, price
       ) VALUES ($1, $2, $3, $4)
     `;
@@ -66,28 +66,24 @@ export class HistoryService {
    * @param data - TWAP history data excluding auto-generated fields
    * @param data.moderatorId - ID of the moderator
    * @param data.proposalId - Global proposal ID
-   * @param data.passTwap - Current pass market TWAP
-   * @param data.failTwap - Current fail market TWAP
-   * @param data.passAggregation - Cumulative pass price aggregation
-   * @param data.failAggregation - Cumulative fail price aggregation
+   * @param data.twaps - Array of TWAPs for each market
+   * @param data.aggregations - Array of cumulative aggregations for each market
    * @throws Error if database insert fails
    */
   static async recordTWAP(data: Omit<ITWAPHistory, 'id' | 'timestamp'>): Promise<void> {
     const pool = getPool();
 
     const query = `
-      INSERT INTO i_twap_history (
-        moderator_id, proposal_id, pass_twap, fail_twap, pass_aggregation, fail_aggregation
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO qm_twap_history (
+        moderator_id, proposal_id, twaps, aggregations
+      ) VALUES ($1, $2, $3, $4)
     `;
 
     await pool.query(query, [
       data.moderatorId,
       data.proposalId,
-      data.passTwap.toString(),
-      data.failTwap.toString(),
-      data.passAggregation.toString(),
-      data.failAggregation.toString()
+      data.twaps.map(t => t.toString()),
+      data.aggregations.map(a => a.toString())
     ]);
   }
 
@@ -97,7 +93,7 @@ export class HistoryService {
    * @param data - Trade history data excluding auto-generated fields
    * @param data.moderatorId - ID of the moderator
    * @param data.proposalId - Global proposal ID
-   * @param data.market - Which AMM was traded ('pass' or 'fail')
+   * @param data.market - Market index (0+)
    * @param data.userAddress - Wallet address of the trader
    * @param data.isBaseToQuote - Direction of the trade
    * @param data.amountIn - Amount of tokens swapped in
@@ -110,7 +106,7 @@ export class HistoryService {
     const pool = getPool();
 
     const query = `
-      INSERT INTO i_trade_history (
+      INSERT INTO qm_trade_history (
         moderator_id, proposal_id, market, user_address, is_base_to_quote,
         amount_in, amount_out, price, tx_signature
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -148,7 +144,7 @@ export class HistoryService {
     const pool = getPool();
 
     let query = `
-      SELECT * FROM i_twap_history
+      SELECT * FROM qm_twap_history
       WHERE moderator_id = $1 AND proposal_id = $2
     `;
     const params: (number | Date)[] = [moderatorId, proposalId];
@@ -172,10 +168,8 @@ export class HistoryService {
       timestamp: row.timestamp,
       moderatorId: row.moderator_id,
       proposalId: row.proposal_id,
-      passTwap: new Decimal(row.pass_twap),
-      failTwap: new Decimal(row.fail_twap),
-      passAggregation: new Decimal(row.pass_aggregation),
-      failAggregation: new Decimal(row.fail_aggregation),
+      twaps: row.twaps.map((t: string) => new Decimal(t)),
+      aggregations: row.aggregations.map((a: string) => new Decimal(a)),
     }));
   }
 
@@ -204,8 +198,8 @@ export class HistoryService {
         t.*,
         p.total_supply,
         p.base_decimals
-      FROM i_trade_history t
-      LEFT JOIN i_proposals p ON t.moderator_id = p.moderator_id
+      FROM qm_trade_history t
+      LEFT JOIN qm_proposals p ON t.moderator_id = p.moderator_id
         AND t.proposal_id = p.proposal_id
       WHERE t.moderator_id = $1 AND t.proposal_id = $2
     `;
@@ -292,7 +286,7 @@ export class HistoryService {
               floor(extract(epoch from timestamp) / ${intervalSeconds})
             ORDER BY timestamp DESC
           ) as last_row
-        FROM i_price_history
+        FROM qm_price_history
         WHERE moderator_id = $1 AND proposal_id = $2
     `;
 
@@ -329,7 +323,7 @@ export class HistoryService {
       SELECT
         to_timestamp(floor(extract(epoch from timestamp) / ${intervalSeconds}) * ${intervalSeconds}) as bucket,
         SUM(amount_in) as volume
-      FROM i_trade_history
+      FROM qm_trade_history
       WHERE moderator_id = $1 AND proposal_id = $2
     `;
 
@@ -359,7 +353,7 @@ export class HistoryService {
     const chartData: IChartDataPoint[] = priceResult.rows.map(row => ({
       timestamp: new Date(row.bucket).getTime(),
       moderatorId: moderatorId,
-      market: row.market as 'pass' | 'fail',
+      market: row.market,
       open: parseFloat(row.open),
       high: parseFloat(row.high),
       low: parseFloat(row.low),
@@ -371,8 +365,8 @@ export class HistoryService {
     const sortedData = chartData.sort((a, b) => a.timestamp - b.timestamp);
 
     // Forward-fill: ensure each candle's open equals the previous candle's close
-    // Group by market to handle pass/fail separately
-    const marketGroups = new Map<'pass' | 'fail' | 'global' | 'spot', IChartDataPoint[]>();
+    // Group by market to handle multiple markets separately
+    const marketGroups = new Map<number, IChartDataPoint[]>();
     for (const point of sortedData) {
       if (!marketGroups.has(point.market)) {
         marketGroups.set(point.market, []);

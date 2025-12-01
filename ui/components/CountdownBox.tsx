@@ -1,6 +1,5 @@
 import { CountdownTimer } from './CountdownTimer';
-
-type ProposalStatus = 'Pending' | 'Passed' | 'Failed' | 'Executed';
+import type { ProposalStatus } from '@/types/api';
 
 interface CountdownBoxProps {
   finalizedAt: number;

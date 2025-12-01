@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPoolsForWallet, isWalletWhitelisted, POOL_METADATA, getPoolByName, isWalletAuthorizedForPool } from '../config/whitelist';
+import { getPoolsForWallet, POOL_METADATA, getPoolByName, isWalletAuthorizedForPool } from '../config/whitelist';
 import { LoggerService } from '../../app/services/logger.service';
 
 const logger = new LoggerService('api').createChild('whitelist');

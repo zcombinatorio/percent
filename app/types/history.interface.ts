@@ -28,7 +28,7 @@ export interface IPriceHistory {
   timestamp: Date;                // Snapshot timestamp
   moderatorId: number;            // Associated moderator ID
   proposalId: number;             // Associated proposal ID
-  market: 'pass' | 'fail' | 'global' | 'spot'; // Which market (pass/fail AMMs, global price, or spot pool)
+  market: number;                 // Market index (-1 for spot, 0+ for market index)
   price: Decimal;                 // Current price at this point in time
 }
 
@@ -41,10 +41,8 @@ export interface ITWAPHistory {
   timestamp: Date;                // Snapshot timestamp
   moderatorId: number;            // Associated moderator ID
   proposalId: number;             // Associated proposal ID
-  passTwap: Decimal;              // Current pass market TWAP
-  failTwap: Decimal;              // Current fail market TWAP
-  passAggregation: Decimal;       // Cumulative pass price aggregation
-  failAggregation: Decimal;       // Cumulative fail price aggregation
+  twaps: Decimal[];               // Array of TWAPs for each market
+  aggregations: Decimal[];        // Array of cumulative aggregations for each market
 }
 
 /**
@@ -56,7 +54,7 @@ export interface ITradeHistory {
   timestamp: Date;                // Trade execution timestamp
   moderatorId: number;            // Associated moderator ID
   proposalId: number;             // Associated proposal ID
-  market: 'pass' | 'fail';        // Which AMM market was traded
+  market: number;                 // Market index (0+)
   userAddress: string;            // Trader's wallet address
   isBaseToQuote: boolean;         // Trade direction (true: base→quote, false: quote→base)
   amountIn: Decimal;              // Input token amount
@@ -75,7 +73,7 @@ export interface ITradeHistory {
 export interface IChartDataPoint {
   timestamp: number;              // Unix timestamp in milliseconds
   moderatorId: number;            // Associated moderator ID
-  market: 'pass' | 'fail' | 'global' | 'spot'; // Which market this data is for (pass/fail AMMs, global price, or spot pool)
+  market: number;                 // Market index (-1 for spot, 0+ for market index)
   open: number;                   // Opening price in the time bucket
   high: number;                   // Highest price in the time bucket
   low: number;                    // Lowest price in the time bucket
