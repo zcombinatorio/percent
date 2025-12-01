@@ -14,16 +14,12 @@ export default function Footer() {
           {/* Logo, Tagline, and Button */}
           <div className="flex flex-col">
             <div className="mb-4">
-              <div className="text-2xl font-semibold flex items-baseline gap-2">
-                <Image
-                  src="/landing/assets/z-logo-white.png"
-                  alt="Z"
-                  width={19}
-                  height={19}
-                  className="mb-0"
-                />
-                <span style={{ color: '#E9E9E4' }}>Combinator</span>
-              </div>
+              <Image
+                src="/combinator-long.svg"
+                alt="Z Combinator"
+                width={180}
+                height={16}
+              />
             </div>
             <p className="text-gray-400 text-sm mb-4 -mt-2.5">Zero to Infinity</p>
           </div>
@@ -36,7 +32,7 @@ export default function Footer() {
               <ul className="space-y-2">
                 <li>
                   <a
-                    href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad?chain=sol"
+                    href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-gray-400 hover:text-white transition-colors"
@@ -51,7 +47,7 @@ export default function Footer() {
             <div>
               <h5 className="text-white text-sm font-medium mb-4">Info</h5>
               <ul className="space-y-2">
-                <li><a href="https://docs.percent.markets/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
+                <li><a href="https://docs.zcombinator.io/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
                 <li><a href="https://github.com/zcombinatorio/zcombinator" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">GitHub</a></li>
               </ul>
             </div>
@@ -61,7 +57,7 @@ export default function Footer() {
               <h5 className="text-white text-sm font-medium mb-4">Contact</h5>
               <ul className="space-y-2">
                 <li><a href="https://x.com/percentmarkets" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Twitter</a></li>
-                <li><a href="http://discord.gg/zcombinator" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Discord</a></li>
+                <li><a href="https://discord.gg/Vf38Mqhxu5" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Discord</a></li>
               </ul>
             </div>
           </div>

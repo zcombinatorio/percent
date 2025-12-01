@@ -10,15 +10,20 @@ export default function Header() {
             href="/"
             className="hover:opacity-80 transition-opacity"
           >
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Image
-                src="/landing/assets/z-logo-white.png"
-                alt="Z"
-                width={20}
-                height={20}
-              />
-              <span className="hidden md:inline" style={{ color: '#E9E9E4' }}>Combinator</span>
-            </h1>
+            <Image
+              src="/combinator-long.svg"
+              alt="Z Combinator"
+              width={180}
+              height={16}
+              className="hidden md:block"
+            />
+            <Image
+              src="/combinator-icon.svg"
+              alt="Z Combinator"
+              width={24}
+              height={28}
+              className="md:hidden"
+            />
           </a>
           <nav className="flex items-center gap-3 sm:gap-6">
             <a
@@ -33,7 +38,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">Twitter</span>
             </a>
             <a
-              href="http://discord.gg/zcombinator"
+              href="https://discord.gg/Vf38Mqhxu5"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
@@ -44,7 +49,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">Discord</span>
             </a>
             <a
-              href="https://github.com/zcombinatorio/zcombinator"
+              href="https://github.com/zcombinatorio"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
@@ -55,7 +60,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">GitHub</span>
             </a>
             <a
-              href="https://docs.percent.markets/"
+              href="https://docs.zcombinator.io/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
@@ -64,7 +69,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">Docs</span>
             </a>
             <a
-              href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad?chain=sol"
+              href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
@@ -74,9 +79,7 @@ export default function Header() {
           </nav>
         </div>
         <a
-          href="https://zc.percent.markets/zc"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/zc"
           className="bg-white text-black px-4 py-1.5 font-medium hover:opacity-90 transition-opacity rounded-full"
         >
           Enter here

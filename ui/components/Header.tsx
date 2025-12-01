@@ -80,15 +80,20 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             href="/"
             className="hover:opacity-80 transition-opacity"
           >
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Image
-                src="/z-logo-white.png"
-                alt="Z"
-                width={18}
-                height={18}
-              />
-              <span className="hidden md:inline" style={{ color: '#E9E9E4' }}>Combinator</span>
-            </h1>
+            <Image
+              src="/combinator-long.svg"
+              alt="Z Combinator"
+              width={180}
+              height={16}
+              className="hidden md:block"
+            />
+            <Image
+              src="/combinator-icon.svg"
+              alt="Z Combinator"
+              width={24}
+              height={28}
+              className="md:hidden"
+            />
           </a>
         <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
         {!authenticated && login && (
@@ -100,7 +105,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
               onClick={login}
               className="text-sm font-ibm-plex-mono font-medium cursor-pointer transition-colors"
               style={{ color: '#BEE8FC', fontFamily: 'IBM Plex Mono, monospace' }}
-              onMouseEnter={(e) => e.currentTarget.style.color = '#C56125'}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#BEE8FC'}
               onMouseLeave={(e) => e.currentTarget.style.color = '#BEE8FC'}
             >
               Click to log in
@@ -163,7 +168,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
         )}
         {/* ZC link (always show) */}
         <a
-          href="https://axiom.trade/meme/CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad"
+          href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"
@@ -174,7 +179,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
           <span className="text-sm">$ZC</span>
         </a>
         <a
-          href="https://docs.percent.markets/"
+          href="https://docs.zcombinator.io/"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"
@@ -200,7 +205,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
           <span className="hidden sm:inline text-sm">Github</span>
         </a>
         <a
-          href="http://discord.gg/zcombinator"
+          href="https://discord.gg/Vf38Mqhxu5"
           target="_blank"
           rel="noopener noreferrer"
           className="transition-colors"

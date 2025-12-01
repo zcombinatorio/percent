@@ -6,7 +6,6 @@ import dynamic from 'next/dynamic';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { useTokenPrices } from '@/hooks/useTokenPrices';
-// import Sidebar from '@/components/Sidebar';
 import TradingInterface from '@/components/TradingInterface';
 import Header from '@/components/Header';
 import { CountdownTimer } from '@/components/CountdownTimer';
