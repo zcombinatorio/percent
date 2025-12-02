@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS qm_proposals (
   quote_decimals INTEGER NOT NULL,
 
   -- Quantum markets fields
-  markets INTEGER NOT NULL CHECK (markets >= 2 AND markets <= 4),
+  markets INTEGER NOT NULL CHECK (markets >= 2 AND markets <= 8),
   market_labels TEXT[],
 
   amm_config JSONB NOT NULL,
