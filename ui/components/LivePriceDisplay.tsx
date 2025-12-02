@@ -20,9 +20,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { PublicKey } from '@solana/web3.js';
 import { TokenPriceBox } from './TokenPriceBox';
 import { getPriceStreamService, ChartPriceUpdate } from '../services/price-stream.service';
 import { api } from '../lib/api';
+import { fetchVaultState } from '@/lib/programs/vault';
 import { buildApiUrl } from '@/lib/api-utils';
 import { useTokenContext } from '@/providers/TokenContext';
 
@@ -60,9 +62,9 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
           throw new Error('Failed to fetch proposal details');
         }
 
-        // Extract all conditional mints as array (supports 2-4 markets)
-        const conditionalMints = proposal.baseVaultState?.conditionalMints || [];
-        setTokenAddresses(conditionalMints.slice(0, marketCount));
+        // Fetch conditional mints from vault state via SDK (on-chain)
+        const vaultState = await fetchVaultState(new PublicKey(proposal.baseVaultPDA));
+        setTokenAddresses(vaultState.conditionalMints.slice(0, marketCount));
 
       } catch (error) {
         console.error('Error fetching proposal details:', error);

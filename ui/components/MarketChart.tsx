@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { PublicKey } from '@solana/web3.js';
 import { ProposalMarketDatafeed } from '@/services/tradingview-datafeed';
 import { api } from '@/lib/api';
+import { fetchVaultState } from '@/lib/programs/vault';
 import { formatUSD } from '@/lib/formatters';
 
 declare global {
@@ -37,9 +39,10 @@ export default function MarketChart({ proposalId, market, height = 256, moderato
           throw new Error('Failed to fetch proposal details');
         }
 
-        // Get token and pool addresses based on market index
-        // Market is now a numeric index (0-3 for quantum markets)
-        const tokenAddress = proposal.baseVaultState?.conditionalMints?.[market];
+        // Get token address from vault state via SDK (on-chain)
+        // Market is a numeric index (0-3 for quantum markets)
+        const vaultState = await fetchVaultState(new PublicKey(proposal.baseVaultPDA));
+        const tokenAddress = vaultState.conditionalMints[market];
         const poolAddress = proposal.ammData?.[market]?.pool;
 
         if (!tokenAddress || !poolAddress) {

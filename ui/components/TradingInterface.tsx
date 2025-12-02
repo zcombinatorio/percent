@@ -28,7 +28,7 @@ import { openPosition } from '@/lib/trading';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getDecimals, toDecimal, toSmallestUnits } from '@/lib/constants/tokens';
-import type { UserBalancesResponse } from '@/types/api';
+import type { UserBalancesResponse } from '@/lib/programs/vault';
 import { useTokenContext } from '@/providers/TokenContext';
 
 interface TradingInterfaceProps {

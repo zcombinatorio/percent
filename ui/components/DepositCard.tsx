@@ -6,8 +6,7 @@ import { useTransactionSigner } from '@/hooks/useTransactionSigner';
 import { PublicKey } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/formatters';
-import { deposit, withdraw } from '@/lib/programs/vault';
-import type { UserBalancesResponse } from '@/types/api';
+import { deposit, withdraw, type UserBalancesResponse } from '@/lib/programs/vault';
 
 const SOL_DECIMALS = 9;
 const ZC_DECIMALS = 6;

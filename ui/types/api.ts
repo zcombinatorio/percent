@@ -73,49 +73,8 @@ export interface ProposalDetailResponse {
     initialQuoteAmount: string;
   } | null;
   ammData: any | null;
-  baseVaultState: any | null;
-  quoteVaultState: any | null;
   twapOracleState: any | null;
   baseVaultPDA: string;
   quoteVaultPDA: string;
 }
 
-// Raw balance response from backend (index-based arrays)
-export interface RawUserBalancesResponse {
-  proposalId: number;
-  user: string;
-  base: {
-    regular: string;
-    conditionalMints: string[];
-    conditionalBalances: string[];  // indexed: 0=fail, 1=pass
-  };
-  quote: {
-    regular: string;
-    conditionalMints: string[];
-    conditionalBalances: string[];  // indexed: 0=fail, 1=pass
-  };
-}
-
-// Transformed balance response with named pass/fail fields for UI
-export interface UserBalancesResponse {
-  proposalId: number;
-  user: string;
-  base: {
-    regular: string;
-    // Named fields for legacy UI compatibility
-    passConditional: string;
-    failConditional: string;
-    // Array format for forward compatibility
-    conditionalMints: string[];
-    conditionalBalances: string[];
-  };
-  quote: {
-    regular: string;
-    // Named fields for legacy UI compatibility
-    passConditional: string;
-    failConditional: string;
-    // Array format for forward compatibility
-    conditionalMints: string[];
-    conditionalBalances: string[];
-  };
-}

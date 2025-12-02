@@ -31,10 +31,8 @@
 import type {
   ProposalListItem,
   ProposalDetailResponse,
-  UserBalancesResponse,
   BackendProposalStatus,
   UIProposalStatus,
-  RawUserBalancesResponse,
 } from '@/types/api';
 
 // Market index constants
@@ -106,34 +104,6 @@ export function transformProposalDetail(raw: ProposalDetailResponse): ProposalDe
   return {
     ...raw,
     status: transformStatus(raw.status as unknown as BackendProposalStatus, raw.winningMarketIndex),
-  };
-}
-
-/**
- * Transform raw user balances to UI format with pass/fail named fields
- */
-export function transformUserBalances(raw: RawUserBalancesResponse): UserBalancesResponse {
-  return {
-    proposalId: raw.proposalId,
-    user: raw.user,
-    base: {
-      regular: raw.base.regular,
-      // Named fields for legacy UI
-      failConditional: raw.base.conditionalBalances[MARKET_INDEX.FAIL] || '0',
-      passConditional: raw.base.conditionalBalances[MARKET_INDEX.PASS] || '0',
-      // Keep array format for forward compatibility
-      conditionalMints: raw.base.conditionalMints,
-      conditionalBalances: raw.base.conditionalBalances,
-    },
-    quote: {
-      regular: raw.quote.regular,
-      // Named fields for legacy UI
-      failConditional: raw.quote.conditionalBalances[MARKET_INDEX.FAIL] || '0',
-      passConditional: raw.quote.conditionalBalances[MARKET_INDEX.PASS] || '0',
-      // Keep array format for forward compatibility
-      conditionalMints: raw.quote.conditionalMints,
-      conditionalBalances: raw.quote.conditionalBalances,
-    },
   };
 }
 

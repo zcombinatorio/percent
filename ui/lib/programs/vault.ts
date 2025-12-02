@@ -113,6 +113,31 @@ export interface UserBalancesResponse {
 }
 
 /**
+ * Vault state response format
+ */
+export interface VaultStateResponse {
+  conditionalMints: string[];  // Array of conditional mint addresses
+  numOptions: number;
+  state: string;
+}
+
+/**
+ * Fetch vault state including conditional mints
+ *
+ * @param vaultPDA - The vault PDA to fetch state for
+ * @returns Vault state with conditional mint addresses
+ */
+export async function fetchVaultState(vaultPDA: PublicKey): Promise<VaultStateResponse> {
+  const vaultClient = createReadOnlyVaultClient();
+  const vault = await vaultClient.fetchVault(vaultPDA);
+  return {
+    conditionalMints: vault.condMints.slice(0, vault.numOptions).map(m => m.toBase58()),
+    numOptions: vault.numOptions,
+    state: vault.state,
+  };
+}
+
+/**
  * Fetch user balances for both base and quote vaults
  *
  * @param baseVaultPDA - The base vault PDA
