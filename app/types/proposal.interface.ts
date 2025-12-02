@@ -24,6 +24,7 @@ import { ITWAPOracle, ITWAPConfig, ITWAPOracleSerializedData } from './twap-orac
 import { ProposalStatus } from './moderator.interface';
 import { IExecutionService } from './execution.interface';
 import { LoggerService } from '../services/logger.service';
+import { VaultClient, VaultType } from '@zcomb/vault-sdk';
 
 /**
  * Comprehensive status information for a proposal
@@ -107,6 +108,13 @@ export interface IProposal {
    * @returns Serialized proposal data that can be saved to database
    */
   serialize(): IProposalSerializedData;
+
+  /**
+   * Derives the vault PDA for a given vault type
+   * @param vaultType - The type of vault (Base or Quote)
+   * @returns The derived vault PDA public key
+   */
+  deriveVaultPDA(vaultType: VaultType): PublicKey;
 }
 
 /**
