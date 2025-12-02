@@ -139,7 +139,7 @@ export default function CreatePage() {
       toast.loading('Creating Quantum Market...', { id: toastId });
 
       // Convert hours to seconds
-      const proposalLength = 600;//Math.floor(hours * 3600);
+      const proposalLength = Math.floor(hours * 3600);
 
       // Build market_labels array: index 0 = "No", then choices 1-3
       const market_labels = ['No', choice1.trim()];
