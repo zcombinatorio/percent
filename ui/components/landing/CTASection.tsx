@@ -8,10 +8,10 @@ export default function CTASection() {
           <Image src="/combinator-icon.svg" alt="Z Combinator" width={128} height={148} className="h-32" />
         </div>
         <h2 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">
-          The Final Coin
+          Grow your token network
         </h2>
         <p className="text-base text-gray-400 mb-8 animate-on-scroll-subtle delay-200">
-          Contribute to ZC today.
+          Contribute to Combinator today.
         </p>
         <a
           href="/zc"

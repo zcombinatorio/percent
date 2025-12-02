@@ -21,7 +21,7 @@ export default function Footer() {
                 height={16}
               />
             </div>
-            <p className="text-gray-400 text-sm mb-4 -mt-2.5">Zero to Infinity</p>
+            <p className="text-gray-400 text-sm mb-4 -mt-2.5">Grow your token network</p>
           </div>
 
           {/* Footer Links */}

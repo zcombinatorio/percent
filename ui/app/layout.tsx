@@ -80,8 +80,26 @@ const supplySans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Z Combinator",
-  description: "Trade decision markets",
+  title: "Combinator",
+  description: "Grow your token network",
+  openGraph: {
+    title: "Combinator",
+    description: "Grow your token network",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Combinator",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Combinator",
+    description: "Grow your token network",
+    images: ["/og-image.jpg"],
+  },
 };
 
 export default function RootLayout({

@@ -132,19 +132,9 @@ export default function LandingPage() {
           {/* Features Section */}
           <FeaturesSection />
 
-          {/* Carousel Section */}
+          {/* CTA Section */}
           <div className="w-full bg-black flex justify-center px-3 sm:px-6">
             <div className="w-full sm:w-2/3">
-              <TokenCarousel
-                carouselRef={carouselRef}
-                currentCard={currentCard}
-                items={carouselItems}
-                onScrollLeft={scrollCarouselLeft}
-                onScrollRight={scrollCarouselRight}
-                onScroll={handleCarouselScroll}
-              />
-
-              {/* CTA Section */}
               <CTASection />
             </div>
           </div>

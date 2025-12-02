@@ -4,11 +4,11 @@ export default function LiveNowSection() {
       <div className="text-center px-3 sm:px-8 pb-16">
         {/* Badge */}
         <div className="mb-4 inline-block px-3 py-1 text-[12px] font-medium tracking-wide uppercase rounded-full border border-white/20 text-white animate-on-scroll-subtle">
-            EVOLVING LIVE
+            Fair token networks
         </div>
-        <h2 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Zero-Person Company</h2>
+        <h2 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Futarchy for governance</h2>
         <p className="text-gray-400 max-w-lg mb-0 animate-on-scroll-subtle delay-200">
-          ZC Quantum Markets evaluate community PRs, push winners to prod, measure value created and reward contributors accordingly.
+          One-click markets evaluate proposals, identify the optimal decision, and execute accordingly.
         </p>
       </div>
       <div className="w-full overflow-hidden relative pt-16">

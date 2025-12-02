@@ -48,10 +48,7 @@ export default function TokenCarousel({
             >
               <div className="p-6 flex flex-col h-full items-center justify-center text-center">
                 <h4 className="text-xl font-medium text-white mb-2">{item.title}</h4>
-                <p className="text-sm text-gray-400 mb-4">{item.subtitle}</p>
-                <button className="bg-white text-black px-6 py-2 font-medium hover:opacity-90 transition-opacity rounded-full">
-                  Claim
-                </button>
+                <p className="text-sm text-gray-400">{item.subtitle}</p>
               </div>
             </div>
           ))}
