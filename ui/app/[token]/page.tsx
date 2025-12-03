@@ -26,6 +26,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { claimWinnings } from '@/lib/trading';
 import { buildApiUrl } from '@/lib/api-utils';
+import { getEffectiveMarketCount, filterMarketData } from '@/lib/proposal-overrides';
 import Masonry from 'react-masonry-css';
 import { ProposalVolume } from '@/components/ProposalVolume';
 import { useTokenContext } from '@/providers/TokenContext';
@@ -101,6 +102,17 @@ export default function HomePage() {
   const proposal = useMemo(() =>
     proposals.find(p => p.id === selectedProposalId) || sortedProposals[0] || null,
     [selectedProposalId, proposals, sortedProposals]
+  );
+
+  // Apply market count overrides for proposals with incorrect market counts
+  const effectiveMarketCount = useMemo(() =>
+    proposal ? getEffectiveMarketCount(moderatorId, proposal.id, proposal.markets || 2) : 2,
+    [proposal, moderatorId]
+  );
+
+  const effectiveMarketLabels = useMemo(() =>
+    proposal?.marketLabels ? filterMarketData(proposal.marketLabels, moderatorId, proposal.id) : ['No', 'Yes'],
+    [proposal, moderatorId]
   );
 
   // Fetch trade history for the selected proposal
@@ -581,8 +593,8 @@ export default function HomePage() {
                     {/* Mode Toggle */}
                     <div className="order-3 md:order-2">
                       <ModeToggle
-                        marketLabels={proposal.marketLabels || ['No', 'Yes']}
-                        marketCaps={marketCaps}
+                        marketLabels={effectiveMarketLabels}
+                        marketCaps={filterMarketData(marketCaps, moderatorId, proposal.id)}
                         selectedIndex={selectedMarketIndex}
                         onSelect={handleMarketIndexSelect}
                       />
@@ -681,8 +693,8 @@ export default function HomePage() {
                 <div className="hidden">
                   <LivePriceDisplay
                     proposalId={proposal.id}
-                    marketLabels={proposal.marketLabels || ['No', 'Yes']}
-                    marketCount={proposal.markets || 2}
+                    marketLabels={effectiveMarketLabels}
+                    marketCount={effectiveMarketCount}
                     onPricesUpdate={handlePricesUpdate}
                     onTwapUpdate={handleTwapUpdate}
                   />
