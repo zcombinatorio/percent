@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PublicKey } from '@solana/web3.js';
-import { fetchUserBalances, type UserBalancesResponse } from '@/lib/programs/vault';
+import { fetchUserBalanceForWinningMint, type WinningMintBalanceResponse } from '@/lib/programs/vault';
 import { useProposals } from './useProposals';
 import { useTokenPrices } from './useTokenPrices';
 import type { ProposalListItem } from '@/types/api';
@@ -27,14 +27,15 @@ interface ClaimablePositions {
 export function useClaimablePositions(walletAddress: string | null, moderatorId?: number | string): ClaimablePositions {
   const { proposals } = useProposals(undefined, moderatorId);
   const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices();
-  const [balancesMap, setBalancesMap] = useState<Map<number, UserBalancesResponse>>(new Map());
+  const [balancesMap, setBalancesMap] = useState<Map<number, WinningMintBalanceResponse>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchAllBalances = useCallback(async (address: string, proposalList: ProposalListItem[]) => {
-    // Only fetch for finalized proposals
+    // Only fetch for finalized proposals with a winning index
     const finalizedProposals = proposalList.filter(p =>
-      p.status === 'Passed' || p.status === 'Failed'
+      (p.status === 'Passed' || p.status === 'Failed') &&
+      p.winningMarketIndex !== null && p.winningMarketIndex !== undefined
     );
 
     if (finalizedProposals.length === 0) return;
@@ -43,12 +44,12 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
     setError(null);
 
     try {
-      // Fetch balances for finalized proposals in parallel
+      // Fetch winning mint balances for finalized proposals in parallel
       const balancePromises = finalizedProposals.map(proposal =>
-        fetchUserBalances(
+        fetchUserBalanceForWinningMint(
           new PublicKey(proposal.vaultPDA),
           new PublicKey(address),
-          proposal.id
+          proposal.winningMarketIndex!
         )
           .then(data => ({ id: proposal.id, data }))
           .catch(() => ({ id: proposal.id, data: null }))
@@ -57,7 +58,7 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
       const results = await Promise.all(balancePromises);
 
       // Update the balances map
-      const newMap = new Map<number, UserBalancesResponse>();
+      const newMap = new Map<number, WinningMintBalanceResponse>();
       results.forEach(({ id, data }) => {
         if (data) {
           newMap.set(id, data);
@@ -91,13 +92,11 @@ export function useClaimablePositions(walletAddress: string | null, moderatorId?
       const proposal = proposals.find(p => p.id === proposalId);
       if (!proposal || (proposal.status !== 'Passed' && proposal.status !== 'Failed')) return;
 
-      // Get winning market index from proposal (for N-ary quantum markets)
-      const winningIndex = proposal.winningMarketIndex;
-      if (winningIndex === null || winningIndex === undefined) return;
+      const winningIndex = balances.winningIndex;
 
-      // Get winning tokens from conditionalBalances array using winningMarketIndex
-      const baseWinningTokens = parseFloat(balances.base.conditionalBalances[winningIndex] || '0');
-      const quoteWinningTokens = parseFloat(balances.quote.conditionalBalances[winningIndex] || '0');
+      // Get winning tokens directly from the response (already for winning index only)
+      const baseWinningTokens = parseFloat(balances.baseConditionalBalance);
+      const quoteWinningTokens = parseFloat(balances.quoteConditionalBalance);
 
       // Check if user has ANY winning tokens to claim
       if (baseWinningTokens > 0 || quoteWinningTokens > 0) {

@@ -20,7 +20,8 @@
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { BN } from '@coral-xyz/anchor';
 import { VaultType } from '@zcomb/vault-sdk';
-import { createVaultClient, createReadOnlyVaultClient } from './utils';
+import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
+import { createVaultClient, createReadOnlyVaultClient, getConnection } from './utils';
 
 export { VaultType };
 
@@ -186,5 +187,72 @@ export async function fetchUserBalances(
       regular: quoteBalances.userBalance.toString(),
       conditionalBalances: quoteBalances.condBalances.map((b: number) => b.toString()),
     },
+  };
+}
+
+/**
+ * User balance for a specific winning market
+ */
+export interface WinningMintBalanceResponse {
+  user: string;
+  winningIndex: number;
+  baseConditionalMint: string;
+  quoteConditionalMint: string;
+  baseConditionalBalance: string;
+  quoteConditionalBalance: string;
+}
+
+/**
+ * Fetch user balance for only the winning conditional mint
+ * More efficient than fetching all balances when only the winner matters
+ *
+ * @param vaultPDA - The vault PDA
+ * @param userPublicKey - The user's public key
+ * @param winningIndex - The winning market index (0-indexed)
+ * @returns User balances for the winning conditional mints only
+ */
+export async function fetchUserBalanceForWinningMint(
+  vaultPDA: PublicKey,
+  userPublicKey: PublicKey,
+  winningIndex: number
+): Promise<WinningMintBalanceResponse> {
+  const vaultClient = createReadOnlyVaultClient();
+  const connection = getConnection();
+
+  // Derive the winning conditional mints
+  const [baseCondMint] = vaultClient.deriveConditionalMint(vaultPDA, VaultType.Base, winningIndex);
+  const [quoteCondMint] = vaultClient.deriveConditionalMint(vaultPDA, VaultType.Quote, winningIndex);
+
+  // Get user's token accounts for these mints
+  const baseAta = getAssociatedTokenAddress(baseCondMint, userPublicKey);
+  const quoteAta = getAssociatedTokenAddress(quoteCondMint, userPublicKey);
+
+  // Resolve ATAs in parallel
+  const [baseAtaAddress, quoteAtaAddress] = await Promise.all([baseAta, quoteAta]);
+
+  // Fetch balances in parallel
+  let baseBalance = '0';
+  let quoteBalance = '0';
+
+  const [baseResult, quoteResult] = await Promise.allSettled([
+    getAccount(connection, baseAtaAddress),
+    getAccount(connection, quoteAtaAddress),
+  ]);
+
+  if (baseResult.status === 'fulfilled') {
+    baseBalance = baseResult.value.amount.toString();
+  }
+
+  if (quoteResult.status === 'fulfilled') {
+    quoteBalance = quoteResult.value.amount.toString();
+  }
+
+  return {
+    user: userPublicKey.toBase58(),
+    winningIndex,
+    baseConditionalMint: baseCondMint.toBase58(),
+    quoteConditionalMint: quoteCondMint.toBase58(),
+    baseConditionalBalance: baseBalance,
+    quoteConditionalBalance: quoteBalance,
   };
 }
