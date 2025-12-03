@@ -6,9 +6,9 @@ export default function LiveNowSection() {
         <div className="mb-4 inline-block px-3 py-1 text-[12px] font-medium tracking-wide uppercase rounded-full border border-white/20 text-white animate-on-scroll-subtle">
             Fair token networks
         </div>
-        <h2 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Futarchy for governance</h2>
+        <h2 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Better incentives. Better governance.</h2>
         <p className="text-gray-400 max-w-lg mb-0 animate-on-scroll-subtle delay-200">
-          One-click markets evaluate proposals, identify the optimal decision, and execute accordingly.
+          Quantum markets evaluate options, find optimal parameters, and execute accordingly.
         </p>
       </div>
       <div className="w-full overflow-hidden relative pt-16">

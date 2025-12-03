@@ -11,7 +11,7 @@ export default function FeaturesSection() {
               </span>
             </div>
             <h4 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Raise Capital</h4>
-            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">Launch or migrate your token with our token sale API.</p>
+            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">Launch or migrate your token with our token sale API. Build a community of traders for your markets.</p>
             <video src="/landing/assets/zc-percent2.mp4" className="w-full h-auto" autoPlay loop muted playsInline />
           </div>
           {/* Feature 2 */}
@@ -22,7 +22,7 @@ export default function FeaturesSection() {
               </span>
             </div>
             <h4 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Auto-deploy quantum markets</h4>
-            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">Easily spin up a quantum market to determine which proposal should be executed. Use quantum markets for figuring out token emission rates, fundraise dynamics, slashing, etc.</p>
+            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">Let markets decide instead of guessing. Spin up a quantum market for emission rates, incentive distributions, treasury management, fundraise dynamics, retroactive funding, and more.</p>
             <video src="/landing/assets/deploy3.mp4" className="w-full h-auto" autoPlay loop muted playsInline />
           </div>
           {/* Feature 3 */}
@@ -33,7 +33,7 @@ export default function FeaturesSection() {
               </span>
             </div>
             <h4 className="text-3xl font-medium text-white mb-4 animate-on-scroll delay-100">Invite the Combinator community to trade</h4>
-            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">The more community members consider trading your proposal, the better the chances of determining the correct outcome.</p>
+            <p className="text-base text-gray-400 mb-12 animate-on-scroll-subtle delay-200">More traders means better signal. The community trades your markets to surface what drives growth.</p>
             <video src="/landing/assets/discord2.mp4" className="w-full h-auto" autoPlay loop muted playsInline />
           </div>
         </div>
