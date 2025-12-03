@@ -24,7 +24,6 @@ export default function CreatePage() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [choice1, setChoice1] = useState('');
   const [choice2, setChoice2] = useState('');
   const [choice3, setChoice3] = useState('');
   const [proposalLengthHours, setProposalLengthHours] = useState('24');
@@ -62,8 +61,8 @@ export default function CreatePage() {
   const hasPermission = isAuthorized;
   const poolName = poolMetadata?.ticker?.toUpperCase() || tokenSlug.toUpperCase();
 
-  // Check if form is valid (title, description, choice1, and duration filled)
-  const isFormInvalid = !title.trim() || !description.trim() || !choice1.trim() || parseFloat(proposalLengthHours) <= 0;
+  // Check if form is valid (title, description, choice2, and duration filled)
+  const isFormInvalid = !title.trim() || !description.trim() || !choice2.trim() || parseFloat(proposalLengthHours) <= 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +76,8 @@ export default function CreatePage() {
       toast.error('Description is required');
       return;
     }
-    if (!choice1.trim()) {
-      toast.error('At least Choice 1 is required');
+    if (!choice2.trim()) {
+      toast.error('Choice 2 is required');
       return;
     }
     const hours = parseFloat(proposalLengthHours);
@@ -141,9 +140,8 @@ export default function CreatePage() {
       // Convert hours to seconds
       const proposalLength = Math.floor(hours * 3600);
 
-      // Build market_labels array: index 0 = "No", then choices 1-3
-      const market_labels = ['No', choice1.trim()];
-      if (choice2.trim()) market_labels.push(choice2.trim());
+      // Build market_labels array: index 0 = "No", then choices 2-3
+      const market_labels = ['No', choice2.trim()];
       if (choice3.trim()) market_labels.push(choice3.trim());
       const markets = market_labels.length;
 
@@ -182,7 +180,6 @@ export default function CreatePage() {
       // Reset form
       setTitle('');
       setDescription('');
-      setChoice1('');
       setChoice2('');
       setChoice3('');
       setProposalLengthHours('24');
@@ -280,37 +277,35 @@ export default function CreatePage() {
 
                     {/* Choice Cards Row */}
                     <div className="grid grid-cols-3 gap-4">
-                      {/* Choice 1 Card */}
+                      {/* Choice 1 Card - Always "No" */}
                       <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
                         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
-                          Choice 1*
+                          Choice 1
                         </span>
                         <input
                           type="text"
-                          value={choice1}
-                          onChange={(e) => setChoice1(e.target.value)}
-                          placeholder="1.5M $ZC"
-                          className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                          value="No"
+                          readOnly
+                          className="w-full h-[56px] px-3 bg-[#1a1a1a] rounded-[6px] text-gray-400 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono cursor-not-allowed"
                           style={{
                             WebkitAppearance: 'none',
                             MozAppearance: 'textfield',
                             fontFamily: 'IBM Plex Mono, monospace',
                             letterSpacing: '0em'
                           }}
-                          disabled={isSubmitting}
                         />
                       </div>
 
                       {/* Choice 2 Card */}
                       <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
                         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
-                          Choice 2
+                          Choice 2*
                         </span>
                         <input
                           type="text"
                           value={choice2}
                           onChange={(e) => setChoice2(e.target.value)}
-                          placeholder="3M $ZC"
+                          placeholder="1.5M $ZC"
                           className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
                           style={{
                             WebkitAppearance: 'none',
@@ -331,7 +326,7 @@ export default function CreatePage() {
                           type="text"
                           value={choice3}
                           onChange={(e) => setChoice3(e.target.value)}
-                          placeholder="5M $ZC"
+                          placeholder="3M $ZC"
                           className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
                           style={{
                             WebkitAppearance: 'none',

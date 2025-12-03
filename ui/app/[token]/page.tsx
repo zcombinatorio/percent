@@ -516,7 +516,7 @@ export default function HomePage() {
                             <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
                               {content.title}
                             </div>
-                            <div className={`text-sm description-links ${!isLiveProposalHovered ? 'line-clamp-2' : ''}`} style={{ color: '#DDDDD7' }}>
+                            <div className={`text-sm description-links ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
                           </div>
@@ -531,13 +531,13 @@ export default function HomePage() {
                             onMouseEnter={() => setIsLiveProposalHovered(true)}
                             onMouseLeave={() => setIsLiveProposalHovered(false)}
                           >
-                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
+                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
                               {cardInner}
                             </div>
                           </a>
                         ) : (
                           <div
-                            className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300"
+                            className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 transition-all duration-300"
                             onMouseEnter={() => setIsLiveProposalHovered(true)}
                             onMouseLeave={() => setIsLiveProposalHovered(false)}
                           >
