@@ -79,10 +79,12 @@ export class Proposal {
       winningMarketLabel: this.config.market_labels![winningIndex],
       winningBaseConditionalMint: this.vaultClient.deriveConditionalMint(
         this.deriveVaultPDA(VaultType.Base),
+        VaultType.Base,
         winningIndex
       )[0],
       winningQuoteConditionalMint: this.vaultClient.deriveConditionalMint(
         this.deriveVaultPDA(VaultType.Quote),
+        VaultType.Quote,
         winningIndex
       )[0],
     };
@@ -148,64 +150,37 @@ export class Proposal {
 
     // Base Vault
     const {
-      builder: baseInitBuilder,
-      vaultPda: baseVaultPda,
-      condMint0: baseCondMint0,
-      condMint1: baseCondMint1,
+      builder: initBuilder,
+      vaultPda: vaultPda,
+      condBaseMint0,
+      condBaseMint1,
+      condQuoteMint0,
+      condQuoteMint1
     } = this.vaultClient.initialize(
       this.config.authority.publicKey,
       this.config.baseMint,
-      VaultType.Base,
+      this.config.quoteMint,
+      this.config.id,
       this.config.moderatorId,
-      this.config.id
     );
-    const baseCondMints: PublicKey[] = [baseCondMint0, baseCondMint1];
-    await baseInitBuilder.rpc();
+    const baseCondMints: PublicKey[] = [condBaseMint0, condBaseMint1];
+    const quoteCondMints: PublicKey[] = [condQuoteMint0, condQuoteMint1];
+    await initBuilder.rpc();
 
     // Add additional options to base vault if markets > 2
-    for (let i = 2; i < this.config.markets; i++) {
-      const { builder: addOptionBuilder, condMint } =
+    for (let i = 2; i < this.config.markets; i++) { 
+      const { builder: addOptionBuilder, condBaseMint, condQuoteMint } =
         await this.vaultClient.addOption(
           this.config.authority.publicKey,
-          baseVaultPda
+          vaultPda
         );
-      baseCondMints.push(condMint);
+      baseCondMints.push(condBaseMint);
+      quoteCondMints.push(condQuoteMint);
       await addOptionBuilder.rpc();
     }
 
     await this.vaultClient
-      .activate(this.config.authority.publicKey, baseVaultPda)
-      .rpc();
-
-    // Quote Vault
-    const {
-      builder: quoteInitBuilder,
-      vaultPda: quoteVaultPda,
-      condMint0: quoteCondMint0,
-      condMint1: quoteCondMint1,
-    } = this.vaultClient.initialize(
-      this.config.authority.publicKey,
-      this.config.quoteMint,
-      VaultType.Quote,
-      this.config.moderatorId,
-      this.config.id
-    );
-    const quoteCondMints: PublicKey[] = [quoteCondMint0, quoteCondMint1];
-    await quoteInitBuilder.rpc();
-
-    // Add additional options to quote vault if markets > 2
-    for (let i = 2; i < this.config.markets; i++) {
-      const { builder: addOptionBuilder, condMint } =
-        await this.vaultClient.addOption(
-          this.config.authority.publicKey,
-          quoteVaultPda
-        );
-      quoteCondMints.push(condMint);
-      await addOptionBuilder.rpc();
-    }
-
-    await this.vaultClient
-      .activate(this.config.authority.publicKey, quoteVaultPda)
+      .activate(this.config.authority.publicKey, vaultPda)
       .rpc();
 
     // Split regular tokens through vaults to get conditional tokens for AMM seeding
@@ -214,14 +189,16 @@ export class Proposal {
     await (
       await this.vaultClient.deposit(
         this.config.authority.publicKey,
-        baseVaultPda,
+        vaultPda,
+        VaultType.Base,
         this.config.ammConfig.initialBaseAmount
       )
     ).rpc();
     await (
       await this.vaultClient.deposit(
         this.config.authority.publicKey,
-        quoteVaultPda,
+        vaultPda,
+        VaultType.Quote,
         this.config.ammConfig.initialQuoteAmount
       )
     ).rpc();
@@ -319,27 +296,16 @@ export class Proposal {
       // Determine the winning conditional mint
       winningIndex = this.twapOracle.fetchHighestTWAPIndex();
 
-      const [baseVaultPDA] = this.vaultClient.deriveVaultPDA(
+      const [vaultPDA] = this.vaultClient.deriveVaultPDA(
         this.config.authority.publicKey,
         this.config.moderatorId,
-        this.config.id,
-        VaultType.Base
-      );
-
-      const [quoteVaultPDA] = this.vaultClient.deriveVaultPDA(
-        this.config.authority.publicKey,
-        this.config.moderatorId,
-        this.config.id,
-        VaultType.Quote
+        this.config.id
       );
 
       // Finalize both vaults
       this.logger.info("Finalizing vaults");
       await this.vaultClient
-        .finalize(this.config.authority.publicKey, baseVaultPDA, winningIndex)
-        .rpc();
-      await this.vaultClient
-        .finalize(this.config.authority.publicKey, quoteVaultPDA, winningIndex)
+        .finalize(this.config.authority.publicKey, vaultPDA, winningIndex)
         .rpc();
 
       // Redeem authority's winning tokens after finalization
@@ -349,7 +315,8 @@ export class Proposal {
         await (
           await this.vaultClient.redeemWinnings(
             this.config.authority.publicKey,
-            baseVaultPDA
+            vaultPDA,
+            VaultType.Base
           )
         ).rpc();
       } catch (error) {
@@ -364,7 +331,8 @@ export class Proposal {
         await (
           await this.vaultClient.redeemWinnings(
             this.config.authority.publicKey,
-            quoteVaultPDA
+            vaultPDA,
+            VaultType.Quote
           )
         ).rpc();
       } catch (error) {
@@ -511,12 +479,11 @@ export class Proposal {
     return proposal;
   }
 
-  deriveVaultPDA(vaultType: VaultType) {
+  deriveVaultPDA(vaultType: VaultType): PublicKey {
     return this.vaultClient.deriveVaultPDA(
       this.config.authority.publicKey,
       this.config.moderatorId,
-      this.config.id,
-      vaultType
+      this.config.id
     )[0]; // Just return the public key
   }
 }
