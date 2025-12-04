@@ -29,8 +29,8 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
       config={{
         // Appearance configuration with dark theme
         appearance: {
-          theme: 'dark',
-          accentColor: '#f97316', // Orange color matching your UI
+          theme: '#0a0a0a',
+          accentColor: '#DDDDD7',
           logo: '/combinator-icon.svg',
           walletChainType: 'solana-only', // Show only Solana options
         },

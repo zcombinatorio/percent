@@ -1,12 +1,57 @@
 'use client';
 
-import { formatMarketCap } from '@/lib/formatters';
+// Parse a small decimal into its components
+const parseSmallDecimal = (value: number): { zeroCount: number; sigDigits: string } | null => {
+  if (value === 0 || value >= 0.01) return null;
+
+  const str = value.toFixed(10);
+  const match = str.match(/^0\.(0+)(\d+)/);
+
+  if (!match) return null;
+
+  return {
+    zeroCount: match[1].length,
+    sigDigits: match[2].replace(/0+$/, '') || '0'
+  };
+};
+
+// Format with subscript notation and specified significant digits (includes $)
+const formatWithSigDigits = (value: number, maxSigDigits: number): string => {
+  if (value === 0) return '$0';
+  if (value >= 0.01) return `$${value.toFixed(4)}`;
+
+  const parsed = parseSmallDecimal(value);
+  if (!parsed) return `$${value.toFixed(4)}`;
+
+  const { zeroCount, sigDigits } = parsed;
+  const paddedDigits = sigDigits.padEnd(maxSigDigits, '0');
+
+  // Subscript digits: ₀₁₂₃₄₅₆₇₈₉
+  const subscripts = '₀₁₂₃₄₅₆₇₈₉';
+  const subscriptNum = String(zeroCount).split('').map(d => subscripts[parseInt(d)]).join('');
+
+  return `$0.0${subscriptNum}${paddedDigits}`;
+};
+
+// Get max significant digits from an array of values
+const getMaxSigDigits = (values: (number | null)[]): number => {
+  let max = 1;
+  for (const value of values) {
+    if (value == null) continue;
+    const parsed = parseSmallDecimal(value);
+    if (parsed) {
+      max = Math.max(max, parsed.sigDigits.length);
+    }
+  }
+  return max;
+};
 
 interface ModeToggleProps {
   marketLabels: string[];
   marketCaps: (number | null)[];
   selectedIndex: number;
   onSelect: (index: number) => void;
+  solPrice?: number | null;
 }
 
 // Parse label to extract display text and optional URL
@@ -21,7 +66,24 @@ const parseLabel = (label: string): { displayText: string; url: string | null } 
   return { displayText: label, url: null };
 };
 
-export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect }: ModeToggleProps) {
+export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
+  // Convert TWAPs from SOL to USD
+  const marketCapsUsd = marketCaps.map(cap =>
+    cap != null && solPrice ? cap * solPrice : null
+  );
+
+  // Calculate max significant digits across all values for consistent formatting (capped at 4)
+  const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
+
+  // Sort indices by TWAP (highest first) for ranking display
+  const sortedIndices = marketLabels
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const aVal = marketCapsUsd[a] ?? -Infinity;
+      const bVal = marketCapsUsd[b] ?? -Infinity;
+      return bVal - aVal; // Descending order
+    });
+
   return (
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-1 md:gap-4">
@@ -29,22 +91,23 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect }
           II. Select Coin
         </span>
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
-          {marketLabels.map((label, index) => {
-            const isSelected = selectedIndex === index;
-            const marketCap = marketCaps[index];
+          {sortedIndices.map((originalIndex, rank) => {
+            const label = marketLabels[originalIndex];
+            const isSelected = selectedIndex === originalIndex;
+            const marketCapUsd = marketCapsUsd[originalIndex];
             const { displayText, url } = parseLabel(label);
 
             const labelContent = (
               <>
-                {index + 1}. {displayText} ({formatMarketCap(marketCap)})
+                {rank + 1}. {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
               </>
             );
 
             return (
               <div
-                key={index}
+                key={originalIndex}
                 className="flex items-center justify-between cursor-pointer select-none"
-                onClick={() => onSelect(index)}
+                onClick={() => onSelect(originalIndex)}
               >
                 {/* Label with market cap - clickable if URL exists */}
                 {url ? (
@@ -75,7 +138,7 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect }
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelect(index);
+                    onSelect(originalIndex);
                   }}
                   className="relative w-[48px] h-[28px] border-none outline-none overflow-hidden rounded-[14px] transition-all duration-200 cursor-pointer flex-shrink-0"
                   style={{
