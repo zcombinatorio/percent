@@ -287,10 +287,10 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
 
         {/* Deposit/Withdraw Button */}
         <button
-          onClick={mode === 'deposit' ? handleDeposit : handleWithdraw}
-          disabled={!amount || parseFloat(amount) <= 0 || isDepositing || !!balanceError}
+          onClick={!authenticated ? login : (mode === 'deposit' ? handleDeposit : handleWithdraw)}
+          disabled={authenticated && (!amount || parseFloat(amount) <= 0 || isDepositing || !!balanceError)}
           className={`h-[56px] w-[100px] md:w-[140px] px-4 md:px-6 rounded-[6px] font-semibold transition cursor-pointer whitespace-nowrap uppercase font-ibm-plex-mono text-md flex items-center justify-center ${
-            amount && parseFloat(amount) > 0 && !balanceError && !isDepositing
+            !authenticated || (amount && parseFloat(amount) > 0 && !balanceError && !isDepositing)
               ? 'bg-[#DDDDD7]'
               : 'bg-[#414346] cursor-not-allowed'
           }`}
@@ -298,6 +298,8 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
         >
           {isDepositing ? (
             <div className="animate-spin h-4 w-4 rounded-full border-2 border-[#161616] border-t-transparent"></div>
+          ) : !authenticated ? (
+            'LOG IN'
           ) : (
             mode === 'deposit' ? 'DEPOSIT' : 'WITHDRAW'
           )}
