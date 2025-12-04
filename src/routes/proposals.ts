@@ -28,6 +28,7 @@ import nacl from 'tweetnacl';
 import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
+import { ProposalStatus } from '../../app/types/moderator.interface';
 import { getPoolsForWallet, POOL_METADATA } from '../config/whitelist';
 import { VaultType } from '@zcomb/vault-sdk';
 
@@ -219,6 +220,27 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       return res.status(404).json({ error: 'Moderator not found' });
     }
 
+    // Check for existing active proposal (only one allowed per moderator/pool at a time)
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
+    const existingProposals = await persistenceService.loadAllProposals();
+    const activeProposal = existingProposals.find(p => p.getStatus().status === ProposalStatus.Pending);
+
+    if (activeProposal) {
+      logger.warn('[POST /] Active proposal already exists', {
+        moderatorId,
+        activeProposalId: activeProposal.config.id,
+        activeProposalTitle: activeProposal.config.title,
+      });
+      return res.status(409).json({
+        error: 'An active proposal already exists for this pool',
+        activeProposal: {
+          id: activeProposal.config.id,
+          title: activeProposal.config.title,
+          createdAt: activeProposal.config.createdAt,
+        },
+      });
+    }
+
     // Validate required fields - title, description, proposalLength, creatorWallet required
     if (!body.title || !body.description || !body.proposalLength || !body.creatorWallet) {
       logger.warn('[POST /] Missing required fields', {
@@ -384,10 +406,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       return res.status(400).json({
         error: 'Invalid markets count: must be between 2 and 8'
       });
-    }    
-    // Get the proposal counter for this moderator
-    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
-    const proposalCounter = await persistenceService.getProposalIdCounter();
+    }
 
     // Step 1: Withdraw from DAMM pool (using whitelisted pool)
     logger.info('[POST /] Withdrawing from DAMM pool', {
