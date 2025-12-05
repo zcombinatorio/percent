@@ -290,6 +290,8 @@ export class Moderator implements IModerator {
       this.logger.error('Failed to create proposal', {
         error: error instanceof Error ? error.message : String(error)
       });
+      // Increment proposal ID counter even if proposal creation fails
+      await this.persistenceService.saveModeratorState(proposalIdCounter + 1, this.config);
       throw error;
     }
   }
