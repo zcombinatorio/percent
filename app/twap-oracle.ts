@@ -143,8 +143,8 @@ export class TWAPOracle implements ITWAPOracle {
       const timeElapsed = effectiveCurrentTime - effectiveLastUpdateTime;
 
       if (timeElapsed > 0) {
-        // Add weighted observations to aggregations
-        this._aggregations = this._observations.map(observation => observation.mul(timeElapsed));
+        // Add weighted observations to aggregations (accumulate, don't overwrite)
+        this._aggregations = this._aggregations.map((agg, i) => agg.add(this._observations[i].mul(timeElapsed)));
       }
     }
 

@@ -7,7 +7,7 @@ This guide covers everything needed to add a new token to the decision market sy
 Adding a new token requires:
 1. Creating a dedicated manager wallet (authority keypair)
 2. Configuring the wallet in both percent and zcombinator
-3. Updating whitelists with authorized users
+3. Updating whitelist with authorized users (percent only)
 4. Adding pool metadata for routing
 
 ---
@@ -53,7 +53,7 @@ POOL_AUTHORITY_NEWTOKEN_PATH=./wallet-newtoken.json
 
 **File:** `percent/app/services/router.service.ts`
 
-Update the `poolMapping` object (lines 44-47):
+Update the `poolMapping` object (lines 43-46):
 
 ```typescript
 const poolMapping: Record<string, string> = {
@@ -65,44 +65,47 @@ const poolMapping: Record<string, string> = {
 
 ### 2b. zcombinator Configuration
 
-Add manager wallet public key as environment variable:
+Add manager wallet and LP owner environment variables:
 
-**File:** `zcombinator/.env`
+**File:** `zcombinator/ui/.env`
 
 ```bash
-# Existing manager wallets
-MANAGER_WALLET_ZC=9x7FvP...  # Public key
-MANAGER_WALLET_OOGWAY=3h8Kq...  # Public key
+# Existing manager wallets (public keys)
+MANAGER_WALLET_ZC=9x7FvP...
+MANAGER_WALLET_OOGWAY=3h8Kq...
 
 # NEW: Add your token's manager wallet public key
 MANAGER_WALLET_NEWTOKEN=YOUR_PUBLIC_KEY_FROM_STEP1
+
+# Existing LP owner private keys (base58 encoded)
+LP_OWNER_PRIVATE_KEY_ZC=...
+LP_OWNER_PRIVATE_KEY_OOGWAY=...
+
+# NEW: Add your token's LP owner private key
+LP_OWNER_PRIVATE_KEY_NEWTOKEN=YOUR_LP_OWNER_PRIVATE_KEY
 ```
 
 **File:** `zcombinator/ui/routes/damm-liquidity.ts`
 
-Update the `getManagerWalletForPool()` function (lines 133-160):
+Update the `poolToTicker` mapping (lines 121-124):
 
 ```typescript
-function getManagerWalletForPool(poolAddress: string): string {
-  const poolToEnvVar: Record<string, string> = {
-    'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad': 'MANAGER_WALLET_ZC',
-    '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': 'MANAGER_WALLET_OOGWAY',
-    'YOUR_NEW_POOL_ADDRESS_HERE': 'MANAGER_WALLET_NEWTOKEN',  // ADD THIS LINE
-  };
-
-  // ... rest of function
-}
+const poolToTicker: Record<string, string> = {
+  'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad': 'ZC',
+  '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': 'OOGWAY',
+  'YOUR_NEW_POOL_ADDRESS_HERE': 'NEWTOKEN',  // ADD THIS LINE
+};
 ```
+
+The functions `getManagerWalletForPool()` and `getLpOwnerPrivateKeyForPool()` automatically construct env var names using this ticker (e.g., `MANAGER_WALLET_NEWTOKEN`, `LP_OWNER_PRIVATE_KEY_NEWTOKEN`).
 
 ---
 
-## Step 3: Update Whitelists
-
-### 3a. percent Whitelist (User Authorization)
+## Step 3: Update Whitelist
 
 **File:** `percent/src/config/whitelist.ts`
 
-Add pool whitelist entry with **manager wallet public key + authorized users**:
+Add pool whitelist entry with authorized user wallets:
 
 ```typescript
 export const POOL_WHITELIST: Record<string, string[]> = {
@@ -112,7 +115,6 @@ export const POOL_WHITELIST: Record<string, string[]> = {
 
   // NEW: Your token's pool
   'YOUR_NEW_POOL_ADDRESS_HERE': [
-    'YOUR_PUBLIC_KEY_FROM_STEP1',      // ⚠️ REQUIRED: Manager wallet must be whitelisted
     '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',  // User wallet 1
     'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',  // User wallet 2
     // Add more authorized user wallets as needed
@@ -120,30 +122,7 @@ export const POOL_WHITELIST: Record<string, string[]> = {
 };
 ```
 
-**⚠️ CRITICAL:** The manager wallet public key MUST be in this list!
-
-### 3b. zcombinator Whitelist (Defense-in-Depth)
-
-**File:** `zcombinator/ui/lib/whitelist.ts`
-
-Add the **exact same whitelist entry**:
-
-```typescript
-export const POOL_WHITELIST: Record<string, string[]> = {
-  // Existing pools...
-  'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad': [...],
-  '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX': [...],
-
-  // NEW: Your token's pool (MUST match percent whitelist)
-  'YOUR_NEW_POOL_ADDRESS_HERE': [
-    'YOUR_PUBLIC_KEY_FROM_STEP1',      // ⚠️ REQUIRED: Manager wallet
-    '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',  // User 1
-    'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',  // User 2
-  ],
-};
-```
-
-**Why duplicate?** Defense-in-depth security. Both APIs validate independently.
+This whitelist controls which user wallets can create decision markets for this pool.
 
 ---
 
@@ -200,10 +179,10 @@ The moderator:
 - [ ] Manager wallet public key copied
 - [ ] `POOL_AUTHORITY_NEWTOKEN_PATH` in percent `.env`
 - [ ] `MANAGER_WALLET_NEWTOKEN` in zcombinator `.env`
-- [ ] `poolMapping` updated in `router.service.ts`
-- [ ] `getManagerWalletForPool()` updated in `damm-liquidity.ts`
-- [ ] Manager wallet public key in **both** whitelists
-- [ ] User wallets added to **both** whitelists
+- [ ] `LP_OWNER_PRIVATE_KEY_NEWTOKEN` in zcombinator `.env`
+- [ ] `poolMapping` updated in `router.service.ts` (percent)
+- [ ] `poolToTicker` updated in `damm-liquidity.ts` (zcombinator)
+- [ ] User wallets added to `POOL_WHITELIST` in percent
 - [ ] `POOL_METADATA` entry added with unique ticker
 - [ ] Unique `moderatorId` assigned
 - [ ] Manager wallet funded with SOL for transaction fees
@@ -222,24 +201,25 @@ POOL_AUTHORITY_SHIRTLESS_PATH=./wallet-shirtless.json
 
 // 3. zcombinator/.env
 MANAGER_WALLET_SHIRTLESS=ShRt1essABC123...
+LP_OWNER_PRIVATE_KEY_SHIRTLESS=<base58-encoded-private-key>
 
-// 4. router.service.ts
+// 4. percent/app/services/router.service.ts - poolMapping
 const poolMapping = {
   'SHIRTLESS': '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T',
 };
 
-// 5. damm-liquidity.ts
-const poolToEnvVar = {
-  '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T': 'MANAGER_WALLET_SHIRTLESS',
+// 5. zcombinator/ui/routes/damm-liquidity.ts - poolToTicker
+const poolToTicker = {
+  '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T': 'SHIRTLESS',
 };
 
-// 6. Both whitelists
+// 6. percent/src/config/whitelist.ts - POOL_WHITELIST
 '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T': [
-  'ShRt1essABC123...',  // Manager wallet
-  '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',
+  '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',  // Authorized user 1
+  'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',  // Authorized user 2
 ],
 
-// 7. POOL_METADATA
+// 7. percent/src/config/whitelist.ts - POOL_METADATA
 '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T': {
   poolAddress: '8qWx3PQrZKm9VNYu4ThJ6Kp5XmD2Hf7Lb1Rj3Cw6Sv9T',
   ticker: 'shirtless',
@@ -299,8 +279,8 @@ Once deployed, I'll test by creating a test DM.
 
 To whitelist a new token:
 1. ✅ Generate dedicated manager wallet
-2. ✅ Configure wallet in both backends (percent + zcombinator)
-3. ✅ Add manager wallet public key to BOTH whitelists
-4. ✅ Add authorized user wallets to BOTH whitelists
+2. ✅ Configure wallet in percent (`POOL_AUTHORITY_<TICKER>_PATH`, `poolMapping`)
+3. ✅ Configure wallet in zcombinator (`MANAGER_WALLET_<TICKER>`, `LP_OWNER_PRIVATE_KEY_<TICKER>`, `poolToTicker`)
+4. ✅ Add authorized user wallets to `POOL_WHITELIST` in percent
 5. ✅ Add pool metadata with unique ticker and moderatorId
 6. ✅ Fund manager wallet with SOL

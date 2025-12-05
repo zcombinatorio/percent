@@ -115,13 +115,6 @@ export default function HomePage() {
     getTokenUsed
   } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol);
 
-  // Market caps are pre-calculated on the backend (price in SOL × total supply × SOL/USD)
-  // WebSocket delivers market cap USD directly - no frontend calculation needed
-  // livePrices is now an array indexed by market (supports 2-4 markets)
-  const marketCaps = useMemo(() => {
-    console.log('[HomePage] Calculating marketCaps from livePrices:', livePrices);
-    return livePrices;
-  }, [livePrices]);
 
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
@@ -379,9 +372,10 @@ export default function HomePage() {
                     <div className="order-3 md:order-2">
                       <ModeToggle
                         marketLabels={effectiveMarketLabels}
-                        marketCaps={filterMarketData(marketCaps, moderatorId, proposal.id)}
+                        marketCaps={twapData}
                         selectedIndex={selectedMarketIndex}
                         onSelect={handleMarketIndexSelect}
+                        solPrice={solPrice}
                       />
                     </div>
 
