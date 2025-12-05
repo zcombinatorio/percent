@@ -171,6 +171,9 @@ const TradingInterface = memo(({
     return !hasAnyBase && !hasAnyQuote;
   }, [userBalances]);
 
+  // Check if market is completed (Passed or Failed)
+  const isMarketCompleted = proposalStatus === 'Passed' || proposalStatus === 'Failed';
+
   const { signTransaction } = useTransactionSigner();
   const [isTrading, setIsTrading] = useState(false);
 
@@ -509,10 +512,10 @@ const TradingInterface = memo(({
                 }
               }
             }}
-            placeholder={!authenticated ? "LOG IN TO TRADE" : hasZeroBalances ? "DEPOSIT FUNDS" : "0.0"}
-            disabled={!authenticated || hasZeroBalances}
+            placeholder={!authenticated ? "LOG IN TO TRADE" : isMarketCompleted ? "CLAIM FUNDS" : hasZeroBalances ? "DEPOSIT FUNDS" : "0.0"}
+            disabled={!authenticated || hasZeroBalances || isMarketCompleted}
             className={`w-full h-[56px] px-3 pr-16 bg-[#2a2a2a] rounded-t-[6px] text-white placeholder-gray-600 focus:outline-none border-t border-l border-r border-[#191919] text-2xl font-ibm-plex-mono ${
-              !authenticated || hasZeroBalances ? 'opacity-50 cursor-not-allowed' : ''
+              !authenticated || hasZeroBalances || isMarketCompleted ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
           />
@@ -530,14 +533,14 @@ const TradingInterface = memo(({
         {quickAmounts.map((val: string, index: number) => (
           <button
             key={index}
-            onClick={isEditingQuickAmounts ? undefined : () => {
+            onClick={(isEditingQuickAmounts || hasZeroBalances || isMarketCompleted) ? undefined : () => {
               if (sellingToken === 'baseToken') {
                 handlePercentageClick(val);
               } else {
                 handleSolQuickAmountClick(val);
               }
             }}
-            contentEditable={isEditingQuickAmounts}
+            contentEditable={isEditingQuickAmounts && !hasZeroBalances && !isMarketCompleted}
             suppressContentEditableWarning={true}
             onBlur={isEditingQuickAmounts ? (e) => {
               let currentValue = e.currentTarget.textContent || '';
@@ -558,9 +561,11 @@ const TradingInterface = memo(({
               handleQuickAmountChange(index, currentValue);
             } : undefined}
             className={`flex-1 py-1.5 border-b border-l border-r border-[#191919] text-sm text-center ${
-              isEditingQuickAmounts
-                ? 'text-[#6B6E71] cursor-text focus:bg-[#2a2a2a] focus:text-white focus:outline-none'
-                : 'text-[#6B6E71] hover:bg-[#303030] transition cursor-pointer'
+              hasZeroBalances || isMarketCompleted
+                ? 'text-[#6B6E71] opacity-50 cursor-not-allowed'
+                : isEditingQuickAmounts
+                  ? 'text-[#6B6E71] cursor-text focus:bg-[#2a2a2a] focus:text-white focus:outline-none'
+                  : 'text-[#6B6E71] hover:bg-[#303030] transition cursor-pointer'
             } ${
               index === 0 ? 'rounded-bl-[6px]' : ''
             } ${

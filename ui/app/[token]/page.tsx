@@ -365,6 +365,9 @@ export default function HomePage() {
                         userBalances={userBalances}
                         onDepositSuccess={refetchBalances}
                         tokenSymbol={tokenSymbol}
+                        baseDecimals={baseDecimals}
+                        proposalStatus={proposal.status as 'Pending' | 'Passed' | 'Failed'}
+                        winningMarketIndex={proposal.winningMarketIndex}
                       />
                     </div>
 
