@@ -108,11 +108,11 @@ export default function HomePage() {
   // Fetch trade history for the selected proposal
   const {
     trades,
-    totalVolume,
     loading: tradesLoading,
     refetch: refetchTrades,
     getTimeAgo,
-    getTokenUsed
+    getTokenUsed,
+    calculateVolume
   } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol);
 
 
@@ -343,11 +343,12 @@ export default function HomePage() {
                         className="md:flex-1"
                         proposalId={proposal.id}
                         selectedMarketIndex={selectedMarketIndex}
+                        marketLabels={effectiveMarketLabels}
                         trades={trades.filter(trade => trade.market === selectedMarketIndex)}
-                        totalVolume={totalVolume}
                         tradesLoading={tradesLoading}
                         getTimeAgo={getTimeAgo}
                         getTokenUsed={getTokenUsed}
+                        calculateVolume={calculateVolume}
                         moderatorId={moderatorId ?? undefined}
                       />
                     </div>
@@ -386,12 +387,13 @@ export default function HomePage() {
                     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 order-5 md:order-3">
                       <div className="text-white flex flex-col items-center">
                         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block w-full text-center" style={{ color: '#DDDDD7' }}>
-                          III. Trade Coin {selectedMarketIndex + 1}
+                          III. Trade "{effectiveMarketLabels[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`}"
                         </span>
                         <div className="w-full">
                           <TradingInterface
                             proposalId={proposal.id}
                             selectedMarketIndex={selectedMarketIndex}
+                            marketLabels={effectiveMarketLabels}
                             passPrice={livePrices[1] || 0.5}
                             failPrice={livePrices[0] || 0.5}
                             proposalStatus={proposal.status as 'Pending' | 'Passed' | 'Failed'}
@@ -414,6 +416,9 @@ export default function HomePage() {
                       // For quantum markets, the winning market index is stored in proposal.winningMarketIndex
                       const isShowingLosingTokens = isExpired && proposal.winningMarketIndex !== selectedMarketIndex;
 
+                      // Get display label for the selected market (strip URLs and trim)
+                      const selectedLabel = effectiveMarketLabels[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`;
+
                       // Calculate actual balances using market index
                       const baseTokenBalance = userBalances ? parseFloat(
                         userBalances.base.conditionalBalances[selectedMarketIndex] || '0'
@@ -433,7 +438,7 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {`IV. If Coin ${selectedMarketIndex + 1} Wins Balance`}
+                              {`IV. If "${selectedLabel}" Wins Bal`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">
@@ -450,7 +455,7 @@ export default function HomePage() {
                         <div className="flex-1 bg-[#121212] border border-[#191919] rounded-[9px] py-3 px-5 transition-all duration-300">
                           <div className="text-white flex flex-col">
                             <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 text-center block" style={{ color: '#DDDDD7' }}>
-                              {`IV. If Coin ${selectedMarketIndex + 1} Wins Balance`}
+                              {`IV. If "${selectedLabel}" Wins Bal`}
                             </span>
                             <div className="group flex items-center justify-center border border-[#191919] rounded-[6px] py-3 px-4 text-lg font-ibm-plex-mono cursor-default" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>
                               <span className="group-hover:hidden">

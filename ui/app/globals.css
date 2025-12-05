@@ -479,3 +479,20 @@ body {
   animation: slideUpFadeSubtle 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
 }
+
+/* Marquee animation for truncated text - scrolls back and forth */
+@keyframes marquee {
+  0%, 10% {
+    transform: translateX(0);
+  }
+  45%, 55% {
+    transform: translateX(var(--scroll-distance, -100px));
+  }
+  90%, 100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 5s ease-in-out infinite;
+}

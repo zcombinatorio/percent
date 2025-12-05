@@ -90,8 +90,8 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             <Image
               src="/combinator-icon.svg"
               alt="Z Combinator"
-              width={24}
-              height={28}
+              width={14}
+              height={16}
               className="md:hidden"
             />
           </a>
@@ -236,7 +236,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
       </div>
 
       {/* Second Row: Live/History/Leaderboard Tab Navigation */}
-      <div className="px-4 md:px-8 border-b border-[#292929]">
+      <div className="-mt-2 md:mt-0 px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
           <button
             onClick={() => router.push(`/${tokenSlug}`)}

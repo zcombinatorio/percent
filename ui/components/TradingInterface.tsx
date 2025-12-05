@@ -34,6 +34,7 @@ import { useTokenContext } from '@/providers/TokenContext';
 interface TradingInterfaceProps {
   proposalId: number;
   selectedMarketIndex: number;  // Numeric market index (0-3) for quantum markets
+  marketLabels?: string[];  // Labels for each market option
   passPrice: number;
   failPrice: number;
   proposalStatus?: 'Pending' | 'Passed' | 'Failed';
@@ -49,6 +50,7 @@ interface TradingInterfaceProps {
 const TradingInterface = memo(({
   proposalId,
   selectedMarketIndex,
+  marketLabels,
   passPrice,
   failPrice,
   proposalStatus = 'Pending',
@@ -60,6 +62,8 @@ const TradingInterface = memo(({
   tokenSymbol = 'ZC',
   winningMarketIndex
 }: TradingInterfaceProps) => {
+  // Get display label for the selected market (strip URLs and trim)
+  const selectedLabel = marketLabels?.[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`;
   const { moderatorId } = useTokenContext();
   const { authenticated, walletAddress, login } = usePrivyWallet();
   const isConnected = authenticated;
@@ -672,7 +676,7 @@ const TradingInterface = memo(({
           <span>
             {(() => {
               const action = sellingToken === 'sol' ? 'BUY' : 'SELL';
-              const coinLabel = `COIN ${selectedMarketIndex + 1}`;
+              const coinLabel = `"${selectedLabel.toUpperCase()}"`;
               const token = sellingToken === 'sol' ? 'SOL' : tokenSymbol;
 
               // Format amount with K/M notation for ZC

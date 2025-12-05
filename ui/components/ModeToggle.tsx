@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef, useEffect, useState } from 'react';
+
 // Parse a small decimal into its components
 const parseSmallDecimal = (value: number): { zeroCount: number; sigDigits: string } | null => {
   if (value === 0 || value >= 0.01) return null;
@@ -66,6 +68,55 @@ const parseLabel = (label: string): { displayText: string; url: string | null } 
   return { displayText: label, url: null };
 };
 
+// Marquee text component for truncated selected items
+function MarqueeText({ children, isSelected, className, style }: {
+  children: React.ReactNode;
+  isSelected: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [shouldAnimate, setShouldAnimate] = useState(false);
+  const [scrollDistance, setScrollDistance] = useState(0);
+
+  useEffect(() => {
+    if (isSelected && containerRef.current && textRef.current) {
+      const containerWidth = containerRef.current.offsetWidth;
+      const textWidth = textRef.current.scrollWidth;
+      const overflow = textWidth - containerWidth;
+
+      if (overflow > 0) {
+        setShouldAnimate(true);
+        setScrollDistance(overflow + 16); // Add some padding
+      } else {
+        setShouldAnimate(false);
+      }
+    } else {
+      setShouldAnimate(false);
+    }
+  }, [isSelected, children]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`overflow-hidden ${className || ''}`}
+      style={style}
+    >
+      <span
+        ref={textRef}
+        className={`inline-block whitespace-nowrap ${shouldAnimate ? 'animate-marquee' : ''}`}
+        style={shouldAnimate ? {
+          '--scroll-distance': `-${scrollDistance}px`,
+          animationDuration: `${Math.max(5, scrollDistance / 20)}s`,
+        } as React.CSSProperties : undefined}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
+
 export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
   // Convert TWAPs from SOL to USD
   const marketCapsUsd = marketCaps.map(cap =>
@@ -116,22 +167,29 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className={`text-lg uppercase transition-colors duration-200 truncate flex-1 min-w-0 mr-3 hover:underline ${
-                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62]'
+                    className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 hover:underline ${
+                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62] truncate'
                     }`}
                     style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
                   >
-                    {labelContent}
+                    {isSelected ? (
+                      <MarqueeText isSelected={isSelected} className="flex-1 min-w-0">
+                        {labelContent}
+                      </MarqueeText>
+                    ) : (
+                      labelContent
+                    )}
                   </a>
                 ) : (
-                  <div
-                    className={`text-lg uppercase transition-colors duration-200 truncate flex-1 min-w-0 mr-3 ${
-                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62]'
+                  <MarqueeText
+                    isSelected={isSelected}
+                    className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 ${
+                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62] truncate'
                     }`}
                     style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
                   >
                     {labelContent}
-                  </div>
+                  </MarqueeText>
                 )}
 
                 {/* Toggle Switch (scaled down) */}
