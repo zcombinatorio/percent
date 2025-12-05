@@ -171,6 +171,77 @@ export class Moderator implements IModerator {
       // Select appropriate authority based on pool address
       const authority = this.getAuthorityForPool(params.spotPoolAddress);
 
+      // Build DAMM withdrawal callback if withdrawal data is provided
+      // Withdrawal metadata is stored after proposal save to satisfy FK constraint
+      let withdrawalMetadata: {
+        requestId: string;
+        signature: string;
+        percentage: number;
+        tokenA: string;
+        tokenB: string;
+        spotPrice: number;
+        poolAddress: string;
+      } | undefined;
+
+      let confirmDammWithdrawal: (() => Promise<void>) | undefined;
+      if (params.dammWithdrawal) {
+        const withdrawal = params.dammWithdrawal;
+        confirmDammWithdrawal = async () => {
+          this.logger.info('Confirming DAMM withdrawal', {
+            requestId: withdrawal.requestId,
+            poolAddress: withdrawal.poolAddress,
+            estimatedAmounts: withdrawal.estimatedAmounts,
+          });
+
+          // Confirm the withdrawal with DAMM API
+          const dammApiUrl = process.env.DAMM_API_URL || 'https://api.zcombinator.io';
+          const withdrawConfirmResponse = await fetch(
+            `${dammApiUrl}/damm/withdraw/confirm`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                signedTransaction: withdrawal.signedTransaction,
+                requestId: withdrawal.requestId,
+              }),
+            }
+          );
+
+          if (!withdrawConfirmResponse.ok) {
+            const error = (await withdrawConfirmResponse.json()) as { error?: string };
+            throw new Error(
+              `DAMM withdrawal confirm failed: ${error.error || withdrawConfirmResponse.statusText}`
+            );
+          }
+
+          const withdrawConfirmData = (await withdrawConfirmResponse.json()) as {
+            signature: string;
+            estimatedAmounts: { tokenA: string; tokenB: string };
+          };
+
+          this.logger.info('Confirmed DAMM withdrawal', {
+            signature: withdrawConfirmData.signature,
+            amounts: withdrawConfirmData.estimatedAmounts,
+          });
+
+          // Store withdrawal data in memory - will be persisted after proposal save
+          withdrawalMetadata = {
+            requestId: withdrawal.requestId,
+            signature: withdrawConfirmData.signature,
+            percentage: withdrawal.withdrawalPercentage,
+            tokenA: withdrawConfirmData.estimatedAmounts.tokenA,
+            tokenB: withdrawConfirmData.estimatedAmounts.tokenB,
+            spotPrice: withdrawal.ammPrice,
+            poolAddress: withdrawal.poolAddress,
+          };
+
+          this.logger.info('DAMM withdrawal confirmed, metadata will be stored after proposal save', {
+            proposalId: proposalIdCounter,
+            withdrawalSignature: withdrawConfirmData.signature,
+          });
+        };
+      }
+
       // Create proposal config from moderator config and params
       const proposalConfig: IProposalConfig = {
         id: proposalIdCounter,
@@ -192,6 +263,7 @@ export class Moderator implements IModerator {
         twap: params.twap,
         ammConfig: params.amm,
         logger: this.logger.createChild(`proposal-${proposalIdCounter}`),
+        confirmDammWithdrawal,
       };
 
       // Create new proposal with config object
@@ -203,7 +275,25 @@ export class Moderator implements IModerator {
       // Save to database FIRST (database is source of truth)
       await this.saveProposal(proposal);
       await this.persistenceService.saveModeratorState(proposalIdCounter, this.config);
-      
+
+      // Now store withdrawal metadata (after proposal exists to satisfy FK constraint)
+      if (withdrawalMetadata) {
+        await this.persistenceService.storeWithdrawalMetadata(
+          proposalIdCounter,
+          withdrawalMetadata.requestId,
+          withdrawalMetadata.signature,
+          withdrawalMetadata.percentage,
+          withdrawalMetadata.tokenA,
+          withdrawalMetadata.tokenB,
+          withdrawalMetadata.spotPrice,
+          withdrawalMetadata.poolAddress
+        );
+        this.logger.info('Stored withdrawal metadata', {
+          proposalId: proposalIdCounter,
+          withdrawalSignature: withdrawalMetadata.signature,
+        });
+      }
+
       this.logger.info('Proposal initialized and saved');
       
       // Schedule automatic TWAP cranking (every minute)
@@ -228,6 +318,8 @@ export class Moderator implements IModerator {
       this.logger.error('Failed to create proposal', {
         error: error instanceof Error ? error.message : String(error)
       });
+      // Increment proposal ID counter even if proposal creation fails
+      await this.persistenceService.saveModeratorState(proposalIdCounter + 1, this.config);
       throw error;
     }
   }

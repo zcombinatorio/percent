@@ -408,8 +408,8 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       });
     }
 
-    // Step 1: Withdraw from DAMM pool (using whitelisted pool)
-    logger.info('[POST /] Withdrawing from DAMM pool', {
+    // Step 1: Build DAMM withdrawal transaction (confirmation happens in Proposal.initialize())
+    logger.info('[POST /] Building DAMM withdrawal transaction', {
       moderatorId,
       percentage: DAMM_WITHDRAWAL_PERCENTAGE,
       poolAddress
@@ -448,32 +448,9 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       unsignedTx.serialize({ requireAllSignatures: false })
     );
 
-    // Confirm the withdrawal (authority signature validates access)
-    const withdrawConfirmResponse = await fetch(`${process.env.DAMM_API_URL || 'https://api.zcombinator.io'}/damm/withdraw/confirm`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        signedTransaction: signedTxBase58,
-        requestId: withdrawBuildData.requestId
-      })
-    });
-
-    if (!withdrawConfirmResponse.ok) {
-      const error = await withdrawConfirmResponse.json() as { error?: string };
-      throw new Error(`DAMM withdrawal confirm failed: ${error.error || withdrawConfirmResponse.statusText}`);
-    }
-
-    const withdrawConfirmData = await withdrawConfirmResponse.json() as {
-      signature: string;
-      estimatedAmounts: { tokenA: string; tokenB: string };
-    };
-    logger.info('[POST /] Confirmed DAMM withdrawal', {
-      signature: withdrawConfirmData.signature,
-      amounts: withdrawConfirmData.estimatedAmounts
-    });
-
-    const initialBaseAmount = withdrawConfirmData.estimatedAmounts.tokenA;
-    const initialQuoteAmount = withdrawConfirmData.estimatedAmounts.tokenB;
+    // Use estimated amounts for initial liquidity (actual amounts confirmed during initialize)
+    const initialBaseAmount = withdrawBuildData.estimatedAmounts.tokenA;
+    const initialQuoteAmount = withdrawBuildData.estimatedAmounts.tokenB;
 
     // Step 2: Fetch total supply using pool metadata
     const heliusApiKey = process.env.HELIUS_API_KEY;
@@ -502,7 +479,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       ammPrice
     });
 
-    // Create the proposal with DAMM-provided amounts
+    // Create the proposal with DAMM withdrawal data (confirmation happens in initialize())
     const proposal = await moderator.createProposal({
       title: body.title,
       description: body.description,
@@ -521,20 +498,16 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       amm: {
         initialBaseAmount: new BN(initialBaseAmount),
         initialQuoteAmount: new BN(initialQuoteAmount)
+      },
+      dammWithdrawal: {
+        requestId: withdrawBuildData.requestId,
+        signedTransaction: signedTxBase58,
+        withdrawalPercentage: DAMM_WITHDRAWAL_PERCENTAGE,
+        estimatedAmounts: withdrawBuildData.estimatedAmounts,
+        poolAddress,
+        ammPrice
       }
     });
-
-    // Store withdrawal metadata automatically
-    await persistenceService.storeWithdrawalMetadata(
-      proposal.config.id,
-      withdrawBuildData.requestId,
-      withdrawConfirmData.signature,
-      DAMM_WITHDRAWAL_PERCENTAGE,
-      initialBaseAmount,
-      initialQuoteAmount,
-      ammPrice,
-      poolAddress
-    );
 
     logger.info('[POST /] Created new proposal with DAMM withdrawal', {
       proposalId: proposal.config.id,
@@ -542,8 +515,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       title: body.title,
       proposalLength: body.proposalLength,
       totalSupply,
-      ammPrice,
-      withdrawalSignature: withdrawConfirmData.signature
+      ammPrice
     });
 
     res.status(201).json({

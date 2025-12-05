@@ -63,6 +63,7 @@ export interface IProposalConfig {
     initialQuoteAmount: BN;                     // Initial quote token liquidity (same for both AMMs)
   };
   logger: LoggerService;
+  confirmDammWithdrawal?: () => Promise<void>;  // Optional callback to confirm DAMM withdrawal during initialize
 }
 
 /**
