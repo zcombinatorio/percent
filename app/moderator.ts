@@ -171,6 +171,67 @@ export class Moderator implements IModerator {
       // Select appropriate authority based on pool address
       const authority = this.getAuthorityForPool(params.spotPoolAddress);
 
+      // Build DAMM withdrawal callback if withdrawal data is provided
+      let confirmDammWithdrawal: (() => Promise<void>) | undefined;
+      if (params.dammWithdrawal) {
+        const withdrawal = params.dammWithdrawal;
+        confirmDammWithdrawal = async () => {
+          this.logger.info('Confirming DAMM withdrawal', {
+            requestId: withdrawal.requestId,
+            poolAddress: withdrawal.poolAddress,
+            estimatedAmounts: withdrawal.estimatedAmounts,
+          });
+
+          // Confirm the withdrawal with DAMM API
+          const dammApiUrl = process.env.DAMM_API_URL || 'https://api.zcombinator.io';
+          const withdrawConfirmResponse = await fetch(
+            `${dammApiUrl}/damm/withdraw/confirm`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                signedTransaction: withdrawal.signedTransaction,
+                requestId: withdrawal.requestId,
+              }),
+            }
+          );
+
+          if (!withdrawConfirmResponse.ok) {
+            const error = (await withdrawConfirmResponse.json()) as { error?: string };
+            throw new Error(
+              `DAMM withdrawal confirm failed: ${error.error || withdrawConfirmResponse.statusText}`
+            );
+          }
+
+          const withdrawConfirmData = (await withdrawConfirmResponse.json()) as {
+            signature: string;
+            estimatedAmounts: { tokenA: string; tokenB: string };
+          };
+
+          this.logger.info('Confirmed DAMM withdrawal', {
+            signature: withdrawConfirmData.signature,
+            amounts: withdrawConfirmData.estimatedAmounts,
+          });
+
+          // Store withdrawal metadata
+          await this.persistenceService.storeWithdrawalMetadata(
+            proposalIdCounter,
+            withdrawal.requestId,
+            withdrawConfirmData.signature,
+            withdrawal.withdrawalPercentage,
+            withdrawConfirmData.estimatedAmounts.tokenA,
+            withdrawConfirmData.estimatedAmounts.tokenB,
+            withdrawal.ammPrice,
+            withdrawal.poolAddress
+          );
+
+          this.logger.info('Stored withdrawal metadata', {
+            proposalId: proposalIdCounter,
+            withdrawalSignature: withdrawConfirmData.signature,
+          });
+        };
+      }
+
       // Create proposal config from moderator config and params
       const proposalConfig: IProposalConfig = {
         id: proposalIdCounter,
@@ -192,6 +253,7 @@ export class Moderator implements IModerator {
         twap: params.twap,
         ammConfig: params.amm,
         logger: this.logger.createChild(`proposal-${proposalIdCounter}`),
+        confirmDammWithdrawal,
       };
 
       // Create new proposal with config object

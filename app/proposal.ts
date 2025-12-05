@@ -141,6 +141,7 @@ export class Proposal {
   /**
    * Initializes the proposal's blockchain components
    * Deploys AMMs, vaults, and starts TWAP oracle recording
+   * If DAMM withdrawal data is provided, withdraws liquidity from spot pool
    * Uses connection, authority, and decimals from constructor config
    */
   async initialize(): Promise<void> {
@@ -183,6 +184,12 @@ export class Proposal {
       .activate(this.config.authority.publicKey, vaultPda)
       .rpc();
 
+    // Withdraw Liquidity from Spot (if callback provided)
+    if (this.config.confirmDammWithdrawal) {
+      await this.config.confirmDammWithdrawal();
+    }
+
+
     // Split regular tokens through vaults to get conditional tokens for AMM seeding
     // The authority needs to have regular tokens to split
     // Splitting gives equal amounts of pass and fail tokens
@@ -224,7 +231,6 @@ export class Proposal {
         this.config.ammConfig.initialQuoteAmount
       );
     }
-
     // Set AMMs in TWAP oracle so it can track prices
     this.twapOracle.setAMMs(this.AMMs);
 
@@ -427,6 +433,7 @@ export class Proposal {
         initialQuoteAmount: new BN(data.ammConfig.initialQuoteAmount),
       },
       logger: config.logger,
+      // Note: confirmDammWithdrawal callback is not restored during deserialization since it's only used during initialize
     };
 
     // Create proposal instance

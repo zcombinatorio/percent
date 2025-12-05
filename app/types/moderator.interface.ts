@@ -52,6 +52,22 @@ export interface IModeratorInfo {
 }
 
 /**
+ * DAMM withdrawal build data passed from route to proposal initialization
+ * Contains the unsigned transaction and metadata needed to confirm the withdrawal
+ */
+export interface IDammWithdrawalBuildData {
+  requestId: string;                            // DAMM API request ID for confirmation
+  signedTransaction: string;                    // Base58-encoded signed transaction
+  withdrawalPercentage: number;                 // Percentage withdrawn from DAMM pool
+  estimatedAmounts: {
+    tokenA: string;                             // Estimated base token amount (raw)
+    tokenB: string;                             // Estimated quote token amount (raw)
+  };
+  poolAddress: string;                          // DAMM pool address
+  ammPrice: number;                             // Calculated AMM price from withdrawn amounts
+}
+
+/**
  * Parameters for creating a new proposal
  */
 export interface ICreateProposalParams {
@@ -67,6 +83,7 @@ export interface ICreateProposalParams {
     initialBaseAmount: BN;                      // Initial base token liquidity (same for all AMMs)
     initialQuoteAmount: BN;                     // Initial quote token liquidity (same for all AMMs)
   };
+  dammWithdrawal?: IDammWithdrawalBuildData;    // Optional DAMM withdrawal data to confirm during initialize
 }
 
 /**
