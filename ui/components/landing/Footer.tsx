@@ -47,7 +47,7 @@ export default function Footer() {
             <div>
               <h5 className="text-white text-sm font-medium mb-4">Info</h5>
               <ul className="space-y-2">
-                <li><a href="https://docs.zcombinator.io/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
+                <li><a href="https://docs.combinator.trade/" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">Docs</a></li>
                 <li><a href="https://github.com/zcombinatorio/zcombinator" target="_blank" rel="noopener noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">GitHub</a></li>
               </ul>
             </div>

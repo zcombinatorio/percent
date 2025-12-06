@@ -60,7 +60,7 @@ export default function Header() {
               <span className="hidden sm:inline text-sm">GitHub</span>
             </a>
             <a
-              href="https://docs.zcombinator.io/"
+              href="https://docs.combinator.trade/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-white transition-colors"
