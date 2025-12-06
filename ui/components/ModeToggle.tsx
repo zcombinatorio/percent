@@ -139,7 +139,7 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-1 md:gap-4">
         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2 text-center" style={{ color: '#DDDDD7' }}>
-          II. Select Coin
+          II. Select Coin (TWAP)
         </span>
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
           {sortedIndices.map((originalIndex, rank) => {
@@ -150,9 +150,15 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
 
             const labelContent = (
               <>
-                {rank + 1}. {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
+                {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
               </>
             );
+
+            // Color logic: winning option (rank 0) gets blue, others get white/gray
+            const isWinning = rank === 0;
+            const textColor = isWinning
+              ? (isSelected ? '#BEE8FC' : '#77868C')  // Blue: bright when selected, darker when not
+              : (isSelected ? '#FFFFFF' : '#5B5E62'); // White/gray for non-winning
 
             return (
               <div
@@ -168,9 +174,9 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 hover:underline ${
-                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62] truncate'
+                      !isSelected && 'truncate'
                     }`}
-                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
+                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em', color: textColor }}
                   >
                     {isSelected ? (
                       <MarqueeText isSelected={isSelected} className="flex-1 min-w-0">
@@ -184,9 +190,9 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
                   <MarqueeText
                     isSelected={isSelected}
                     className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 ${
-                      isSelected ? 'text-[#FFFFFF]' : 'text-[#5B5E62] truncate'
+                      !isSelected && 'truncate'
                     }`}
-                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
+                    style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em', color: textColor }}
                   >
                     {labelContent}
                   </MarqueeText>
