@@ -39,21 +39,9 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
     const CHART_READY_TIMEOUT = 15000; // 15 seconds
 
     const initChart = async () => {
-      const logPrefix = `[Chart P${proposalId} M${market}]`;
-      const startTime = Date.now();
-      const log = (step: string, data?: any) => {
-        const elapsed = Date.now() - startTime;
-        console.log(`${logPrefix} [${elapsed}ms] ${step}`, data || '');
-      };
-
       try {
-        log('🚀 Starting chart initialization', { retry: chartRetryCount });
-
         // Fetch proposal details to get token/pool addresses
-        log('📡 Fetching proposal...');
-        const proposalFetchStart = Date.now();
         const proposal = await api.getProposal(proposalId, moderatorId);
-        log('✅ Proposal fetched', { took: Date.now() - proposalFetchStart + 'ms', hasVaultPDA: !!proposal?.vaultPDA });
         if (!proposal) {
           throw new Error('Failed to fetch proposal details');
         }
@@ -61,24 +49,18 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         // Get token address from vault state via SDK (on-chain)
         // Market is a numeric index (0-3 for quantum markets)
         // Use VaultType.Base to get the base vault's conditional mints
-        log('📡 Fetching vault state from RPC...');
-        const vaultFetchStart = Date.now();
         const { VaultType } = await import('@/lib/programs/vault');
         const vaultState = await fetchVaultState(new PublicKey(proposal.vaultPDA), VaultType.Base);
-        log('✅ Vault state fetched', { took: Date.now() - vaultFetchStart + 'ms', mintsCount: vaultState.conditionalMints?.length });
         const tokenAddress = vaultState.conditionalMints[market];
         const poolAddress = proposal.ammData?.[market]?.pool;
 
         if (!tokenAddress || !poolAddress) {
-          log('❌ Missing addresses', { tokenAddress, poolAddress, market });
           throw new Error(`Missing market ${market} addresses`);
         }
-        log('✅ Addresses resolved', { tokenAddress: tokenAddress.slice(0, 8) + '...', poolAddress: poolAddress?.slice(0, 8) + '...' });
 
         // Wait for TradingView library to load with timeout
         if (typeof window === 'undefined' || !window.TradingView) {
           retryCount++;
-          log('⏳ TradingView not loaded yet', { attempt: retryCount, maxRetries: MAX_RETRIES });
           if (retryCount >= MAX_RETRIES) {
             throw new Error(
               'TradingView library failed to load. This may be due to a CDN issue or ad blocker. ' +
@@ -89,38 +71,30 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
           setTimeout(initChart, 500);
           return;
         }
-        log('✅ TradingView library loaded');
 
         // Wait for container to be mounted in DOM
         if (!containerRef.current) {
           containerRetryCount++;
-          log('⏳ Container not ready', { attempt: containerRetryCount, maxRetries: MAX_CONTAINER_RETRIES });
           if (containerRetryCount >= MAX_CONTAINER_RETRIES) {
             throw new Error('Chart container failed to mount');
           }
           setTimeout(initChart, 100);
           return;
         }
-        log('✅ Container ready');
 
         // Check if component is still mounted
         if (!isMounted) {
-          log('⚠️ Component unmounted, aborting');
           return;
         }
 
         // Create datafeed with spot pool address for overlay support
-        log('📊 Creating datafeed...');
         const datafeed = new ProposalMarketDatafeed(proposalId, market, proposal.spotPoolAddress, moderatorId, marketLabel);
         datafeed.setAddresses(tokenAddress, poolAddress);
-        log('✅ Datafeed created');
 
         // Clear any existing widget
         containerRef.current.innerHTML = '';
 
         // Create widget
-        log('📊 Creating TradingView widget...');
-        const widgetCreateStart = Date.now();
         const widget = new window.TradingView.widget({
           container: containerRef.current,
           library_path: '/charting_library/charting_library/',
@@ -201,16 +175,12 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
             'mainSeriesProperties.areaStyle.linecolor': '#6ECC94',
           },
         });
-        log('✅ Widget constructor completed', { took: Date.now() - widgetCreateStart + 'ms' });
 
         widgetRef.current = widget;
 
         // Set timeout for chart ready - auto-retry if it doesn't fire
-        log('⏱️ Starting chart ready timeout', { timeout: CHART_READY_TIMEOUT + 'ms' });
         chartReadyTimeoutRef = setTimeout(() => {
           if (!isMounted) return;
-          log('❌ TIMEOUT: onChartReady never fired!', { waited: CHART_READY_TIMEOUT + 'ms' });
-          console.warn(`[Chart market-${market}] Chart ready timeout after ${CHART_READY_TIMEOUT}ms`);
 
           // Cleanup current widget
           if (widgetRef.current) {
@@ -224,7 +194,6 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
 
           // Retry or show error
           if (chartRetryCount < MAX_CHART_READY_RETRIES) {
-            console.log(`[Chart market-${market}] Retrying... (attempt ${chartRetryCount + 2}/${MAX_CHART_READY_RETRIES + 1})`);
             setChartRetryCount(prev => prev + 1);
           } else {
             setError('Chart failed to load. Please refresh the page.');
@@ -233,31 +202,25 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         }, CHART_READY_TIMEOUT);
 
         // Wait for chart to be ready before hiding loading state
-        log('⏳ Waiting for onChartReady callback...');
         widget.onChartReady(async () => {
           // Cancel timeout on success
           if (chartReadyTimeoutRef) {
             clearTimeout(chartReadyTimeoutRef);
             chartReadyTimeoutRef = null;
           }
-          log('🎉 onChartReady FIRED!', { totalTime: Date.now() - startTime + 'ms' });
-          console.log(`[Chart market-${market}] Chart ready`);
           const chart = widget.chart();
 
           setIsLoading(false);
-          log('✅ Loading state cleared, chart visible');
 
           // Add spot price overlay FIRST (if available)
           // Note: Compare study automatically switches to percentage mode
           if (proposal.spotPoolAddress) {
             try {
-              console.log(`[Chart market-${market}] Adding spot price overlay for pool ${proposal.spotPoolAddress}`);
-
               // Use the chart's createStudy method to add a line overlay
               // The 'Compare' study allows adding additional price series
               // The main datafeed (ProposalMarketDatafeed) handles 'SPOT-MARKET' symbol requests
               // WARNING: Compare study automatically switches to percentage mode!
-              const studyId = await chart.createStudy(
+              await chart.createStudy(
                 'Compare',     // indicator name
                 false,         // forceOverlay
                 false,         // lock
@@ -272,10 +235,7 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
                   'plot.linestyle': 0,          // Solid line
                 }
               );
-
-              console.log(`[Chart market-${market}] ✅ Spot price overlay added (study ID: ${studyId}, color: #9ca3af)`);
-            } catch (error) {
-              console.error(`[Chart market-${market}] ❌ Failed to add spot price overlay:`, error);
+            } catch {
               // Don't throw - chart should still work without overlay
             }
           }
@@ -290,24 +250,17 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
 
               if (rightScales && rightScales.length > 0) {
                 const currentMode = rightScales[0].getMode();
-                console.log(`[Chart market-${market}] Current price scale mode (after Compare): ${currentMode}`);
-
                 // Mode 0 = Normal, 1 = Log, 2 = Percentage, 3 = IndexedTo100
                 if (currentMode !== 0) {
                   rightScales[0].setMode(0); // Set to Normal mode
-                  const newMode = rightScales[0].getMode();
-                  console.log(`[Chart market-${market}] ✅ Forced Normal mode (was ${currentMode}, now ${newMode})`);
-                } else {
-                  console.log(`[Chart market-${market}] Price scale already in Normal mode`);
                 }
               }
             }
-          } catch (e) {
-            console.error(`[Chart market-${market}] Failed to set price scale mode:`, e);
+          } catch {
+            // Ignore price scale mode errors
           }
         });
       } catch (err) {
-        log('❌ ERROR during initialization', { error: err instanceof Error ? err.message : err });
         console.error('Error initializing chart:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chart');
         setIsLoading(false);

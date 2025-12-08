@@ -21,11 +21,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { getAccount, getAssociatedTokenAddress } from '@solana/spl-token';
 
-interface WalletBalances {
+interface WalletBalancesState {
   sol: number;
   baseToken: number; // Dynamic token balance (ZC, OOGWAY, etc.)
   loading: boolean;
   error: string | null;
+}
+
+interface WalletBalances extends WalletBalancesState {
   refetch: () => void;
 }
 
@@ -40,7 +43,7 @@ export function useWalletBalances({
   baseMint,
   baseDecimals = 6,
 }: UseWalletBalancesParams): WalletBalances {
-  const [balances, setBalances] = useState<WalletBalances>({
+  const [balances, setBalances] = useState<WalletBalancesState>({
     sol: 0,
     baseToken: 0,
     loading: false,

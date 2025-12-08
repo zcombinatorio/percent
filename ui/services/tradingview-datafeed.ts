@@ -59,9 +59,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
    * Called when the chart library is ready
    */
   onReady(callback: (config: any) => void): void {
-    console.log(`[Datafeed P${this.proposalId} M${this.market}] 🔧 onReady called`);
     setTimeout(() => {
-      console.log(`[Datafeed P${this.proposalId} M${this.market}] ✅ onReady callback fired`);
       callback({
         supported_resolutions: ['1', '5', '15', '60', '240', '1D'] as ResolutionString[],
         supports_marks: false,
@@ -86,7 +84,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     onResolve: (symbolInfo: LibrarySymbolInfo) => void,
     onError: (reason: string) => void
   ): void {
-    console.log(`[Datafeed P${this.proposalId} M${this.market}] 🔍 resolveSymbol called`, { symbolName });
     // Check if this is a spot market request
     const isSpotMarket = symbolName === 'SPOT-MARKET';
 
@@ -114,10 +111,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       format: 'price',
     };
 
-    setTimeout(() => {
-      console.log(`[Datafeed P${this.proposalId} M${this.market}] ✅ resolveSymbol resolved`, { symbolName, displayName });
-      onResolve(symbolInfo);
-    }, 0);
+    setTimeout(() => onResolve(symbolInfo), 0);
   }
 
   /**
@@ -130,22 +124,11 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     onResult: HistoryCallback,
     onError: (reason: string) => void
   ): Promise<void> {
-    const getBarsStart = Date.now();
     try {
-      const { from, to, countBack, firstDataRequest } = periodParams;
+      const { from, to } = periodParams;
 
       // Detect if this is a spot market request (check ticker, not name)
       const isSpotMarket = symbolInfo.ticker === 'SPOT-MARKET';
-      const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
-      const logPrefix = `[Datafeed P${this.proposalId} ${marketLabel}]`;
-
-      console.log(`${logPrefix} 📊 getBars called:`, {
-        from: new Date(from * 1000).toISOString(),
-        to: new Date(to * 1000).toISOString(),
-        countBack,
-        firstDataRequest,
-        isSpotMarket
-      });
 
       // Map TradingView resolution to our API interval format
       const intervalMap: Record<string, string> = {
@@ -172,34 +155,26 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      console.log(`${logPrefix} 📡 Fetching from API...`);
-      const fetchStart = Date.now();
       let response: Response;
       try {
         response = await fetch(url, { signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
       }
-      console.log(`${logPrefix} ✅ API response received`, { took: Date.now() - fetchStart + 'ms', status: response.status });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log(`${logPrefix} 📦 Data parsed`, { rawItemCount: data.data?.length || 0 });
 
       if (!data.data || data.data.length === 0) {
-        console.log(`${logPrefix} ⚠️ No data from API, returning noData=true`, { totalTime: Date.now() - getBarsStart + 'ms' });
         onResult([], { noData: true });
         return;
       }
 
       // Filter data for the specific market and convert to bars
       // Note: REST API sends 'spot' string, but accept -1 too for consistency
-      const rawMarkets = [...new Set(data.data.map((item: any) => item.market))];
-      console.log(`${logPrefix} 🔍 Available markets in data:`, rawMarkets, `(looking for: ${isSpotMarket ? 'spot' : this.market})`);
-
       const bars: Bar[] = data.data
         .filter((item: any) => isSpotMarket ? (item.market === 'spot' || item.market === -1) : item.market === this.market)
         .map((item: ChartDataPoint) => ({
@@ -213,24 +188,15 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         .filter((bar: Bar) => !isNaN(bar.open) && !isNaN(bar.high) && !isNaN(bar.low) && !isNaN(bar.close))
         .sort((a: Bar, b: Bar) => a.time - b.time);
 
-      console.log(`${logPrefix} 📊 Returning ${bars.length} bars:`, {
-        firstBar: bars[0] ? new Date(bars[0].time).toISOString() : 'none',
-        lastBar: bars[bars.length - 1] ? new Date(bars[bars.length - 1].time).toISOString() : 'none',
-        samplePrice: bars[0]?.close,
-        totalTime: Date.now() - getBarsStart + 'ms'
-      });
-
       if (bars.length === 0) {
-        console.log(`${logPrefix} ⚠️ No bars after filtering, returning noData=true`);
         onResult([], { noData: true });
         return;
       }
 
-      console.log(`${logPrefix} ✅ getBars SUCCESS`, { barsCount: bars.length, totalTime: Date.now() - getBarsStart + 'ms' });
       onResult(bars, { noData: false });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[Datafeed P${this.proposalId} market-${this.market}] ❌ getBars FAILED:`, { error: errorMsg, totalTime: Date.now() - getBarsStart + 'ms' });
+      console.error('Error fetching bars:', error);
       onError(errorMsg);
     }
   }
@@ -247,9 +213,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   ): Promise<void> {
     // Detect if this is a spot market request (check ticker, not name)
     const isSpotMarket = symbolInfo.ticker === 'SPOT-MARKET';
-    const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
-
-    console.log(`[${marketLabel}] subscribeBars called for resolution ${resolution}, listenerGuid: ${listenerGuid}`);
 
     // Create bar aggregator for this resolution
     const aggregator = new BarAggregator(resolution);
@@ -259,20 +222,16 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     this.subscribers.set(listenerGuid, { callback: onTick, aggregator, isSpotMarket });
 
-    console.log(`[${marketLabel}] Subscribers count after add: ${this.subscribers.size}`);
-
     // Subscribe to both trade and price updates via WebSocket
     const priceService = getPriceStreamService();
 
     if (!isSpotMarket) {
       // Subscribe to trade updates for conditional markets
       priceService.subscribeToTrades(this.proposalId, this.handleTradeUpdate.bind(this));
-      console.log(`[${marketLabel}] Subscribed to real-time trade updates for proposal ${this.proposalId}`);
     }
 
     // Subscribe to chart price updates for all markets (conditional and spot)
     priceService.subscribeToChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
-    console.log(`[${marketLabel}] Subscribed to real-time price updates for proposal ${this.proposalId}`);
   }
 
   /**
@@ -282,7 +241,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     try {
       // For spot market use 'spot', otherwise use numeric market index
       const marketFilter: number | 'spot' = isSpotMarket ? 'spot' : this.market;
-      const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
 
       // Map resolution to API interval format
       const intervalMap: Record<string, string> = {
@@ -317,14 +275,12 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       }
 
       if (!response.ok) {
-        console.warn(`[${marketLabel}] Failed to fetch last bar for seeding`);
         return;
       }
 
       const data = await response.json();
 
       if (!data.data || data.data.length === 0) {
-        console.log(`[${marketLabel}] No historical data to seed aggregator`);
         return;
       }
 
@@ -338,17 +294,11 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         const lastPrice = parseFloat(lastBar.close);
         const lastTime = new Date(lastBar.timestamp).getTime();
 
-        console.log(`[${marketLabel}] Seeding aggregator with last bar:`, {
-          time: new Date(lastTime).toISOString(),
-          close: lastPrice
-        });
-
         // Create a synthetic trade at the last bar time to seed the aggregator
         // This ensures the next bar will open at this close price
         aggregator.updateBar(lastPrice, 0, lastTime);
       }
-    } catch (error) {
-      console.error(`[market-${this.market}] Error seeding aggregator:`, error);
+    } catch {
       // Continue without seeding - not critical
     }
   }
@@ -358,26 +308,18 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
    * Handle incoming trade updates
    */
   private handleTradeUpdate(trade: TradeUpdate): void {
-    console.log(`[${this.market}] Trade received for ${trade.market}:`, trade);
-
     // Filter for our market only
     if (trade.market !== this.market) {
-      console.log(`[${this.market}] Ignoring trade for ${trade.market} market`);
       return;
     }
 
-    console.log(`[${this.market}] Processing trade - subscribers: ${this.subscribers.size}`);
-    console.log(`[${this.market}] Trade timestamp: ${new Date(trade.timestamp).toISOString()} (${trade.timestamp})`);
-
     // Use marketCapUsd if available (new backend), otherwise price (legacy/old backend)
     const marketCapUSD = trade.marketCapUsd ?? trade.price;
-    console.log(`[${this.market}] Market cap from trade: $${marketCapUSD.toFixed(2)}`);
 
     // Update all active subscribers (skip spot market subscribers)
     for (const [listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
       // Skip spot market subscribers - they get updates from backend periodic recording
       if (isSpotMarket) {
-        console.log(`[${this.market}] Skipping spot market subscriber ${listenerGuid}`);
         continue;
       }
 
@@ -391,19 +333,8 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
         // Send updated bar to TradingView
         callback(updatedBar);
-
-        console.log(`[${this.market}] Updated bar for ${listenerGuid}:`, {
-          time: new Date(updatedBar.time).toISOString(),
-          timeMs: updatedBar.time,
-          marketCapUSD: marketCapUSD,
-          open: updatedBar.open,
-          high: updatedBar.high,
-          low: updatedBar.low,
-          close: updatedBar.close,
-          volume: updatedBar.volume
-        });
       } catch (error) {
-        console.error(`[${this.market}] Error updating bar for ${listenerGuid}:`, error);
+        console.error(`Error updating bar for ${listenerGuid}:`, error);
       }
     }
   }
@@ -412,16 +343,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
    * Handle incoming price updates from scheduler
    */
   private handlePriceUpdate(priceUpdate: ChartPriceUpdate): void {
-    console.log(`[Datafeed ${this.market}] 📊 Price update received:`, {
-      proposalId: priceUpdate.proposalId,
-      market: priceUpdate.market,
-      price: priceUpdate.price,
-      timestamp: new Date(priceUpdate.timestamp).toISOString(),
-      subscribersCount: this.subscribers.size
-    });
-
     // Update all subscribers that match this market
-    let updatedCount = 0;
     for (const [listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
       // Match spot market subscribers to spot prices, pass/fail subscribers to their respective prices
       // Note: REST API sends 'spot' string, WebSocket sends -1 number - accept both
@@ -430,7 +352,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         : priceUpdate.market === this.market;
 
       if (!marketMatches) {
-        console.log(`[Datafeed ${this.market}] Skipping subscriber ${listenerGuid}: market mismatch (subscriber wants ${isSpotMarket ? 'spot' : this.market}, update is ${priceUpdate.market})`);
         continue;
       }
 
@@ -448,22 +369,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
         // Send updated bar to TradingView
         callback(updatedBar);
-        updatedCount++;
-
-        console.log(`[Datafeed ${this.market}] ✅ Bar updated for ${listenerGuid}:`, {
-          time: new Date(updatedBar.time).toISOString(),
-          timeMs: updatedBar.time,
-          marketCapUSD: marketCapUSD,
-          open: updatedBar.open,
-          high: updatedBar.high,
-          low: updatedBar.low,
-          close: updatedBar.close,
-        });
       } catch (error) {
-        console.error(`[Datafeed ${this.market}] ❌ Error updating bar for ${listenerGuid}:`, error);
+        console.error(`Error updating bar for ${listenerGuid}:`, error);
       }
     }
-    console.log(`[Datafeed ${this.market}] Price update complete: ${updatedCount}/${this.subscribers.size} subscriber(s) updated`);
   }
 
   /**
@@ -477,7 +386,6 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       const priceService = getPriceStreamService();
       priceService.unsubscribeFromTrades(this.proposalId, this.handleTradeUpdate.bind(this));
       priceService.unsubscribeFromChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
-      console.log(`[${this.market}] Unsubscribed from trade and price updates`);
     }
   }
 }
