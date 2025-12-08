@@ -56,7 +56,7 @@ export function ChartBox({
   };
 
   return (
-    <div className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 flex flex-col ${className || ''}`}>
+    <div className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 flex flex-col overflow-hidden min-h-0 ${className || ''}`}>
       {/* Header with inline toggle and volume */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
@@ -114,7 +114,8 @@ export function ChartBox({
           </div>
         </div>
       ) : (
-        <div className="h-[480px] md:h-auto md:flex-1 overflow-y-auto scrollbar-hide border border-[#191919] rounded-[6px]">
+        <div className="h-[480px] md:flex-1 md:min-h-0 relative border border-[#191919] rounded-[6px]">
+          <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
           <table className="w-full text-sm">
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>
@@ -341,6 +342,7 @@ export function ChartBox({
             )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

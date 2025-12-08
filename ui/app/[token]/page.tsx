@@ -263,7 +263,7 @@ export default function HomePage() {
                 {/* 2-column layout: 2/3 left, 1/3 right */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Left Column (2/3 width) */}
-                  <div className="contents md:flex md:col-span-2 md:flex-col md:gap-4 md:pb-12">
+                  <div className="contents md:flex md:col-span-2 md:flex-col md:gap-4 md:pb-12 md:min-h-0">
                     {/* Top Row: Title/Description and Time Left */}
                     <div className="flex flex-col md:flex-row gap-4 md:items-stretch order-1">
                       {/* Title and Description */}
@@ -344,7 +344,7 @@ export default function HomePage() {
                     </div>
 
                     {/* Chart */}
-                    <div className="order-4 md:order-2 md:flex-1 md:flex md:flex-col">
+                    <div className="order-4 md:order-2 md:flex-1 md:flex md:flex-col md:min-h-0">
                       <ChartBox
                         className="md:flex-1"
                         proposalId={proposal.id}
