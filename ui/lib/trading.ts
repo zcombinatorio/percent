@@ -20,7 +20,7 @@
 import { PublicKey, Transaction } from '@solana/web3.js';
 import toast from 'react-hot-toast';
 import { buildApiUrl } from './api-utils';
-import { fetchUserBalances, redeemWinnings, VaultType, type UserBalancesResponse } from './programs/vault';
+import { fetchUserBalanceForWinningMint, redeemWinnings, VaultType } from './programs/vault';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -103,17 +103,17 @@ export async function claimWinnings(config: {
   const toastId = toast.loading('Claiming winnings from both vaults...');
 
   try {
-    // Get user balances to determine which vault types have claimable tokens
-    const balances = await fetchUserBalances(
+    // Get user balances for the winning market only
+    // Uses Promise.allSettled internally to gracefully handle network errors
+    const winningBalances = await fetchUserBalanceForWinningMint(
       new PublicKey(vaultPDA),
       new PublicKey(userAddress),
-      proposalId
+      winningMarketIndex
     );
 
-    // Check if user has winning tokens in the winning market index
-    // Use conditionalBalances array for N-ary quantum markets
-    const hasBaseTokens = parseFloat(balances.base.conditionalBalances[winningMarketIndex] || '0') > 0;
-    const hasQuoteTokens = parseFloat(balances.quote.conditionalBalances[winningMarketIndex] || '0') > 0;
+    // Check if user has winning tokens
+    const hasBaseTokens = parseFloat(winningBalances.baseConditionalBalance) > 0;
+    const hasQuoteTokens = parseFloat(winningBalances.quoteConditionalBalance) > 0;
 
     const vaultTypesToRedeem: VaultType[] = [];
     if (hasBaseTokens) vaultTypesToRedeem.push(VaultType.Base);

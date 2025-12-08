@@ -19,9 +19,14 @@
 
 import { useMemo } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
 
 export function usePrivyWallet() {
-  const { ready, authenticated, user, login, logout } = usePrivy();
+  const { ready: privyReady, authenticated, user, login, logout } = usePrivy();
+  const { ready: solanaWalletsReady } = useSolanaWallets();
+
+  // Both Privy SDK and Solana wallets must be ready for transactions
+  const ready = privyReady && solanaWalletsReady;
 
   const walletAddress = useMemo(() => {
     if (!user) return null;

@@ -52,7 +52,7 @@ export default function HomePage() {
   const [isPassMode, setIsPassMode] = useState(true);
 
   // Fetch wallet balances for current token
-  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+  const { sol: solBalance, baseToken: baseTokenBalance, refetch: refetchWalletBalances } = useWalletBalances({
     walletAddress,
     baseMint,
     baseDecimals,
@@ -119,6 +119,12 @@ export default function HomePage() {
   const handleSelectProposal = useCallback((id: number) => {
     setSelectedProposalId(id);
   }, []);
+
+  // Combined refetch callback for all balance-affecting operations
+  const handleBalanceChange = useCallback(() => {
+    refetchBalances();
+    refetchWalletBalances();
+  }, [refetchBalances, refetchWalletBalances]);
 
   const handleModeToggle = useCallback((newIsPassMode: boolean) => {
     setIsPassMode(newIsPassMode);
@@ -257,7 +263,7 @@ export default function HomePage() {
                 {/* 2-column layout: 2/3 left, 1/3 right */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Left Column (2/3 width) */}
-                  <div className="contents md:flex md:col-span-2 md:flex-col md:gap-4 md:pb-12">
+                  <div className="contents md:flex md:col-span-2 md:flex-col md:gap-4 md:pb-12 md:min-h-0">
                     {/* Top Row: Title/Description and Time Left */}
                     <div className="flex flex-col md:flex-row gap-4 md:items-stretch order-1">
                       {/* Title and Description */}
@@ -338,7 +344,7 @@ export default function HomePage() {
                     </div>
 
                     {/* Chart */}
-                    <div className="order-4 md:order-2 md:flex-1 md:flex md:flex-col">
+                    <div className="order-4 md:order-2 md:flex-1 md:flex md:flex-col md:min-h-0">
                       <ChartBox
                         className="md:flex-1"
                         proposalId={proposal.id}
@@ -364,7 +370,7 @@ export default function HomePage() {
                         solBalance={solBalance}
                         baseTokenBalance={baseTokenBalance}
                         userBalances={userBalances}
-                        onDepositSuccess={refetchBalances}
+                        onDepositSuccess={handleBalanceChange}
                         tokenSymbol={tokenSymbol}
                         baseDecimals={baseDecimals}
                         proposalStatus={proposal.status as 'Pending' | 'Passed' | 'Failed'}
@@ -398,7 +404,7 @@ export default function HomePage() {
                             failPrice={livePrices[0] || 0.5}
                             proposalStatus={proposal.status as 'Pending' | 'Passed' | 'Failed'}
                             userBalances={userBalances}
-                            refetchBalances={refetchBalances}
+                            refetchBalances={handleBalanceChange}
                             onTradeSuccess={refetchTrades}
                             baseMint={baseMint}
                             tokenSymbol={tokenSymbol}

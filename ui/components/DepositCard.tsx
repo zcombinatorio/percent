@@ -26,7 +26,7 @@ interface DepositCardProps {
 }
 
 export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance, userBalances, onDepositSuccess, tokenSymbol = 'ZC', baseDecimals = 6, proposalStatus = 'Pending', winningMarketIndex }: DepositCardProps) {
-  const { authenticated, walletAddress, login } = usePrivyWallet();
+  const { ready, authenticated, walletAddress, login } = usePrivyWallet();
   const { signTransaction } = useTransactionSigner();
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
@@ -108,6 +108,11 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
       return;
     }
 
+    if (!ready) {
+      toast.error('Wallet initializing, please try again');
+      return;
+    }
+
     if (!walletAddress) {
       toast.error('No wallet address found');
       return;
@@ -157,12 +162,17 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
     } finally {
       setIsDepositing(false);
     }
-  }, [authenticated, walletAddress, amount, balanceError, selectedToken, baseDecimals, signTransaction, vaultPDA, login, onDepositSuccess]);
+  }, [authenticated, ready, walletAddress, amount, balanceError, selectedToken, baseDecimals, signTransaction, vaultPDA, login, onDepositSuccess]);
 
   // Handle withdraw
   const handleWithdraw = useCallback(async () => {
     if (!authenticated) {
       login();
+      return;
+    }
+
+    if (!ready) {
+      toast.error('Wallet initializing, please try again');
       return;
     }
 
@@ -215,12 +225,17 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
     } finally {
       setIsDepositing(false);
     }
-  }, [authenticated, walletAddress, amount, balanceError, selectedToken, baseDecimals, signTransaction, vaultPDA, login, onDepositSuccess]);
+  }, [authenticated, ready, walletAddress, amount, balanceError, selectedToken, baseDecimals, signTransaction, vaultPDA, login, onDepositSuccess]);
 
   // Handle claim (for completed markets)
   const handleClaim = useCallback(async () => {
     if (!authenticated) {
       login();
+      return;
+    }
+
+    if (!ready) {
+      toast.error('Wallet initializing, please try again');
       return;
     }
 
@@ -247,7 +262,7 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
     } finally {
       setIsDepositing(false);
     }
-  }, [authenticated, walletAddress, winningMarketIndex, proposalId, vaultPDA, signTransaction, login, onDepositSuccess]);
+  }, [authenticated, ready, walletAddress, winningMarketIndex, proposalId, vaultPDA, signTransaction, login, onDepositSuccess]);
 
   return (
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-2.5 pb-4 px-5 transition-all duration-300">

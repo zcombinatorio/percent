@@ -26,16 +26,34 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
   const widgetRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chartRetryCount, setChartRetryCount] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
     let retryCount = 0;
+    let containerRetryCount = 0;
+    let chartReadyTimeoutRef: NodeJS.Timeout | null = null;
     const MAX_RETRIES = 20; // 10 seconds max wait time (20 * 500ms)
+    const MAX_CONTAINER_RETRIES = 50; // 5 seconds max (50 * 100ms)
+    const MAX_CHART_READY_RETRIES = 3;
+    const CHART_READY_TIMEOUT = 15000; // 15 seconds
 
     const initChart = async () => {
+      const logPrefix = `[Chart P${proposalId} M${market}]`;
+      const startTime = Date.now();
+      const log = (step: string, data?: any) => {
+        const elapsed = Date.now() - startTime;
+        console.log(`${logPrefix} [${elapsed}ms] ${step}`, data || '');
+      };
+
       try {
+        log('🚀 Starting chart initialization', { retry: chartRetryCount });
+
         // Fetch proposal details to get token/pool addresses
+        log('📡 Fetching proposal...');
+        const proposalFetchStart = Date.now();
         const proposal = await api.getProposal(proposalId, moderatorId);
+        log('✅ Proposal fetched', { took: Date.now() - proposalFetchStart + 'ms', hasVaultPDA: !!proposal?.vaultPDA });
         if (!proposal) {
           throw new Error('Failed to fetch proposal details');
         }
@@ -43,18 +61,24 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         // Get token address from vault state via SDK (on-chain)
         // Market is a numeric index (0-3 for quantum markets)
         // Use VaultType.Base to get the base vault's conditional mints
+        log('📡 Fetching vault state from RPC...');
+        const vaultFetchStart = Date.now();
         const { VaultType } = await import('@/lib/programs/vault');
         const vaultState = await fetchVaultState(new PublicKey(proposal.vaultPDA), VaultType.Base);
+        log('✅ Vault state fetched', { took: Date.now() - vaultFetchStart + 'ms', mintsCount: vaultState.conditionalMints?.length });
         const tokenAddress = vaultState.conditionalMints[market];
         const poolAddress = proposal.ammData?.[market]?.pool;
 
         if (!tokenAddress || !poolAddress) {
+          log('❌ Missing addresses', { tokenAddress, poolAddress, market });
           throw new Error(`Missing market ${market} addresses`);
         }
+        log('✅ Addresses resolved', { tokenAddress: tokenAddress.slice(0, 8) + '...', poolAddress: poolAddress?.slice(0, 8) + '...' });
 
         // Wait for TradingView library to load with timeout
         if (typeof window === 'undefined' || !window.TradingView) {
           retryCount++;
+          log('⏳ TradingView not loaded yet', { attempt: retryCount, maxRetries: MAX_RETRIES });
           if (retryCount >= MAX_RETRIES) {
             throw new Error(
               'TradingView library failed to load. This may be due to a CDN issue or ad blocker. ' +
@@ -65,27 +89,38 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
           setTimeout(initChart, 500);
           return;
         }
+        log('✅ TradingView library loaded');
 
         // Wait for container to be mounted in DOM
         if (!containerRef.current) {
-          // Container not ready yet, retry
+          containerRetryCount++;
+          log('⏳ Container not ready', { attempt: containerRetryCount, maxRetries: MAX_CONTAINER_RETRIES });
+          if (containerRetryCount >= MAX_CONTAINER_RETRIES) {
+            throw new Error('Chart container failed to mount');
+          }
           setTimeout(initChart, 100);
           return;
         }
+        log('✅ Container ready');
 
         // Check if component is still mounted
         if (!isMounted) {
+          log('⚠️ Component unmounted, aborting');
           return;
         }
 
         // Create datafeed with spot pool address for overlay support
+        log('📊 Creating datafeed...');
         const datafeed = new ProposalMarketDatafeed(proposalId, market, proposal.spotPoolAddress, moderatorId, marketLabel);
         datafeed.setAddresses(tokenAddress, poolAddress);
+        log('✅ Datafeed created');
 
         // Clear any existing widget
         containerRef.current.innerHTML = '';
 
         // Create widget
+        log('📊 Creating TradingView widget...');
+        const widgetCreateStart = Date.now();
         const widget = new window.TradingView.widget({
           container: containerRef.current,
           library_path: '/charting_library/charting_library/',
@@ -166,15 +201,51 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
             'mainSeriesProperties.areaStyle.linecolor': '#6ECC94',
           },
         });
+        log('✅ Widget constructor completed', { took: Date.now() - widgetCreateStart + 'ms' });
 
         widgetRef.current = widget;
 
+        // Set timeout for chart ready - auto-retry if it doesn't fire
+        log('⏱️ Starting chart ready timeout', { timeout: CHART_READY_TIMEOUT + 'ms' });
+        chartReadyTimeoutRef = setTimeout(() => {
+          if (!isMounted) return;
+          log('❌ TIMEOUT: onChartReady never fired!', { waited: CHART_READY_TIMEOUT + 'ms' });
+          console.warn(`[Chart market-${market}] Chart ready timeout after ${CHART_READY_TIMEOUT}ms`);
+
+          // Cleanup current widget
+          if (widgetRef.current) {
+            try {
+              widgetRef.current.remove();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            widgetRef.current = null;
+          }
+
+          // Retry or show error
+          if (chartRetryCount < MAX_CHART_READY_RETRIES) {
+            console.log(`[Chart market-${market}] Retrying... (attempt ${chartRetryCount + 2}/${MAX_CHART_READY_RETRIES + 1})`);
+            setChartRetryCount(prev => prev + 1);
+          } else {
+            setError('Chart failed to load. Please refresh the page.');
+            setIsLoading(false);
+          }
+        }, CHART_READY_TIMEOUT);
+
         // Wait for chart to be ready before hiding loading state
+        log('⏳ Waiting for onChartReady callback...');
         widget.onChartReady(async () => {
+          // Cancel timeout on success
+          if (chartReadyTimeoutRef) {
+            clearTimeout(chartReadyTimeoutRef);
+            chartReadyTimeoutRef = null;
+          }
+          log('🎉 onChartReady FIRED!', { totalTime: Date.now() - startTime + 'ms' });
           console.log(`[Chart market-${market}] Chart ready`);
           const chart = widget.chart();
 
           setIsLoading(false);
+          log('✅ Loading state cleared, chart visible');
 
           // Add spot price overlay FIRST (if available)
           // Note: Compare study automatically switches to percentage mode
@@ -236,6 +307,7 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
           }
         });
       } catch (err) {
+        log('❌ ERROR during initialization', { error: err instanceof Error ? err.message : err });
         console.error('Error initializing chart:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chart');
         setIsLoading(false);
@@ -247,6 +319,9 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
     // Cleanup
     return () => {
       isMounted = false;
+      if (chartReadyTimeoutRef) {
+        clearTimeout(chartReadyTimeoutRef);
+      }
       if (widgetRef.current) {
         try {
           widgetRef.current.remove();
@@ -255,7 +330,7 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         }
       }
     };
-  }, [proposalId, market]);
+  }, [proposalId, market, chartRetryCount]);
 
   return (
     <div style={{ position: 'relative', height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}>

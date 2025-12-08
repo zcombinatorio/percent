@@ -26,6 +26,7 @@ interface WalletBalances {
   baseToken: number; // Dynamic token balance (ZC, OOGWAY, etc.)
   loading: boolean;
   error: string | null;
+  refetch: () => void;
 }
 
 interface UseWalletBalancesParams {
@@ -163,5 +164,12 @@ export function useWalletBalances({
     };
   }, [walletAddress, baseMint, fetchBalances]);
 
-  return balances;
+  // Create a stable refetch function
+  const refetch = useCallback(() => {
+    if (walletAddress) {
+      fetchBalances(walletAddress);
+    }
+  }, [walletAddress, fetchBalances]);
+
+  return { ...balances, refetch };
 }

@@ -59,7 +59,9 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
    * Called when the chart library is ready
    */
   onReady(callback: (config: any) => void): void {
+    console.log(`[Datafeed P${this.proposalId} M${this.market}] 🔧 onReady called`);
     setTimeout(() => {
+      console.log(`[Datafeed P${this.proposalId} M${this.market}] ✅ onReady callback fired`);
       callback({
         supported_resolutions: ['1', '5', '15', '60', '240', '1D'] as ResolutionString[],
         supports_marks: false,
@@ -84,6 +86,7 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     onResolve: (symbolInfo: LibrarySymbolInfo) => void,
     onError: (reason: string) => void
   ): void {
+    console.log(`[Datafeed P${this.proposalId} M${this.market}] 🔍 resolveSymbol called`, { symbolName });
     // Check if this is a spot market request
     const isSpotMarket = symbolName === 'SPOT-MARKET';
 
@@ -111,7 +114,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       format: 'price',
     };
 
-    setTimeout(() => onResolve(symbolInfo), 0);
+    setTimeout(() => {
+      console.log(`[Datafeed P${this.proposalId} M${this.market}] ✅ resolveSymbol resolved`, { symbolName, displayName });
+      onResolve(symbolInfo);
+    }, 0);
   }
 
   /**
@@ -124,14 +130,16 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     onResult: HistoryCallback,
     onError: (reason: string) => void
   ): Promise<void> {
+    const getBarsStart = Date.now();
     try {
       const { from, to, countBack, firstDataRequest } = periodParams;
 
       // Detect if this is a spot market request (check ticker, not name)
       const isSpotMarket = symbolInfo.ticker === 'SPOT-MARKET';
       const marketLabel = isSpotMarket ? 'spot' : `market-${this.market}`;
+      const logPrefix = `[Datafeed P${this.proposalId} ${marketLabel}]`;
 
-      console.log(`[${marketLabel}] getBars called:`, {
+      console.log(`${logPrefix} 📊 getBars called:`, {
         from: new Date(from * 1000).toISOString(),
         to: new Date(to * 1000).toISOString(),
         countBack,
@@ -159,22 +167,39 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         from: fromDate,
         to: toDate
       }, this.moderatorId);
-      const response = await fetch(url);
+
+      // Add timeout to prevent hanging forever
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      console.log(`${logPrefix} 📡 Fetching from API...`);
+      const fetchStart = Date.now();
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      console.log(`${logPrefix} ✅ API response received`, { took: Date.now() - fetchStart + 'ms', status: response.status });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log(`${logPrefix} 📦 Data parsed`, { rawItemCount: data.data?.length || 0 });
 
       if (!data.data || data.data.length === 0) {
-        console.log(`[${marketLabel}] No data from API, returning noData=true`);
+        console.log(`${logPrefix} ⚠️ No data from API, returning noData=true`, { totalTime: Date.now() - getBarsStart + 'ms' });
         onResult([], { noData: true });
         return;
       }
 
       // Filter data for the specific market and convert to bars
       // Note: REST API sends 'spot' string, but accept -1 too for consistency
+      const rawMarkets = [...new Set(data.data.map((item: any) => item.market))];
+      console.log(`${logPrefix} 🔍 Available markets in data:`, rawMarkets, `(looking for: ${isSpotMarket ? 'spot' : this.market})`);
+
       const bars: Bar[] = data.data
         .filter((item: any) => isSpotMarket ? (item.market === 'spot' || item.market === -1) : item.market === this.market)
         .map((item: ChartDataPoint) => ({
@@ -188,24 +213,25 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         .filter((bar: Bar) => !isNaN(bar.open) && !isNaN(bar.high) && !isNaN(bar.low) && !isNaN(bar.close))
         .sort((a: Bar, b: Bar) => a.time - b.time);
 
-      console.log(`[${marketLabel}] Returning ${bars.length} bars:`, {
+      console.log(`${logPrefix} 📊 Returning ${bars.length} bars:`, {
         firstBar: bars[0] ? new Date(bars[0].time).toISOString() : 'none',
         lastBar: bars[bars.length - 1] ? new Date(bars[bars.length - 1].time).toISOString() : 'none',
-        requestedFrom: new Date(from * 1000).toISOString(),
-        requestedTo: new Date(to * 1000).toISOString(),
-        samplePrice: bars[0]?.close
+        samplePrice: bars[0]?.close,
+        totalTime: Date.now() - getBarsStart + 'ms'
       });
 
       if (bars.length === 0) {
-        console.log(`[${marketLabel}] No bars after filtering, returning noData=true`);
+        console.log(`${logPrefix} ⚠️ No bars after filtering, returning noData=true`);
         onResult([], { noData: true });
         return;
       }
 
+      console.log(`${logPrefix} ✅ getBars SUCCESS`, { barsCount: bars.length, totalTime: Date.now() - getBarsStart + 'ms' });
       onResult(bars, { noData: false });
     } catch (error) {
-      console.error('Error fetching bars:', error);
-      onError(error instanceof Error ? error.message : 'Unknown error');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[Datafeed P${this.proposalId} market-${this.market}] ❌ getBars FAILED:`, { error: errorMsg, totalTime: Date.now() - getBarsStart + 'ms' });
+      onError(errorMsg);
     }
   }
 
@@ -278,7 +304,17 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
         from: fromDate,
         to: toDate
       }, this.moderatorId);
-      const response = await fetch(url);
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         console.warn(`[${marketLabel}] Failed to fetch last bar for seeding`);

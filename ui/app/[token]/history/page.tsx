@@ -26,7 +26,7 @@ export default function HistoryPage() {
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
 
   // Fetch wallet balances for current token
-  const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
+  const { sol: solBalance, baseToken: baseTokenBalance, refetch: refetchWalletBalances } = useWalletBalances({
     walletAddress,
     baseMint,
     baseDecimals,
@@ -52,6 +52,12 @@ export default function HistoryPage() {
       return;
     }
 
+    // Check if Privy SDK is fully ready - embedded wallet needs to be initialized
+    if (!ready) {
+      toast.error('Wallet initializing, please try again in a moment');
+      return;
+    }
+
     if (!walletAddress) {
       toast.error('No wallet address found');
       return;
@@ -68,8 +74,9 @@ export default function HistoryPage() {
         signTransaction,
       });
 
-      // Refresh claimable positions to update UI
+      // Refresh all balances after successful claim
       refetchClaimable();
+      refetchWalletBalances();
 
     } catch (error) {
       console.error('Claim failed:', error);
@@ -77,7 +84,7 @@ export default function HistoryPage() {
     } finally {
       setClaimingProposalId(null);
     }
-  }, [authenticated, login, walletAddress, signTransaction, refetchClaimable]);
+  }, [authenticated, ready, login, walletAddress, signTransaction, refetchClaimable, refetchWalletBalances]);
 
   // Memoize sorted proposals
   const sortedProposals = useMemo(() =>
