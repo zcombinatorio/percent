@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
+export type AuthMethod = 'whitelist' | 'token_balance';
+
 interface PoolMetadata {
   poolAddress: string;
   ticker: string;
@@ -8,6 +10,7 @@ interface PoolMetadata {
   quoteMint: string;
   baseDecimals: number;
   quoteDecimals: number;
+  minTokenBalance?: number;
 }
 
 interface WhitelistStatus {
@@ -16,6 +19,7 @@ interface WhitelistStatus {
   poolsWithMetadata: Array<{
     poolAddress: string;
     metadata: PoolMetadata | null;
+    authMethod?: AuthMethod;
   }>;
   isLoading: boolean;
   error: string | null;
