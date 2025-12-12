@@ -29,11 +29,17 @@ import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
 import { ProposalStatus } from '../../app/types/moderator.interface';
-import { getPoolsForWallet, POOL_METADATA } from '../config/whitelist';
+import { getPoolsForWallet, POOL_METADATA, getAuthorizedPoolsAsync, AuthMethod } from '../config/whitelist';
 import { VaultType } from '@zcomb/vault-sdk';
 
 const routerService = RouterService.getInstance();
 const logger = new LoggerService('api').createChild('proposals');
+
+// Initialize Solana connection for token balance checks
+const rpcUrl = process.env.HELIUS_API_KEY
+  ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
+  : process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const authConnection = new Connection(rpcUrl, 'confirmed');
 
 // DAMM Configuration (default if not set per-moderator)
 const DEFAULT_DAMM_WITHDRAWAL_PERCENTAGE = 12;
@@ -269,43 +275,49 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       });
     }
 
-    // Step 0: Validate whitelist and get pool address
+    // Step 0: Validate authorization (whitelist OR token balance) and get pool address
     const creatorWallet = body.creatorWallet;
     const spotPoolAddress = body.spotPoolAddress as string | undefined;
-    const authorizedPools = getPoolsForWallet(creatorWallet);
+
+    // Get authorized pools (checks both whitelist and token balance)
+    const authorizedPools = await getAuthorizedPoolsAsync(authConnection, creatorWallet);
 
     if (authorizedPools.length === 0) {
-      logger.warn('[POST /] Creator wallet not whitelisted', {
+      logger.warn('[POST /] Creator wallet not authorized', {
         creatorWallet,
         moderatorId
       });
       return res.status(403).json({
-        error: 'Creator wallet is not authorized to create decision markets',
+        error: 'Creator wallet is not authorized to create decision markets. You need to be whitelisted or hold the minimum required token balance.',
         wallet: creatorWallet
       });
     }
 
     // Use pool from request body if provided, otherwise default to first authorized
     let poolAddress: string;
+    let authMethod: AuthMethod;
     if (spotPoolAddress) {
       // Validate wallet is authorized for the requested pool
-      if (!authorizedPools.includes(spotPoolAddress)) {
+      const poolAuth = authorizedPools.find(p => p.poolAddress === spotPoolAddress);
+      if (!poolAuth) {
         logger.warn('[POST /] Wallet not authorized for requested pool', {
           creatorWallet,
           requestedPool: spotPoolAddress,
-          authorizedPools
+          authorizedPools: authorizedPools.map(p => p.poolAddress)
         });
         return res.status(403).json({
           error: 'Wallet not authorized for requested pool',
           wallet: creatorWallet,
           requestedPool: spotPoolAddress,
-          authorizedPools
+          authorizedPools: authorizedPools.map(p => p.poolAddress)
         });
       }
       poolAddress = spotPoolAddress;
+      authMethod = poolAuth.authMethod;
     } else {
       // Backward compatibility: use first authorized pool
-      poolAddress = authorizedPools[0];
+      poolAddress = authorizedPools[0].poolAddress;
+      authMethod = authorizedPools[0].authMethod;
     }
 
     const poolMetadata = POOL_METADATA[poolAddress];
@@ -318,11 +330,12 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       });
     }
 
-    logger.info('[POST /] Whitelist validation passed', {
+    logger.info('[POST /] Authorization validation passed', {
       creatorWallet,
       poolAddress,
       poolName: poolMetadata?.ticker || 'Unknown',
-      requestedPool: spotPoolAddress || 'not specified'
+      requestedPool: spotPoolAddress || 'not specified',
+      authMethod
     });
 
     // Validate user attestation (proves user authorized the withdrawal)

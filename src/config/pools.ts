@@ -17,6 +17,7 @@ export interface PoolMetadata {
   quoteDecimals: number;
   moderatorId: number;
   icon?: string;
+  minTokenBalance?: number; // Minimum base token balance required to create proposals (in whole tokens)
 }
 
 /**
@@ -98,6 +99,7 @@ const POOL_METADATA: Record<string, PoolMetadata> = {
     quoteDecimals: 9,
     moderatorId: 4,
     icon: 'https://arweave.net/r02Vz3jHG5_ZH0BrKbkIJOkF4LDcTTdLNljefYpJYJo',
+    minTokenBalance: 5_000_000, // 5M SURF required to create proposals
   },
 };
 

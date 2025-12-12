@@ -57,8 +57,10 @@ class GovernanceAPI {
       quoteDecimals: number;
       moderatorId: number;
       icon?: string;
+      minTokenBalance?: number;
     };
     isAuthorized?: boolean;
+    authMethod?: 'whitelist' | 'token_balance';
   } | null> {
     try {
       const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`);
@@ -84,8 +86,10 @@ class GovernanceAPI {
       quoteDecimals: number;
       moderatorId: number;
       icon?: string;
+      minTokenBalance?: number;
     };
     isAuthorized: boolean;
+    authMethod?: 'whitelist' | 'token_balance';
   } | null> {
     try {
       const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`, { wallet: walletAddress });
@@ -216,7 +220,9 @@ class GovernanceAPI {
         quoteDecimals: number;
         moderatorId: number;
         icon?: string;
+        minTokenBalance?: number;
       } | null;
+      authMethod?: 'whitelist' | 'token_balance';
     }>;
   } | null> {
     try {

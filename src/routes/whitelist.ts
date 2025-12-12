@@ -1,6 +1,21 @@
 import { Router } from 'express';
-import { getPoolsForWallet, POOL_METADATA, getPoolByName, isWalletAuthorizedForPool } from '../config/whitelist';
+import { Connection } from '@solana/web3.js';
+import {
+  getPoolsForWallet,
+  POOL_METADATA,
+  getPoolByName,
+  isWalletAuthorizedForPool,
+  getAuthorizedPoolsAsync,
+  isWalletAuthorizedForPoolAsync,
+  AuthMethod,
+} from '../config/whitelist';
 import { LoggerService } from '../../app/services/logger.service';
+
+// Initialize Solana connection for token balance checks
+const rpcUrl = process.env.HELIUS_API_KEY
+  ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
+  : process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const connection = new Connection(rpcUrl, 'confirmed');
 
 const logger = new LoggerService('api').createChild('whitelist');
 const router = Router();
@@ -8,14 +23,15 @@ const router = Router();
 /**
  * GET /api/whitelist/check
  * Check if a wallet is authorized to create decision markets
+ * Authorization can be via whitelist OR minimum token balance
  *
  * Query params:
  *   - wallet: The wallet public key to check
  *
  * Returns:
- *   - isWhitelisted: boolean
+ *   - isWhitelisted: boolean (true if authorized by any method)
  *   - pools: Array of pool addresses the wallet is authorized for
- *   - poolMetadata: Optional metadata about each pool
+ *   - poolsWithMetadata: Pool info with authorization method
  */
 router.get('/check', async (req, res, next) => {
   try {
@@ -36,29 +52,32 @@ router.get('/check', async (req, res, next) => {
       });
     }
 
-    const authorizedPools = getPoolsForWallet(wallet);
+    // Get authorized pools (checks both whitelist and token balance)
+    const authorizedPools = await getAuthorizedPoolsAsync(connection, wallet);
     const isWhitelisted = authorizedPools.length > 0;
 
-    // Build response with pool metadata
-    const poolsWithMetadata = authorizedPools.map(poolAddress => ({
+    // Build response with pool metadata and auth method
+    const poolsWithMetadata = authorizedPools.map(({ poolAddress, authMethod }) => ({
       poolAddress,
       metadata: POOL_METADATA[poolAddress] || null,
+      authMethod,
     }));
 
-    logger.info('[GET /check] Whitelist check completed', {
+    logger.info('[GET /check] Authorization check completed', {
       wallet,
       isWhitelisted,
       poolCount: authorizedPools.length,
+      authMethods: authorizedPools.map(p => p.authMethod),
     });
 
     res.json({
       wallet,
       isWhitelisted,
-      pools: authorizedPools,
+      pools: authorizedPools.map(p => p.poolAddress),
       poolsWithMetadata,
     });
   } catch (error) {
-    logger.error('[GET /check] Failed to check whitelist', {
+    logger.error('[GET /check] Failed to check authorization', {
       error: error instanceof Error ? error.message : String(error),
       wallet: req.query.wallet,
     });
@@ -97,14 +116,15 @@ router.get('/pools', async (req, res, next) => {
  * Get pool metadata by name/slug
  *
  * URL params:
- *   - name: The pool name/slug (e.g., 'zc', 'bangit')
+ *   - name: The pool name/slug (e.g., 'zc', 'surf')
  *
  * Query params (optional):
  *   - wallet: Check if this wallet is authorized for the pool
  *
  * Returns:
- *   - pool: Pool metadata object
+ *   - pool: Pool metadata object (includes minTokenBalance if configured)
  *   - isAuthorized: (if wallet provided) Whether wallet can create DMs for this pool
+ *   - authMethod: (if wallet provided) How the wallet was authorized ('whitelist' | 'token_balance')
  */
 router.get('/pool/:name', async (req, res, next) => {
   try {
@@ -122,8 +142,11 @@ router.get('/pool/:name', async (req, res, next) => {
     }
 
     let isAuthorized: boolean | undefined;
+    let authMethod: AuthMethod | null | undefined;
     if (wallet && typeof wallet === 'string') {
-      isAuthorized = isWalletAuthorizedForPool(wallet, pool.poolAddress);
+      const result = await isWalletAuthorizedForPoolAsync(connection, wallet, pool.poolAddress);
+      isAuthorized = result.isAuthorized;
+      authMethod = result.authMethod;
     }
 
     logger.info('[GET /pool/:name] Pool lookup completed', {
@@ -131,11 +154,13 @@ router.get('/pool/:name', async (req, res, next) => {
       poolAddress: pool.poolAddress,
       wallet: wallet || null,
       isAuthorized: isAuthorized ?? null,
+      authMethod: authMethod ?? null,
     });
 
     res.json({
       pool,
       ...(isAuthorized !== undefined && { isAuthorized }),
+      ...(authMethod !== undefined && { authMethod }),
     });
   } catch (error) {
     logger.error('[GET /pool/:name] Failed to lookup pool', {
