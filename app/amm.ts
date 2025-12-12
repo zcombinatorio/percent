@@ -120,11 +120,11 @@ export class AMM implements IAMM {
       maxSqrtPrice: MAX_SQRT_PRICE
     });
 
-    // Configure pool fees (10% base fee for prediction markets)
+    // Configure pool fees (0.5% fee in quote token only)
     const poolFees: PoolFeesParams = {
       baseFee: {
         feeSchedulerMode: 0,                     // Linear fee schedule
-        cliffFeeNumerator: new BN(10_000_000),   // 10% fee (10M / 100M)
+        cliffFeeNumerator: new BN(5_000_000),    // 0.5% fee (5M / 1B)
         numberOfPeriod: 0,                       // No fee decay
         reductionFactor: new BN(0),              // No reduction
         periodFrequency: new BN(0)               // No period changes
@@ -152,7 +152,7 @@ export class AMM implements IAMM {
       liquidityDelta: liquidityDelta,
       poolFees: poolFees,
       hasAlphaVault: false,                     // No alpha vault needed
-      collectFeeMode: 0,                        // Collect fees in both tokens
+      collectFeeMode: 1,                        // Collect fees in quote token only (OnlyB)
       activationPoint: null,                     // Activate immediately
       activationType: 1,                        // Activation by timestamp
       tokenAProgram: TOKEN_PROGRAM_ID,

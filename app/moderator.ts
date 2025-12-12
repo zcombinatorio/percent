@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Keypair } from '@solana/web3.js';
+import { Keypair, PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import { IModerator, IModeratorConfig, IModeratorInfo, ProposalStatus, ICreateProposalParams } from './types/moderator.interface';
 import { IExecutionConfig, PriorityFeeMode, Commitment } from './types/execution.interface';
 import { IProposal, IProposalConfig } from './types/proposal.interface';
@@ -340,6 +340,18 @@ export class Moderator implements IModerator {
       throw new Error(`Proposal with ID ${id} does not exist`);
     }
 
+    // Get authority for fee tracking
+    const spotPoolAddress = proposal.config.spotPoolAddress;
+    const authority = this.getAuthorityForPool(spotPoolAddress);
+
+    // Record SOL balance before finalization
+    const solBalanceBefore = await this.executionService.connection.getBalance(authority.publicKey);
+    this.logger.info('Recorded SOL balance before finalization', {
+      proposalId: id,
+      solBalanceBefore,
+      solBalanceBeforeSOL: solBalanceBefore / LAMPORTS_PER_SOL
+    });
+
     const [status, winningIndex] = await proposal.finalize();
     await this.saveProposal(proposal);
 
@@ -349,10 +361,147 @@ export class Moderator implements IModerator {
       this.logger.info('Waiting for RPC to sync after finalization', { proposalId: id });
       await new Promise(resolve => setTimeout(resolve, 2000));
 
+      // Record SOL balance after finalization
+      const solBalanceAfter = await this.executionService.connection.getBalance(authority.publicKey);
+      this.logger.info('Recorded SOL balance after finalization', {
+        proposalId: id,
+        solBalanceAfter,
+        solBalanceAfterSOL: solBalanceAfter / LAMPORTS_PER_SOL
+      });
+
+      // Calculate and transfer fees before deposit-back
+      await this.handleFeeTransfer(id, authority, solBalanceBefore, solBalanceAfter);
+
       // Handle deposit-back for proposals with DAMM withdrawals
       await this.handleDepositBack(id);
     }
     return [status, winningIndex];
+  }
+
+  /**
+   * Handle fee calculation and transfer to fee wallet after proposal finalization
+   * Fees = SOL after finalization - SOL before finalization - original withdrawal SOL (tokenB)
+   * @param proposalId - The ID of the finalized proposal
+   * @param authority - The authority keypair for the proposal's pool
+   * @param solBalanceBefore - SOL balance before finalization (lamports)
+   * @param solBalanceAfter - SOL balance after finalization (lamports)
+   */
+  private async handleFeeTransfer(
+    proposalId: number,
+    authority: Keypair,
+    solBalanceBefore: number,
+    solBalanceAfter: number
+  ): Promise<void> {
+    try {
+      // Check if fee wallet is configured
+      const feeWalletAddress = process.env.FEE_WALLET_ADDRESS;
+      if (!feeWalletAddress) {
+        this.logger.info('No fee wallet configured, skipping fee transfer', { proposalId });
+        return;
+      }
+
+      // Validate fee wallet address
+      let feeWallet: PublicKey;
+      try {
+        feeWallet = new PublicKey(feeWalletAddress);
+      } catch (e) {
+        this.logger.error('Invalid FEE_WALLET_ADDRESS configured', {
+          proposalId,
+          feeWalletAddress,
+          error: e instanceof Error ? e.message : String(e)
+        });
+        return;
+      }
+
+      // Get withdrawal metadata to get the original SOL withdrawal amount (tokenB)
+      const metadata = await this.persistenceService.getWithdrawalMetadata(proposalId);
+
+      // If no withdrawal metadata, there's no fee to calculate
+      // (proposal was created without DAMM withdrawal)
+      if (!metadata) {
+        this.logger.info('No withdrawal metadata found, skipping fee transfer', { proposalId });
+        return;
+      }
+
+      // Calculate fees: SOL gained from conditional AMM trading
+      // fees = sol_after_finalize - sol_before_finalize - metadata.tokenB
+      // Note: tokenB is stored in raw lamports (already scaled)
+      const originalWithdrawnSol = metadata.tokenB;
+      const fees = solBalanceAfter - solBalanceBefore - originalWithdrawnSol;
+
+      this.logger.info('Calculated fees', {
+        proposalId,
+        solBalanceBefore,
+        solBalanceAfter,
+        originalWithdrawnSol,
+        fees,
+        feesSOL: fees / LAMPORTS_PER_SOL
+      });
+
+      // Validate fees are non-negative (negative indicates RPC issue or failed tx)
+      if (fees < 0) {
+        this.logger.error('Negative fees detected - SOL balance after finalization is less than expected', {
+          proposalId,
+          solBalanceBefore,
+          solBalanceAfter,
+          originalWithdrawnSol,
+          fees,
+          feesSOL: fees / LAMPORTS_PER_SOL,
+          note: 'This may indicate stale RPC data or a failed transaction. Skipping fee transfer.'
+        });
+        return;
+      }
+
+      // Only transfer if fees are meaningful (> 0.1337 SOL)
+      const minFeeThreshold = 0.1337 * LAMPORTS_PER_SOL;
+      if (fees <= minFeeThreshold) {
+        this.logger.info('Fees below threshold, skipping transfer', {
+          proposalId,
+          fees,
+          feesSOL: fees / LAMPORTS_PER_SOL,
+          threshold: minFeeThreshold / LAMPORTS_PER_SOL
+        });
+        return;
+      }
+
+      // Transfer fees to fee wallet
+      this.logger.info('Transferring fees to fee wallet', {
+        proposalId,
+        fees,
+        feesSOL: fees / LAMPORTS_PER_SOL,
+        feeWallet: feeWallet.toBase58()
+      });
+
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: authority.publicKey,
+          toPubkey: feeWallet,
+          lamports: fees
+        })
+      );
+
+      const signature = await sendAndConfirmTransaction(
+        this.executionService.connection,
+        transaction,
+        [authority],
+        { commitment: 'confirmed' }
+      );
+
+      this.logger.info('Fee transfer completed', {
+        proposalId,
+        signature,
+        fees,
+        feesSOL: fees / LAMPORTS_PER_SOL,
+        feeWallet: feeWallet.toBase58()
+      });
+    } catch (error) {
+      // Log error but don't fail the finalization
+      this.logger.error('Failed to transfer fees', {
+        proposalId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      // Don't throw - we don't want fee transfer failures to prevent finalization
+    }
   }
 
   /**
