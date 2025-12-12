@@ -46,7 +46,7 @@ async function createModerator() {
 
   // SURF token
   const TICKER = 'SURF';
-  const BASE_MINT = 'SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar';
+  const BASE_MINT = 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW'; // was: SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar
   const BASE_DECIMALS = 9;
   const DAMM_WITHDRAWAL_PERCENTAGE = 12; // Optional: DAMM withdrawal percentage (0-50, defaults to 12)
 

@@ -27,7 +27,7 @@ export interface PoolMetadata {
 const TICKER_TO_POOL: Record<string, string> = {
   'ZC': 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad',
   'OOGWAY': '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
-  'SURF': 'Ez1QYeC95xJRwPA9SR7YWC1H1Tj43exJr91QqKf8Puu1',
+  'SURF': 'PS3rPSb49GnAkmh3tec1RQizgNSb1hUwPsYHGGuAy5r', // was: Ez1QYeC95xJRwPA9SR7YWC1H1Tj43exJr91QqKf8Puu1
 };
 
 /**
@@ -93,7 +93,7 @@ const POOL_METADATA: Record<string, PoolMetadata> = {
   [TICKER_TO_POOL.SURF]: {
     poolAddress: TICKER_TO_POOL.SURF,
     ticker: 'surf',
-    baseMint: 'SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar',
+    baseMint: 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW', // was: SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar
     quoteMint: 'So11111111111111111111111111111111111111112',
     baseDecimals: 9,
     quoteDecimals: 9,
