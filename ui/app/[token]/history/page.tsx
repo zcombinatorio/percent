@@ -229,7 +229,7 @@ export default function HistoryPage() {
 
                               const parts = [];
                               if (zcReward) {
-                                parts.push(`${formatNumber(zcReward.claimableAmount, 0)} ZC`);
+                                parts.push(`${formatNumber(zcReward.claimableAmount, 0)} ${tokenSymbol}`);
                               }
                               if (solReward) {
                                 parts.push(`${solReward.claimableAmount.toFixed(4)} SOL`);
@@ -364,7 +364,7 @@ export default function HistoryPage() {
 
                                 const parts = [];
                                 if (zcReward) {
-                                  parts.push(`${formatNumber(zcReward.claimableAmount, 0)} ZC`);
+                                  parts.push(`${formatNumber(zcReward.claimableAmount, 0)} ${tokenSymbol}`);
                                 }
                                 if (solReward) {
                                   parts.push(`${solReward.claimableAmount.toFixed(4)} SOL`);

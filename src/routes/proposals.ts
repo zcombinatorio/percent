@@ -499,8 +499,8 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       ammPrice
     });
 
-    // Override proposal length for SURF to 10 minutes (for testing)
-    const SURF_PROPOSAL_LENGTH_OVERRIDE = 10 * 60; // 10 minutes in seconds
+    // Override proposal length for SURF to 2 minutes (for testing)
+    const SURF_PROPOSAL_LENGTH_OVERRIDE = 2 * 60; // 2 minutes in seconds
     const effectiveProposalLength = poolMetadata.ticker.toLowerCase() === 'surf'
       ? SURF_PROPOSAL_LENGTH_OVERRIDE
       : body.proposalLength;
