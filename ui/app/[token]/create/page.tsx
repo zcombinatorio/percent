@@ -58,6 +58,21 @@ export default function CreatePage() {
   const firstDigitRef = useRef<HTMLInputElement>(null);
   const secondDigitRef = useRef<HTMLInputElement>(null);
 
+  // Ref for choice input to maintain focus when navigating
+  const choiceInputRef = useRef<HTMLInputElement>(null);
+
+  // Track if we should maintain focus after re-render
+  const shouldMaintainFocus = useRef(false);
+
+  // Effect to maintain focus on choice input after state changes
+  useEffect(() => {
+    if (shouldMaintainFocus.current && choiceInputRef.current) {
+      choiceInputRef.current.focus();
+      setIsChoiceInputFocused(true);
+      shouldMaintainFocus.current = false;
+    }
+  }, [selectedChoiceIndex, choices]);
+
   // Check if wallet is authorized for THIS specific pool
   useEffect(() => {
     const checkAuth = async () => {
@@ -298,7 +313,24 @@ export default function CreatePage() {
                     </div>
 
                     {/* Choices Card - Single card with dot navigation */}
-                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
+                    <div
+                      className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 focus:outline-none"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        const totalChoices = choices.length + 1; // +1 for "No"
+                        if (e.key === 'ArrowRight') {
+                          e.preventDefault();
+                          setSelectedChoiceIndex((prev) => Math.min(prev + 1, totalChoices - 1));
+                        } else if (e.key === 'ArrowLeft') {
+                          e.preventDefault();
+                          setSelectedChoiceIndex((prev) => Math.max(prev - 1, 0));
+                        } else if (e.key === 'Enter' && selectedChoiceIndex > 0 && choices.length < MAX_CHOICES) {
+                          e.preventDefault();
+                          addChoice();
+                          setSelectedChoiceIndex(choices.length + 1);
+                        }
+                      }}
+                    >
                       <div className="flex items-center justify-between mb-4">
                         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
                           Choice {selectedChoiceIndex + 1}{selectedChoiceIndex === 1 ? '*' : ''}
@@ -314,7 +346,7 @@ export default function CreatePage() {
                               onClick={() => setSelectedChoiceIndex(index)}
                               className={`h-2.5 rounded-full transition-all cursor-pointer ${
                                 selectedChoiceIndex === index
-                                  ? 'w-5 bg-[#DDDDD7]'
+                                  ? 'w-8 bg-[#DDDDD7]'
                                   : 'w-2.5 bg-[#414346] hover:bg-[#6B6E71]'
                               }`}
                               title={`Choice ${index + 1}`}
@@ -328,6 +360,7 @@ export default function CreatePage() {
                       <div className="relative">
                         {selectedChoiceIndex === 0 ? (
                           <input
+                            ref={choiceInputRef}
                             type="text"
                             value="No"
                             readOnly
@@ -337,9 +370,13 @@ export default function CreatePage() {
                               const totalChoices = choices.length + 1; // +1 for "No"
                               if (e.key === 'ArrowRight') {
                                 e.preventDefault();
+                                e.stopPropagation();
+                                shouldMaintainFocus.current = true;
                                 setSelectedChoiceIndex((prev) => Math.min(prev + 1, totalChoices - 1));
                               } else if (e.key === 'ArrowLeft') {
                                 e.preventDefault();
+                                e.stopPropagation();
+                                shouldMaintainFocus.current = true;
                                 setSelectedChoiceIndex((prev) => Math.max(prev - 1, 0));
                               }
                             }}
@@ -353,21 +390,31 @@ export default function CreatePage() {
                           />
                         ) : (
                           <input
+                            ref={choiceInputRef}
                             type="text"
                             value={choices[selectedChoiceIndex - 1] || ''}
-                            onChange={(e) => updateChoice(selectedChoiceIndex - 1, e.target.value)}
+                            onChange={(e) => {
+                              shouldMaintainFocus.current = true;
+                              updateChoice(selectedChoiceIndex - 1, e.target.value);
+                            }}
                             onFocus={() => setIsChoiceInputFocused(true)}
                             onBlur={() => setIsChoiceInputFocused(false)}
                             onKeyDown={(e) => {
                               const totalChoices = choices.length + 1; // +1 for "No"
                               if (e.key === 'ArrowRight') {
                                 e.preventDefault();
+                                e.stopPropagation();
+                                shouldMaintainFocus.current = true;
                                 setSelectedChoiceIndex((prev) => Math.min(prev + 1, totalChoices - 1));
                               } else if (e.key === 'ArrowLeft') {
                                 e.preventDefault();
+                                e.stopPropagation();
+                                shouldMaintainFocus.current = true;
                                 setSelectedChoiceIndex((prev) => Math.max(prev - 1, 0));
                               } else if (e.key === 'Enter' && choices.length < MAX_CHOICES) {
                                 e.preventDefault();
+                                e.stopPropagation();
+                                shouldMaintainFocus.current = true;
                                 addChoice();
                                 setSelectedChoiceIndex(choices.length + 1);
                               }
@@ -386,18 +433,20 @@ export default function CreatePage() {
                           />
                         )}
 
-                        {/* Hint text - show when focused on custom choice and can add more */}
-                        {isChoiceInputFocused && selectedChoiceIndex > 0 && choices.length < MAX_CHOICES && (
+                        {/* Hint text - show when focused on last custom choice and can add more */}
+                        {isChoiceInputFocused && selectedChoiceIndex === choices.length && choices.length < MAX_CHOICES && (
                           <span
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#414346] text-2xl font-ibm-plex-mono pointer-events-none"
+                            className={`absolute top-1/2 -translate-y-1/2 text-[#414346] text-2xl font-ibm-plex-mono pointer-events-none ${
+                              selectedChoiceIndex > 0 && choices.length > 1 ? 'right-12' : 'right-3'
+                            }`}
                             style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
                           >
-                            [Enter] to add
+                            [Enter]
                           </span>
                         )}
 
-                        {/* Delete button - only for non-required choices (Choice 3+) when there are multiple custom choices */}
-                        {!isChoiceInputFocused && selectedChoiceIndex > 1 && choices.length > 1 && (
+                        {/* Delete button - show on any custom choice when there are multiple custom choices */}
+                        {selectedChoiceIndex > 0 && choices.length > 1 && (
                           <button
                             type="button"
                             onClick={() => removeChoice(selectedChoiceIndex - 1)}

@@ -504,7 +504,7 @@ export function StakeContent() {
                       {/* APY Box */}
                       <div className="flex-1 flex flex-col">
                         <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7' }}>
+                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                             {calculateAPY().toFixed(0)}%
                           </p>
                         </div>
@@ -515,7 +515,7 @@ export function StakeContent() {
                       {/* TVL Box */}
                       <div className="flex-1 flex flex-col">
                         <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7' }}>
+                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                             {formatCompactNumber(vaultBalance)}
                           </p>
                         </div>
@@ -526,7 +526,7 @@ export function StakeContent() {
                       {/* Exchange Rate Box */}
                       <div className="flex-1 flex flex-col">
                         <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7' }}>
+                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                             1:{exchangeRate > 0 ? exchangeRate.toFixed(2) : '1.00'}
                           </p>
                         </div>
@@ -552,7 +552,7 @@ export function StakeContent() {
                         {/* Held Box */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7' }}>
+                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {wallet ? formatCompactNumber(zcBalance) : '0'}
                             </p>
                           </div>
@@ -563,7 +563,7 @@ export function StakeContent() {
                         {/* Staked Box */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7' }}>
+                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {wallet ? formatCompactNumber(userShareValue) : '0'}
                             </p>
                           </div>
@@ -628,7 +628,7 @@ export function StakeContent() {
                                   }
                                 }}
                                 className="w-full h-[56px] px-3 pr-24 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
-                                style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
                                 disabled={!wallet}
                                 autoComplete="off"
                               />
@@ -665,7 +665,7 @@ export function StakeContent() {
                                   }
                                 }}
                                 className="w-full h-[56px] px-3 pr-24 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
-                                style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                                style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
                                 disabled={!withdrawalsEnabled || !wallet}
                                 autoComplete="off"
                               />
