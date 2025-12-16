@@ -1043,7 +1043,7 @@ export function StakeContent() {
                         {/* APY Box */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: userShareValue > 0 ? '#DDDDD7' : '#6B6E71', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {calculateAPY().toFixed(0)}%
                             </p>
                           </div>
