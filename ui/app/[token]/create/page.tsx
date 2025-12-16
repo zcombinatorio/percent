@@ -25,6 +25,8 @@ export default function CreatePage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [choices, setChoices] = useState<string[]>(['']); // Custom choices (Choice 1 "No" is hardcoded)
+  const [selectedChoiceIndex, setSelectedChoiceIndex] = useState(0); // 0 = "No", 1+ = custom choices
+  const [isChoiceInputFocused, setIsChoiceInputFocused] = useState(false);
   const [proposalLengthHours, setProposalLengthHours] = useState('24');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -40,6 +42,12 @@ export default function CreatePage() {
   const removeChoice = (index: number) => {
     if (choices.length > 1) {
       setChoices(choices.filter((_, i) => i !== index));
+      // Adjust selected index if needed
+      if (selectedChoiceIndex > index + 1) {
+        setSelectedChoiceIndex(selectedChoiceIndex - 1);
+      } else if (selectedChoiceIndex === index + 1 && index + 1 >= choices.length) {
+        setSelectedChoiceIndex(Math.max(1, choices.length - 1));
+      }
     }
   };
   const updateChoice = (index: number, value: string) => {
@@ -195,6 +203,7 @@ export default function CreatePage() {
       setTitle('');
       setDescription('');
       setChoices(['']);
+      setSelectedChoiceIndex(0);
       setProposalLengthHours('24');
 
     } catch (error) {
@@ -288,54 +297,85 @@ export default function CreatePage() {
                       />
                     </div>
 
-                    {/* Choice Cards - Vertical List */}
-                    <div className="flex flex-col gap-3">
-                      {/* Choice 1 - Always "No" (hardcoded) */}
-                      <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
-                        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block" style={{ color: '#DDDDD7' }}>
-                          Choice 1
+                    {/* Choices Card - Single card with dot navigation */}
+                    <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
+                          Choice {selectedChoiceIndex + 1}{selectedChoiceIndex === 1 ? '*' : ''}
                         </span>
-                        <input
-                          type="text"
-                          value="No"
-                          readOnly
-                          className="w-full h-[56px] px-3 bg-[#1a1a1a] rounded-[6px] text-gray-400 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono cursor-not-allowed"
-                          style={{
-                            WebkitAppearance: 'none',
-                            MozAppearance: 'textfield',
-                            fontFamily: 'IBM Plex Mono, monospace',
-                            letterSpacing: '0em'
-                          }}
-                        />
+
+                        {/* Navigation Dots */}
+                        <div className="flex items-center gap-1.5">
+                          {/* Dot for each choice (0 = "No", 1+ = custom choices) */}
+                          {['No', ...choices].map((_, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => setSelectedChoiceIndex(index)}
+                              className={`h-2.5 rounded-full transition-all cursor-pointer ${
+                                selectedChoiceIndex === index
+                                  ? 'w-5 bg-[#DDDDD7]'
+                                  : 'w-2.5 bg-[#414346] hover:bg-[#6B6E71]'
+                              }`}
+                              title={`Choice ${index + 1}`}
+                            />
+                          ))}
+
+                        </div>
                       </div>
 
-                      {/* Dynamic custom choices (Choice 2+) */}
-                      {choices.map((choice, index) => (
-                        <div key={index} className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
-                              Choice {index + 2}{index === 0 ? '*' : ''}
-                            </span>
-                            {choices.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeChoice(index)}
-                                disabled={isSubmitting}
-                                className="w-6 h-6 flex items-center justify-center rounded-full bg-[#2a2a2a] hover:bg-[#3a3a3a] text-[#6B6E71] hover:text-[#DDDDD7] transition-colors"
-                                title="Remove choice"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                </svg>
-                              </button>
-                            )}
-                          </div>
+                      {/* Input - shows current selected choice */}
+                      <div className="relative">
+                        {selectedChoiceIndex === 0 ? (
                           <input
                             type="text"
-                            value={choice}
-                            onChange={(e) => updateChoice(index, e.target.value)}
-                            placeholder={index === 0 ? "1.5M $ZC" : index === 1 ? "3M $ZC" : "5M $ZC"}
-                            className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                            value="No"
+                            readOnly
+                            onFocus={() => setIsChoiceInputFocused(true)}
+                            onBlur={() => setIsChoiceInputFocused(false)}
+                            onKeyDown={(e) => {
+                              const totalChoices = choices.length + 1; // +1 for "No"
+                              if (e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                setSelectedChoiceIndex((prev) => Math.min(prev + 1, totalChoices - 1));
+                              } else if (e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                setSelectedChoiceIndex((prev) => Math.max(prev - 1, 0));
+                              }
+                            }}
+                            className="w-full h-[56px] px-3 bg-[#1a1a1a] rounded-[6px] text-gray-400 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                            style={{
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'textfield',
+                              fontFamily: 'IBM Plex Mono, monospace',
+                              letterSpacing: '0em'
+                            }}
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={choices[selectedChoiceIndex - 1] || ''}
+                            onChange={(e) => updateChoice(selectedChoiceIndex - 1, e.target.value)}
+                            onFocus={() => setIsChoiceInputFocused(true)}
+                            onBlur={() => setIsChoiceInputFocused(false)}
+                            onKeyDown={(e) => {
+                              const totalChoices = choices.length + 1; // +1 for "No"
+                              if (e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                setSelectedChoiceIndex((prev) => Math.min(prev + 1, totalChoices - 1));
+                              } else if (e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                setSelectedChoiceIndex((prev) => Math.max(prev - 1, 0));
+                              } else if (e.key === 'Enter' && choices.length < MAX_CHOICES) {
+                                e.preventDefault();
+                                addChoice();
+                                setSelectedChoiceIndex(choices.length + 1);
+                              }
+                            }}
+                            placeholder={selectedChoiceIndex === 1 ? "1.5M $ZC" : selectedChoiceIndex === 2 ? "3M $ZC" : "5M $ZC"}
+                            className={`w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono ${
+                              selectedChoiceIndex > 1 && choices.length > 1 ? 'pr-12' : ''
+                            }`}
                             style={{
                               WebkitAppearance: 'none',
                               MozAppearance: 'textfield',
@@ -344,23 +384,33 @@ export default function CreatePage() {
                             }}
                             disabled={isSubmitting}
                           />
-                        </div>
-                      ))}
+                        )}
 
-                      {/* Add Choice Button */}
-                      {choices.length < MAX_CHOICES && (
-                        <button
-                          type="button"
-                          onClick={addChoice}
-                          disabled={isSubmitting}
-                          className="w-full h-[56px] rounded-[9px] border border-dashed border-[#2a2a2a] hover:border-[#414346] bg-transparent hover:bg-[#121212] text-[#6B6E71] hover:text-[#DDDDD7] transition-colors flex items-center justify-center gap-2 font-ibm-plex-mono text-sm uppercase tracking-[0.2em]"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M7 1V13M1 7H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                          </svg>
-                          Add Choice
-                        </button>
-                      )}
+                        {/* Hint text - show when focused on custom choice and can add more */}
+                        {isChoiceInputFocused && selectedChoiceIndex > 0 && choices.length < MAX_CHOICES && (
+                          <span
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#414346] text-2xl font-ibm-plex-mono pointer-events-none"
+                            style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
+                          >
+                            [Enter] to add
+                          </span>
+                        )}
+
+                        {/* Delete button - only for non-required choices (Choice 3+) when there are multiple custom choices */}
+                        {!isChoiceInputFocused && selectedChoiceIndex > 1 && choices.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeChoice(selectedChoiceIndex - 1)}
+                            disabled={isSubmitting}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-[#3a3a3a] hover:bg-[#4a4a4a] text-[#6B6E71] hover:text-[#DDDDD7] transition-colors cursor-pointer"
+                            title="Remove choice"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 

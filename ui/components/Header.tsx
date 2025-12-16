@@ -46,10 +46,10 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
   // Auto-detect active tab from pathname
   const activeTab = pathname.includes('/history')
     ? 'history'
-    : pathname.includes('/rank')
-      ? 'rank'
-      : pathname.includes('/create')
-        ? 'create'
+    : pathname.includes('/create')
+      ? 'create'
+      : pathname.includes('/stake')
+        ? 'stake'
         : 'live';
   const { exportWallet } = useSolanaWallets();
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
@@ -262,20 +262,6 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             )}
             History
           </button>
-          {tokenSlug === 'zc' && (
-            <button
-              onClick={() => router.push(`/${tokenSlug}/rank`)}
-              className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-              style={activeTab === 'rank' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-              onMouseEnter={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#9B9E9F'; }}
-              onMouseLeave={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#6B6E71'; }}
-            >
-              {activeTab === 'rank' && (
-                <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
-              )}
-              Rankings
-            </button>
-          )}
           <button
             onClick={() => router.push(`/${tokenSlug}/create`)}
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
@@ -288,6 +274,20 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             )}
             Create
           </button>
+          {tokenSlug === 'zc' && (
+            <button
+              onClick={() => router.push(`/${tokenSlug}/stake`)}
+              className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
+              style={activeTab === 'stake' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+              onMouseEnter={(e) => { if (activeTab !== 'stake') e.currentTarget.style.color = '#9B9E9F'; }}
+              onMouseLeave={(e) => { if (activeTab !== 'stake') e.currentTarget.style.color = '#6B6E71'; }}
+            >
+              {activeTab === 'stake' && (
+                <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+              )}
+              Stake
+            </button>
+          )}
           <a
             href="https://v1.zcombinator.io/launch"
             className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
