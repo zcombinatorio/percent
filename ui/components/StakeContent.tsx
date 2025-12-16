@@ -45,6 +45,8 @@ export function StakeContent() {
   const [userShareValue, setUserShareValue] = useState<number>(0);
   const [exchangeRate, setExchangeRate] = useState<number>(0);
   const [zcTotalSupply, setZcTotalSupply] = useState<number>(0);
+  const [stakerCount, setStakerCount] = useState<number>(0);
+  const [qmVolumeUsd, setQmVolumeUsd] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [postTransactionRefreshing, setPostTransactionRefreshing] = useState(false);
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState<boolean>(true);
@@ -142,6 +144,19 @@ export function StakeContent() {
         }
       } catch (error) {
         console.error("Failed to fetch ZC total supply:", error);
+      }
+
+      // Fetch staker count and QM Volume from backend API
+      // Backend uses getProgramAccounts which gets ALL stakers (not limited to ~20)
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/stakers/volume`);
+        const data = await response.json();
+        setStakerCount(data.stakerCount || 0);
+        setQmVolumeUsd(data.volumeUsd || 0);
+      } catch (error) {
+        console.error("Failed to fetch staker data:", error);
+        setStakerCount(0);
+        setQmVolumeUsd(0);
       }
     } catch (error) {
       console.error("Failed to fetch public vault data:", error);
@@ -493,77 +508,105 @@ export function StakeContent() {
               {/* Cards Layout - 2/3 + 1/3 columns */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Left Column: Vault Stats (2/3 width) */}
-                <div className="md:col-span-2 bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 flex flex-col">
+                <div className="contents md:flex md:col-span-2 md:flex-col md:gap-4 md:pb-12">
+                  <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 flex flex-col md:flex-1">
                   <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block text-center" style={{ color: '#DDDDD7' }}>
                     ZC Vault
                   </span>
 
-                  {/* Bordered Container for Stats */}
+                  {/* Bordered Container for Stats - 2x2 Grid */}
                   <div className="border border-[#191919] rounded-[6px] py-6 px-4 flex-1 flex flex-col">
-                    <div className="flex gap-3 flex-1">
-                      {/* APY Box */}
-                      <div className="flex-1 flex flex-col">
-                        <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
-                            {calculateAPY().toFixed(0)}%
-                          </p>
-                        </div>
-                        <p className="text-sm text-center mt-4" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
-                          Annual Percentage Yield
-                        </p>
-                      </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-5 flex-1">
                       {/* TVL Box */}
-                      <div className="flex-1 flex flex-col">
+                      <div className="flex flex-col">
                         <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
                           <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                             {formatCompactNumber(vaultBalance)}
                           </p>
                         </div>
-                        <p className="text-sm text-center mt-4" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        <p className="text-sm text-center mt-2" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
                           Total Value Locked (ZC)
                         </p>
                       </div>
                       {/* Exchange Rate Box */}
-                      <div className="flex-1 flex flex-col">
+                      <div className="flex flex-col">
                         <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
                           <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
-                            1:{exchangeRate > 0 ? exchangeRate.toFixed(2) : '1.00'}
+                            1:{exchangeRate > 0 ? exchangeRate.toFixed(3) : '1.000'}
                           </p>
                         </div>
-                        <p className="text-sm text-center mt-4" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
+                        <p className="text-sm text-center mt-2" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
                           sZC:ZC
+                        </p>
+                      </div>
+                      {/* Stakers Box */}
+                      <div className="flex flex-col">
+                        <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                            {stakerCount}
+                          </p>
+                        </div>
+                        <p className="text-sm text-center mt-2" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
+                          Stakers
+                        </p>
+                      </div>
+                      {/* QM Volume Box */}
+                      <div className="flex flex-col">
+                        <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                            {qmVolumeUsd >= 1000000
+                              ? `$${(qmVolumeUsd / 1000000).toFixed(1)}M`
+                              : qmVolumeUsd >= 1000
+                                ? `$${(qmVolumeUsd / 1000).toFixed(0)}K`
+                                : `$${qmVolumeUsd.toFixed(0)}`
+                            }
+                          </p>
+                        </div>
+                        <p className="text-sm text-center mt-2" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
+                          Total QM Volume
                         </p>
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
 
-                {/* Right Column: Your Position + Stake/Redeem stacked (1/3 width) */}
-                <div className="md:col-span-1 flex flex-col gap-4">
+                {/* Right Column: How It Works + Your Position + Stake/Redeem stacked (1/3 width) */}
+                <div className="contents md:flex md:col-span-1 md:flex-col md:gap-4 md:pb-12">
+                  {/* How It Works Card */}
+                  <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5">
+                    <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-4 uppercase text-center" style={{ color: '#DDDDD7' }}>
+                      How It Works
+                    </h1>
+                    <div className="text-sm" style={{ color: '#DDDDD7' }}>
+                      Staked $ZC acts as a license to earn protocol fees, conditional on you trading and proposing QMs. The community polices this obligation. If you passively collect rewards without contributing, a QM is initiated to slash and redistribute your stake.
+                    </div>
+                  </div>
+
                   {/* Your Position Card */}
                   <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 flex flex-col min-h-[280px]">
                     <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-4 block text-center" style={{ color: '#DDDDD7' }}>
-                      Your Positions
+                      Your Position
                     </span>
 
                     {/* Bordered Container for Position Stats */}
                     <div className="border border-[#191919] rounded-[6px] py-6 px-4 flex-1 flex flex-col">
                       <div className="flex gap-3 flex-1">
-                        {/* Held Box */}
+                        {/* APY Box */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
-                              {wallet ? formatCompactNumber(zcBalance) : '0'}
+                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                              {calculateAPY().toFixed(0)}%
                             </p>
                           </div>
                           <p className="text-sm text-center mt-4" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
-                            Held (ZC)
+                            APY
                           </p>
                         </div>
                         {/* Staked Box */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-3xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {wallet ? formatCompactNumber(userShareValue) : '0'}
                             </p>
                           </div>
@@ -576,6 +619,7 @@ export function StakeContent() {
                   </div>
 
                   {/* Stake/Redeem Form Card */}
+                  <div className="pb-10 md:pb-0">
                   <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5">
                     <div className="flex flex-col gap-4">
                       {/* Title + Toggle Row */}
@@ -733,6 +777,7 @@ export function StakeContent() {
                         )}
                       </div>
                     </div>
+                  </div>
                   </div>
                 </div>
               </div>
