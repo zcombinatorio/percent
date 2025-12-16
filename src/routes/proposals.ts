@@ -499,11 +499,7 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       ammPrice
     });
 
-    // Override proposal length for SURF to 2 minutes (for testing)
-    const SURF_PROPOSAL_LENGTH_OVERRIDE = 2 * 60; // 2 minutes in seconds
-    const effectiveProposalLength = poolMetadata.ticker.toLowerCase() === 'surf'
-      ? SURF_PROPOSAL_LENGTH_OVERRIDE
-      : body.proposalLength;
+    const effectiveProposalLength = body.proposalLength;
 
     // Create the proposal with DAMM withdrawal data (confirmation happens in initialize())
     const proposal = await moderator.createProposal({

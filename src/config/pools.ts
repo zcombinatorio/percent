@@ -27,7 +27,8 @@ export interface PoolMetadata {
 const TICKER_TO_POOL: Record<string, string> = {
   'ZC': 'CCZdbVvDqPN8DmMLVELfnt9G1Q9pQNt3bTGifSpUY9Ad',
   'OOGWAY': '2FCqTyvFcE4uXgRL1yh56riZ9vdjVgoP6yknZW3f8afX',
-  'SURF': 'PS3rPSb49GnAkmh3tec1RQizgNSb1hUwPsYHGGuAy5r', // was: Ez1QYeC95xJRwPA9SR7YWC1H1Tj43exJr91QqKf8Puu1
+  'SURF': 'Ez1QYeC95xJRwPA9SR7YWC1H1Tj43exJr91QqKf8Puu1',
+  'SURFTEST': 'PS3rPSb49GnAkmh3tec1RQizgNSb1hUwPsYHGGuAy5r',
 };
 
 /**
@@ -55,14 +56,14 @@ const POOL_WHITELIST: Record<string, string[]> = {
     'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',
     'FgACAue3FuWPrL7xSqXWtUdHLne52dvVsKyKxjwqPYtr',
   ],
-  // SURF-SOL DAMM Pool
-  [TICKER_TO_POOL.SURF]: [
-    '79TLv4oneDA1tDUSNXBxNCnemzNmLToBHYXnfZWDQNeP',
-    'BXc9g3zxbQhhfkLjxXbtSHrfd6MSFRdJo8pDQhW95QUw',
-    'FgACAue3FuWPrL7xSqXWtUdHLne52dvVsKyKxjwqPYtr',
+  // SURFTEST-SOL DAMM Pool (test)
+  [TICKER_TO_POOL.SURFTEST]: [
     'FtV94i2JvmaqsE1rBT72C9YR58wYJXt1ZjRmPb4tDvMK',
     '4GctbRKwsQjECaY1nL8HiqkgvEUAi8EyhU1ezNmhB3hg',
-    'HU65idnreBAe9gsLzSGTV7w7tVTzaSzXBw518F1aQrGv',
+  ],
+  // SURF-SOL DAMM Pool (production)
+  [TICKER_TO_POOL.SURF]: [
+    '4GctbRKwsQjECaY1nL8HiqkgvEUAi8EyhU1ezNmhB3hg',
   ],
 };
 
@@ -90,14 +91,27 @@ const POOL_METADATA: Record<string, PoolMetadata> = {
     moderatorId: 3,
     icon: 'https://wsrv.nl/?w=128&h=128&default=1&url=https%3A%2F%2Folive-imaginative-aardvark-508.mypinata.cloud%2Fipfs%2FQmV4rzAgYREFBpDRyM5VmboewHUwS1Xu8ey2wrs9rJKcfE',
   },
-  [TICKER_TO_POOL.SURF]: {
-    poolAddress: TICKER_TO_POOL.SURF,
-    ticker: 'surf',
-    baseMint: 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW', // was: SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar
+  // Test SURF pool
+  [TICKER_TO_POOL.SURFTEST]: {
+    poolAddress: TICKER_TO_POOL.SURFTEST,
+    ticker: 'surftest',
+    baseMint: 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW',
     quoteMint: 'So11111111111111111111111111111111111111112',
     baseDecimals: 9,
     quoteDecimals: 9,
     moderatorId: 4,
+    icon: 'https://arweave.net/r02Vz3jHG5_ZH0BrKbkIJOkF4LDcTTdLNljefYpJYJo',
+    minTokenBalance: 5_000_000, // 5M SURF required to create proposals
+  },
+  // Production SURF pool
+  [TICKER_TO_POOL.SURF]: {
+    poolAddress: TICKER_TO_POOL.SURF,
+    ticker: 'surf',
+    baseMint: 'SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar',
+    quoteMint: 'So11111111111111111111111111111111111111112',
+    baseDecimals: 9,
+    quoteDecimals: 9,
+    moderatorId: 5,
     icon: 'https://arweave.net/r02Vz3jHG5_ZH0BrKbkIJOkF4LDcTTdLNljefYpJYJo',
     minTokenBalance: 5_000_000, // 5M SURF required to create proposals
   },

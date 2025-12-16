@@ -44,11 +44,17 @@ async function createModerator() {
   // Token configuration - UPDATE THESE FOR EACH NEW TOKEN
   const SOL_MINT = 'So11111111111111111111111111111111111111112'; // Wrapped SOL
 
-  // SURF token
+  // SURF token (production) - moderatorId 5
   const TICKER = 'SURF';
-  const BASE_MINT = 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW'; // was: SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar
+  const BASE_MINT = 'SurfwRjQQFV6P7JdhxSptf4CjWU8sb88rUiaLCystar';
   const BASE_DECIMALS = 9;
   const DAMM_WITHDRAWAL_PERCENTAGE = 12; // Optional: DAMM withdrawal percentage (0-50, defaults to 12)
+
+  // // SURFTEST token (test) - moderatorId 4 (already created)
+  // const TICKER = 'SURFTEST';
+  // const BASE_MINT = 'E7xktmaFNM6vd4GKa8FrXwX7sA7hrLzToxc64foGq3iW';
+  // const BASE_DECIMALS = 9;
+  // const DAMM_WITHDRAWAL_PERCENTAGE = 12;
 
   // // ZC token (example)
   // const TICKER = 'ZC';
