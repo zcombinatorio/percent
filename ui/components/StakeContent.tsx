@@ -620,8 +620,9 @@ export function StakeContent() {
                   <div className={`bg-[#121212] border border-[#191919] rounded-[9px] flex flex-col md:flex-1 ${vaultTab === 'trades' || vaultTab === 'stakers' ? '' : 'py-4 px-5'}`}>
                   {/* Header with title left, toggle right */}
                   <div className={`flex items-center justify-between ${vaultTab === 'trades' || vaultTab === 'stakers' ? 'py-4 px-5' : 'mb-4'}`}>
-                    <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase" style={{ color: '#DDDDD7' }}>
-                      {vaultTab === 'stats' ? 'ZC Stakers Vault' : vaultTab === 'stakers' ? 'ZC Stakers' : 'ZC Stakers QM Trades'}
+                    <span className={`text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase ${vaultTab !== 'stats' ? 'hidden md:inline' : ''}`} style={{ color: '#DDDDD7' }}>
+                      <span className="md:hidden">Vault</span>
+                      <span className="hidden md:inline">{vaultTab === 'stats' ? 'ZC Stakers Vault' : vaultTab === 'stakers' ? 'ZC Stakers' : 'ZC Stakers QM Trades'}</span>
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -706,10 +707,10 @@ export function StakeContent() {
                   {/* Bordered Container - Content changes based on tab */}
                   <div className={`flex-1 flex flex-col px-5 ${vaultTab === 'trades' || vaultTab === 'stakers' ? 'pb-4' : 'border border-[#191919] rounded-[6px] py-6'}`}>
                     {vaultTab === 'stats' ? (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-5 flex-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-5 flex-1">
                         {/* TVL Box */}
                         <div className="flex flex-col">
-                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 py-6 md:py-0 flex flex-col items-center justify-center">
                             <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {formatCompactNumber(vaultBalance)}
                             </p>
@@ -720,7 +721,7 @@ export function StakeContent() {
                         </div>
                         {/* Exchange Rate Box */}
                         <div className="flex flex-col">
-                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 py-6 md:py-0 flex flex-col items-center justify-center">
                             <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               1:{exchangeRate > 0 ? exchangeRate.toFixed(3) : '1.000'}
                             </p>
@@ -731,7 +732,7 @@ export function StakeContent() {
                         </div>
                         {/* Stakers Box */}
                         <div className="flex flex-col">
-                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 py-6 md:py-0 flex flex-col items-center justify-center">
                             <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {stakerCount}
                             </p>
@@ -742,7 +743,7 @@ export function StakeContent() {
                         </div>
                         {/* QM Volume Box */}
                         <div className="flex flex-col">
-                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
+                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 py-6 md:py-0 flex flex-col items-center justify-center">
                             <p className="text-[60px] leading-none font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {qmVolumeUsd >= 1000000
                                 ? `$${(qmVolumeUsd / 1000000).toFixed(1)}M`
@@ -758,16 +759,16 @@ export function StakeContent() {
                         </div>
                       </div>
                     ) : vaultTab === 'trades' ? (
-                      <div className="flex-1 min-h-0 relative border border-[#191919] rounded-[6px]">
+                      <div className="flex-1 min-h-[400px] md:min-h-0 relative border border-[#191919] rounded-[6px]">
                         <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
                         <table className="w-full text-sm">
                           <thead className="text-[#6B6E71] font-medium uppercase">
                             <tr>
-                              <th className="py-3 pl-3 text-left font-medium">Staker</th>
+                              <th className="py-3 pl-3 text-left font-medium w-[120px] md:w-auto">Staker</th>
                               <th className="py-3 text-left font-medium w-[100px]">QM</th>
                               <th className="py-3 text-left font-medium w-[100px]">Coin</th>
-                              <th className="py-3 text-left font-medium w-[100px]">Trade</th>
-                              <th className="py-3 text-left font-medium w-[100px]">Amount</th>
+                              <th className="py-3 text-left font-medium w-[100px] hidden md:table-cell">Trade</th>
+                              <th className="py-3 text-left font-medium w-[100px] hidden md:table-cell">Amount</th>
                               <th className="py-3 text-left font-medium">Tx</th>
                               <th className="py-3 pr-3 text-right font-medium">Age</th>
                             </tr>
@@ -817,7 +818,8 @@ export function StakeContent() {
                                   style={{ color: '#E9E9E3' }}
                                 >
                                   <td className="py-3 pl-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
-                                    {formatTradeAddress(trade.userAddress)}
+                                    <span className="md:hidden">{trade.userAddress.slice(0, 6)}</span>
+                                    <span className="hidden md:inline">{formatTradeAddress(trade.userAddress)}</span>
                                     <button
                                       onClick={() => navigator.clipboard.writeText(trade.userAddress)}
                                       className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
@@ -868,14 +870,19 @@ export function StakeContent() {
                                   <td className="py-3 w-[100px]" style={{ color: '#DDDDD7' }}>
                                     {trade.marketLabel}
                                   </td>
-                                  <td className="py-3 w-[100px]" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
+                                  <td className="py-3 w-[100px] hidden md:table-cell" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
                                     {isBuy ? 'Buy' : 'Sell'}
                                   </td>
-                                  <td className="py-3 w-[100px]" style={{ color: '#DDDDD7' }}>
+                                  <td className="py-3 w-[100px] hidden md:table-cell" style={{ color: '#DDDDD7' }}>
                                     {formattedAmount} {tokenUsed}
                                   </td>
                                   <td className="py-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
-                                    {trade.txSignature ? `${trade.txSignature.slice(0, 12)}...` : '—'}
+                                    {trade.txSignature ? (
+                                      <>
+                                        <span className="md:hidden">{trade.txSignature.slice(0, 6)}</span>
+                                        <span className="hidden md:inline">{trade.txSignature.slice(0, 12)}...</span>
+                                      </>
+                                    ) : '—'}
                                     {trade.txSignature && (
                                       <a
                                         href={`https://solscan.io/tx/${trade.txSignature}`}
@@ -911,7 +918,7 @@ export function StakeContent() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex-1 min-h-0 relative border border-[#191919] rounded-[6px]">
+                      <div className="flex-1 min-h-[400px] md:min-h-0 relative border border-[#191919] rounded-[6px]">
                         <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
                         <table className="w-full text-sm">
                           <thead className="text-[#6B6E71] font-medium uppercase">
@@ -921,7 +928,7 @@ export function StakeContent() {
                                 className="py-3 text-right font-medium cursor-pointer hover:text-[#DDDDD7] transition-colors select-none"
                                 onClick={() => toggleStakersSort('volume')}
                               >
-                                QM Trade Vol
+                                QM Vol
                               </th>
                               <th
                                 className="py-3 pr-3 text-right font-medium cursor-pointer hover:text-[#DDDDD7] transition-colors select-none"
@@ -952,7 +959,8 @@ export function StakeContent() {
                                 style={{ color: '#E9E9E3' }}
                               >
                                 <td className="py-3 pl-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
-                                  {formatTradeAddress(staker.address)}
+                                  <span className="md:hidden">{staker.address.slice(0, 6)}</span>
+                                  <span className="hidden md:inline">{formatTradeAddress(staker.address)}</span>
                                   <button
                                     onClick={() => navigator.clipboard.writeText(staker.address)}
                                     className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
@@ -1006,7 +1014,18 @@ export function StakeContent() {
                                   })()}
                                 </td>
                                 <td className="py-3 pr-3 text-right" style={{ color: '#DDDDD7' }}>
-                                  {parseFloat(staker.balance).toLocaleString()} ({staker.percentage}%)
+                                  <span className="md:hidden">
+                                    {(() => {
+                                      const bal = parseFloat(staker.balance);
+                                      if (bal >= 1000000000) return `${(bal / 1000000000).toFixed(1)}B`;
+                                      if (bal >= 1000000) return `${(bal / 1000000).toFixed(1)}M`;
+                                      if (bal >= 1000) return `${(bal / 1000).toFixed(1)}K`;
+                                      return bal.toFixed(0);
+                                    })()} ({staker.percentage}%)
+                                  </span>
+                                  <span className="hidden md:inline">
+                                    {parseFloat(staker.balance).toLocaleString()} ({staker.percentage}%)
+                                  </span>
                                 </td>
                               </tr>
                             ))
@@ -1023,7 +1042,7 @@ export function StakeContent() {
                 {/* Right Column: How It Works + Your Position + Stake/Redeem stacked (1/3 width) */}
                 <div className="contents md:flex md:col-span-1 md:flex-col md:gap-4 md:pb-12">
                   {/* How It Works Card */}
-                  <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5">
+                  <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 order-first md:order-none">
                     <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-4 uppercase text-center" style={{ color: '#DDDDD7' }}>
                       How It Works
                     </h1>
