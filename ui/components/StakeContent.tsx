@@ -80,6 +80,7 @@ export function StakeContent() {
   const [stakersList, setStakersList] = useState<Staker[]>([]);
   const [stakersLoading, setStakersLoading] = useState(false);
   const [stakersSort, setStakersSort] = useState<{ column: 'balance' | 'volume'; direction: 'asc' | 'desc' }>({ column: 'balance', direction: 'desc' });
+  const [isHoveringStaked, setIsHoveringStaked] = useState(false);
 
   const connection = useMemo(() => new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com"), []);
 
@@ -1061,13 +1062,17 @@ export function StakeContent() {
                         </div>
                         {/* Staked Box */}
                         <div className="flex-1 flex flex-col">
-                          <div className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center">
-                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
+                          <div
+                            className="flex-1 border border-[#191919] rounded-[30px] px-4 flex flex-col items-center justify-center"
+                            onMouseEnter={() => setIsHoveringStaked(true)}
+                            onMouseLeave={() => setIsHoveringStaked(false)}
+                          >
+                            <p className="text-4xl font-semibold font-ibm-plex-mono" style={{ color: isHoveringStaked ? '#FF6F94' : '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}>
                               {wallet ? formatCompactNumber(userShareValue) : '0'}
                             </p>
                           </div>
                           <p className="text-sm text-center mt-2" style={{ color: '#6B6E71', fontFamily: 'IBM Plex Mono, monospace' }}>
-                            Staked (ZC)
+                            {isHoveringStaked ? 'Slashed (ZC)' : 'Staked (ZC)'}
                           </p>
                         </div>
                       </div>
