@@ -29,8 +29,9 @@ import { PersistenceService } from '../../app/services/persistence.service';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
 import { ProposalStatus } from '../../app/types/moderator.interface';
-import { getPoolsForWallet, POOL_METADATA, getAuthorizedPoolsAsync, AuthMethod, PoolType } from '../config/whitelist';
+import { POOL_METADATA, getAuthorizedPoolsAsync, AuthMethod } from '../config/whitelist';
 import { VaultType } from '@zcomb/vault-sdk';
+import { normalizeWithdrawBuildResponse, calculateMarketPriceFromAmounts } from '../../app/utils/pool-api.utils';
 
 const routerService = RouterService.getInstance();
 const logger = new LoggerService('api').createChild('proposals');
@@ -457,29 +458,17 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       throw new Error(`${poolType.toUpperCase()} withdrawal build failed: ${error.error || withdrawBuildResponse.statusText}`);
     }
 
-    // Handle response - DLMM uses tokenX/Y and transactions array, DAMM uses tokenA/B and transaction
-    const withdrawBuildDataRaw = await withdrawBuildResponse.json() as {
-      requestId: string;
-      transaction?: string;        // DAMM: single transaction
-      transactions?: string[];     // DLMM: array of transactions
-      estimatedAmounts?: { tokenA?: string; tokenB?: string; tokenX?: string; tokenY?: string };
-    };
-
-    // Normalize field names: DLMM returns tokenX/Y, DAMM returns tokenA/B
-    // We use tokenA/B internally (base/quote)
-    const withdrawBuildData = {
-      requestId: withdrawBuildDataRaw.requestId,
-      transaction: withdrawBuildDataRaw.transaction,       // DAMM single tx
-      transactions: withdrawBuildDataRaw.transactions,     // DLMM multi tx
-      estimatedAmounts: {
-        tokenA: withdrawBuildDataRaw.estimatedAmounts?.tokenX || withdrawBuildDataRaw.estimatedAmounts?.tokenA || '0',
-        tokenB: withdrawBuildDataRaw.estimatedAmounts?.tokenY || withdrawBuildDataRaw.estimatedAmounts?.tokenB || '0',
-      }
-    };
+    // Parse and normalize the API response using explicit pool-type branching
+    // DLMM returns tokenX/Y, DAMM returns tokenA/B - normalized to tokenA/B internally
+    const withdrawBuildDataRaw = await withdrawBuildResponse.json();
+    const withdrawBuildData = normalizeWithdrawBuildResponse(withdrawBuildDataRaw, poolType);
 
     logger.info('[POST /] Built withdrawal transaction(s)', {
       requestId: withdrawBuildData.requestId,
-      estimatedAmounts: withdrawBuildData.estimatedAmounts,
+      marketPrice: withdrawBuildData.marketPrice,
+      withdrawn: withdrawBuildData.withdrawn,
+      transferred: withdrawBuildData.transferred,
+      redeposited: withdrawBuildData.redeposited,
       poolType,
       transactionCount: withdrawBuildData.transactions?.length || 1
     });
@@ -508,9 +497,9 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       throw new Error('No transaction(s) returned from withdrawal build');
     }
 
-    // Use estimated amounts for initial liquidity (actual amounts confirmed during initialize)
-    const initialBaseAmount = withdrawBuildData.estimatedAmounts.tokenA;
-    const initialQuoteAmount = withdrawBuildData.estimatedAmounts.tokenB;
+    // Use transferred amounts for initial liquidity (what manager receives at market price)
+    const initialBaseAmount = withdrawBuildData.transferred.tokenA;
+    const initialQuoteAmount = withdrawBuildData.transferred.tokenB;
 
     // Step 2: Fetch total supply using pool metadata
     const heliusApiKey = process.env.HELIUS_API_KEY;
@@ -528,16 +517,16 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
       tokenMint: poolMetadata.baseMint
     });
 
-    // Step 3: Calculate AMM price from withdrawn amounts
-    const baseTokens = parseInt(initialBaseAmount) / Math.pow(10, poolMetadata.baseDecimals);
-    const quoteTokens = parseInt(initialQuoteAmount) / Math.pow(10, poolMetadata.quoteDecimals);
-    const ammPrice = quoteTokens / baseTokens;
-
-    logger.info('[POST /] Calculated AMM price', {
-      baseTokens,
-      quoteTokens,
-      ammPrice
-    });
+    // Step 3: Calculate AMM price from transferred amounts
+    // Both DAMM and DLMM use the same calculation - amounts are the ground truth
+    // (DLMM withdrawal already adjusts amounts to match Jupiter market price)
+    const ammPrice = calculateMarketPriceFromAmounts(
+      initialBaseAmount,
+      initialQuoteAmount,
+      poolMetadata.baseDecimals,
+      poolMetadata.quoteDecimals
+    );
+    logger.info('[POST /] Calculated AMM price from amounts', { ammPrice, poolType });
 
     const effectiveProposalLength = body.proposalLength;
 
@@ -566,10 +555,11 @@ router.post('/', requireApiKey, requireModeratorId, async (req, res, next) => {
         signedTransaction: signedTxBase58,       // DAMM single tx
         signedTransactions: signedTxsBase58,     // DLMM multi tx
         withdrawalPercentage,
-        estimatedAmounts: withdrawBuildData.estimatedAmounts,
+        withdrawn: withdrawBuildData.withdrawn,
+        transferred: withdrawBuildData.transferred,
+        redeposited: withdrawBuildData.redeposited,
         poolAddress,
         poolType,
-        ammPrice
       }
     });
 

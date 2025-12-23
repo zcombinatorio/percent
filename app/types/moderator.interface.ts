@@ -59,6 +59,10 @@ export interface IModeratorInfo {
  * Supports both DAMM (CP-AMM) and DLMM pool types
  *
  * DAMM uses single transaction, DLMM may use multiple transactions for wide bin ranges
+ *
+ * For DLMM: The API fetches Jupiter market price and adjusts amounts so that
+ * transferred amounts match the market price ratio. Excess tokens are redeposited
+ * back to the DLMM pool.
  */
 export interface IWithdrawalBuildData {
   requestId: string;                            // API request ID for confirmation
@@ -66,13 +70,20 @@ export interface IWithdrawalBuildData {
   signedTransactions?: string[];                // Base58-encoded signed transactions (DLMM, multi-tx)
   transactionCount?: number;                    // Number of transactions (1 for DAMM, 1+ for DLMM)
   withdrawalPercentage: number;                 // Percentage withdrawn from pool
-  estimatedAmounts: {
-    tokenA: string;                             // Estimated base token amount (raw)
-    tokenB: string;                             // Estimated quote token amount (raw)
+  withdrawn: {
+    tokenA: string;                             // Total base token amount withdrawn from pool (raw)
+    tokenB: string;                             // Total quote token amount withdrawn from pool (raw)
+  };
+  transferred: {
+    tokenA: string;                             // Base token amount transferred to manager (raw)
+    tokenB: string;                             // Quote token amount transferred to manager (raw)
+  };
+  redeposited: {
+    tokenA: string;                             // Base token amount redeposited to pool (raw)
+    tokenB: string;                             // Quote token amount redeposited to pool (raw)
   };
   poolAddress: string;                          // Pool address (DAMM or DLMM)
   poolType: PoolType;                           // Pool type for routing to correct confirm endpoint
-  ammPrice: number;                             // Calculated AMM price from withdrawn amounts
 }
 
 /**

@@ -29,7 +29,8 @@ import { LoggerService } from './services/logger.service';
 import { DammService } from './services/damm.service';
 import { DlmmService } from './services/dlmm.service';
 import { FeeService } from './services/fee.service';
-import { POOL_METADATA, PoolType } from '../src/config/whitelist';
+import { POOL_METADATA } from '../src/config/whitelist';
+import { normalizeWithdrawConfirmResponse, calculateMarketPriceFromAmounts } from './utils/pool-api.utils';
 //import { BlockEngineUrl, JitoService } from '@slateos/jito';
 
 /**
@@ -199,7 +200,9 @@ export class Moderator implements IModerator {
             requestId: withdrawal.requestId,
             poolAddress: withdrawal.poolAddress,
             poolType,
-            estimatedAmounts: withdrawal.estimatedAmounts,
+            withdrawn: withdrawal.withdrawn,
+            transferred: withdrawal.transferred,
+            redeposited: withdrawal.redeposited,
             transactionCount: withdrawal.signedTransactions?.length || 1,
           });
 
@@ -237,45 +240,41 @@ export class Moderator implements IModerator {
             );
           }
 
-          // Handle response - DLMM uses tokenX/Y and signatures array, DAMM uses tokenA/B and signature
-          const withdrawConfirmDataRaw = (await withdrawConfirmResponse.json()) as {
-            signature?: string;           // DAMM single signature
-            signatures?: string[];        // DLMM array of signatures
-            estimatedAmounts?: { tokenA?: string; tokenB?: string; tokenX?: string; tokenY?: string };
-          };
+          // Parse and normalize the API response using explicit pool-type branching
+          // DLMM returns tokenX/Y + signatures array, DAMM returns tokenA/B + single signature
+          const withdrawConfirmDataRaw = await withdrawConfirmResponse.json();
+          const normalizedConfirm = normalizeWithdrawConfirmResponse(withdrawConfirmDataRaw, poolType);
 
-          // Normalize field names
-          const confirmedAmounts = {
-            tokenA: withdrawConfirmDataRaw.estimatedAmounts?.tokenX || withdrawConfirmDataRaw.estimatedAmounts?.tokenA || '0',
-            tokenB: withdrawConfirmDataRaw.estimatedAmounts?.tokenY || withdrawConfirmDataRaw.estimatedAmounts?.tokenB || '0',
-          };
-
-          // Use last signature for DLMM (transfer tx), or single signature for DAMM
-          const finalSignature = withdrawConfirmDataRaw.signatures
-            ? withdrawConfirmDataRaw.signatures[withdrawConfirmDataRaw.signatures.length - 1]
-            : withdrawConfirmDataRaw.signature || '';
+          // Calculate spot price from confirmed amounts (ground truth)
+          const spotPrice = calculateMarketPriceFromAmounts(
+            normalizedConfirm.amounts.tokenA,
+            normalizedConfirm.amounts.tokenB,
+            this.config.baseDecimals,
+            this.config.quoteDecimals
+          );
 
           this.logger.info('Confirmed withdrawal', {
-            signature: finalSignature,
-            allSignatures: withdrawConfirmDataRaw.signatures,
-            amounts: confirmedAmounts,
+            signature: normalizedConfirm.signature,
+            allSignatures: normalizedConfirm.allSignatures,
+            spotPrice,
+            transferred: normalizedConfirm.amounts,
             poolType,
           });
 
           // Store withdrawal data in memory - will be persisted after proposal save
           withdrawalMetadata = {
             requestId: withdrawal.requestId,
-            signature: finalSignature,
+            signature: normalizedConfirm.signature,
             percentage: withdrawal.withdrawalPercentage,
-            tokenA: confirmedAmounts.tokenA,
-            tokenB: confirmedAmounts.tokenB,
-            spotPrice: withdrawal.ammPrice,
+            tokenA: normalizedConfirm.amounts.tokenA,
+            tokenB: normalizedConfirm.amounts.tokenB,
+            spotPrice,
             poolAddress: withdrawal.poolAddress,
           };
 
           this.logger.info('Withdrawal confirmed, metadata will be stored after proposal save', {
             proposalId: proposalIdCounter,
-            withdrawalSignature: finalSignature,
+            withdrawalSignature: normalizedConfirm.signature,
             poolType,
           });
         };
