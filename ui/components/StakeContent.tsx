@@ -63,8 +63,7 @@ export function StakeContent() {
   const [loading, setLoading] = useState(false);
   const [modalMode, setModalMode] = useState<"deposit" | "redeem">("deposit");
   const [amount, setAmount] = useState<string>("");
-  const [redeemPercent, setRedeemPercent] = useState<string>("");
-
+  
   const [zcBalance, setZcBalance] = useState<number>(0);
   const [vaultBalance, setVaultBalance] = useState<number>(0);
   const [userShareBalance, setUserShareBalance] = useState<number>(0);
@@ -583,21 +582,15 @@ export function StakeContent() {
     }
   };
 
-  // Request unstake - starts 24h unbonding period
+  // Request unstake - starts 24h unbonding period (always 100% of shares)
   const handleRequestUnstake = async () => {
-    const redeemPercentNum = parseFloat(redeemPercent);
-    if (!redeemPercentNum || redeemPercentNum <= 0 || redeemPercentNum > 100) {
-      toast.error('Please enter a valid percentage between 0 and 100');
-      return;
-    }
-
     const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
     if (!wallet || !walletProvider) {
       toast.error('Please connect your wallet first');
       return;
     }
 
-    const toastId = toast.loading(`Requesting unstake for ${redeemPercentNum}% of staked ZC...`);
+    const toastId = toast.loading('Requesting unstake for 100% of staked ZC...');
 
     try {
       setLoading(true);
@@ -616,8 +609,8 @@ export function StakeContent() {
         PROGRAM_ID
       );
 
-      // Calculate shares to unstake based on percentage
-      const sharesToUnstake = new BN(Math.floor(userShares * (redeemPercentNum / 100) * 1_000_000));
+      // Unstake all shares (100%)
+      const sharesToUnstake = new BN(Math.floor(userShares * 1_000_000));
 
       const requestUnstakeIx = await program.methods
         .requestUnstake(sharesToUnstake)
@@ -644,7 +637,6 @@ export function StakeContent() {
       });
 
       toast.success(`Unstake requested! 24h countdown started.`, { id: toastId });
-      setRedeemPercent("");
 
       setPostTransactionRefreshing(true);
       setTimeout(async () => {
@@ -1423,32 +1415,12 @@ export function StakeContent() {
                             <div className="relative">
                               <input
                                 type="text"
-                                placeholder="0.0"
-                                value={redeemPercent}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  if (value === "" || (/^\d*\.?\d*$/.test(value) && parseFloat(value) <= 100)) {
-                                    setRedeemPercent(value);
-                                  }
-                                }}
-                                className="w-full h-[56px] px-3 pr-24 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
+                                value="100"
+                                readOnly
+                                className="w-full h-[56px] px-3 pr-16 bg-[#1a1a1a] rounded-[6px] text-white focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono cursor-not-allowed"
                                 style={{ WebkitAppearance: 'none', MozAppearance: 'textfield', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em' }}
-                                disabled={!withdrawalsEnabled || !wallet}
-                                autoComplete="off"
                               />
                               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (userShareBalance > 0) {
-                                      setRedeemPercent('100');
-                                    }
-                                  }}
-                                  className="px-2 h-7 rounded hover:bg-[#404040] transition cursor-pointer text-xs font-medium"
-                                  style={{ color: '#AFAFAF' }}
-                                >
-                                  MAX
-                                </button>
                                 <div className="flex items-center justify-center px-2 h-7 bg-[#333] rounded">
                                   <span className="text-xs text-[#AFAFAF] font-bold">%</span>
                                 </div>
@@ -1580,10 +1552,10 @@ export function StakeContent() {
                                 onClick={handleRequestUnstake}
                                 className="w-full h-[56px] rounded-full font-semibold transition cursor-pointer uppercase font-ibm-plex-mono disabled:cursor-not-allowed"
                                 style={{
-                                  backgroundColor: loading || !redeemPercent || parseFloat(redeemPercent) <= 0 || userShares === 0 ? '#414346' : '#DDDDD7',
+                                  backgroundColor: loading || userShares === 0 ? '#414346' : '#DDDDD7',
                                   color: '#161616'
                                 }}
-                                disabled={loading || !redeemPercent || parseFloat(redeemPercent) <= 0 || userShares === 0}
+                                disabled={loading || userShares === 0}
                               >
                                 {loading ? (
                                   <span className="flex items-center justify-center gap-2">
