@@ -564,6 +564,13 @@ export class Moderator implements IModerator {
     tokenBMint: PublicKey,
     proposalId: number
   ): Promise<void> {
+    // Skip transfer if authority and LP owner are the same address
+    // This happens when the pool's LP owner and manager wallet are configured to be the same
+    if (authority.publicKey.equals(lpOwner)) {
+      this.logger.info('Authority and LP owner are same address, skipping transfer', { proposalId });
+      return;
+    }
+
     const isTokenANativeSOL = tokenAMint.equals(NATIVE_MINT);
     const isTokenBNativeSOL = tokenBMint.equals(NATIVE_MINT);
     const connection = this.executionService.connection;
