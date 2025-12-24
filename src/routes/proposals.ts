@@ -33,6 +33,7 @@ import { POOL_METADATA, getAuthorizedPoolsAsync, AuthMethod } from '../config/wh
 import { VaultType } from '@zcomb/vault-sdk';
 import { normalizeWithdrawBuildResponse, calculateMarketPriceFromAmounts } from '../../app/utils/pool-api.utils';
 import { getPool } from '../../app/utils/database';
+import { initStakingVaultService, StakingVaultService } from '../../app/services/staking-vault.service';
 
 // Staking vault constants for slash amount calculation
 const STAKING_PROGRAM_ID = new PublicKey("47rZ1jgK7zU6XAgffAfXkDX1JkiiRi4HRPBytossWR12");
@@ -46,6 +47,19 @@ const rpcUrl = process.env.HELIUS_API_KEY
   ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
   : process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const authConnection = new Connection(rpcUrl, 'confirmed');
+
+// Initialize staking vault service for slash execution
+let stakingVaultService: StakingVaultService | null = null;
+try {
+  stakingVaultService = initStakingVaultService(authConnection);
+  if (stakingVaultService) {
+    logger.info('StakingVaultService initialized for slash execution');
+  }
+} catch (error) {
+  logger.warn('Failed to initialize StakingVaultService', {
+    error: error instanceof Error ? error.message : String(error)
+  });
+}
 
 // DAMM Configuration (default if not set per-moderator)
 const DEFAULT_DAMM_WITHDRAWAL_PERCENTAGE = 12;
@@ -711,8 +725,53 @@ async function recordSlashIfApplicable(
 
   const slashPercentage = parseInt(percentMatch[1]);
 
-  // Query the user's staked ZC balance from on-chain
+  // Query the user's shares from on-chain UserStake account
+  let sharesToSlash = 0n;
+  let totalUserShares = 0n;
+  let txSignature: string | null = null;
   let zcAmountSlashed = 0;
+
+  if (stakingVaultService) {
+    try {
+      // Get user's total shares (active + unbonding)
+      totalUserShares = await stakingVaultService.getUserShares(targetWallet);
+
+      if (totalUserShares > 0n) {
+        // Calculate shares to slash based on percentage
+        sharesToSlash = (totalUserShares * BigInt(slashPercentage)) / 100n;
+
+        if (sharesToSlash > 0n) {
+          // Execute on-chain slash
+          logger.info('[recordSlash] Executing on-chain slash', {
+            targetWallet,
+            totalUserShares: totalUserShares.toString(),
+            sharesToSlash: sharesToSlash.toString(),
+            slashPercentage
+          });
+
+          txSignature = await stakingVaultService.slash(targetWallet, sharesToSlash);
+
+          logger.info('[recordSlash] On-chain slash executed successfully', {
+            targetWallet,
+            sharesToSlash: sharesToSlash.toString(),
+            txSignature
+          });
+        }
+      } else {
+        logger.info('[recordSlash] User has no shares to slash', { targetWallet });
+      }
+    } catch (error) {
+      logger.error('[recordSlash] Failed to execute on-chain slash', {
+        targetWallet,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      // Continue to record in database even if on-chain slash fails
+    }
+  } else {
+    logger.warn('[recordSlash] StakingVaultService not available - recording without on-chain execution');
+  }
+
+  // Also calculate ZC amount for display purposes (using sZC token balance as before)
   try {
     const connection = new Connection(rpcUrl, 'confirmed');
 
@@ -741,7 +800,7 @@ async function recordSlashIfApplicable(
       zcAmountSlashed = stakedBalance * (slashPercentage / 100);
     }
   } catch (error) {
-    logger.warn('[recordSlash] Failed to fetch staked balance, recording with 0 amount', {
+    logger.warn('[recordSlash] Failed to fetch sZC balance for display', {
       targetWallet,
       error: error instanceof Error ? error.message : String(error)
     });
@@ -750,9 +809,9 @@ async function recordSlashIfApplicable(
   // Insert into qm_slashed table
   const pool = getPool();
   await pool.query(
-    `INSERT INTO qm_slashed (moderator_id, proposal_id, target_wallet, slash_percentage, zc_amount_slashed)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [moderatorId, proposalId, targetWallet, slashPercentage, zcAmountSlashed]
+    `INSERT INTO qm_slashed (moderator_id, proposal_id, target_wallet, slash_percentage, zc_amount_slashed, shares_slashed, tx_signature)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [moderatorId, proposalId, targetWallet, slashPercentage, zcAmountSlashed, sharesToSlash.toString(), txSignature]
   );
 
   logger.info('[recordSlash] Slash recorded successfully', {
@@ -760,7 +819,9 @@ async function recordSlashIfApplicable(
     proposalId,
     targetWallet,
     slashPercentage,
-    zcAmountSlashed
+    zcAmountSlashed,
+    sharesToSlash: sharesToSlash.toString(),
+    txSignature
   });
 }
 
