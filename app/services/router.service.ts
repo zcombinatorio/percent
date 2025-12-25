@@ -45,7 +45,7 @@ import { POOL_CONFIG } from '../../src/config/pools';
  * @param logger - Logger instance for logging
  * @returns Map of pool addresses to manager keypairs, or undefined if none configured
  */
-function loadPoolAuthorities(logger: LoggerService): Map<string, Keypair> | undefined {
+export function loadPoolAuthorities(logger: LoggerService): Map<string, Keypair> | undefined {
   const poolAuthorities = new Map<string, Keypair>();
 
   for (const [ticker, poolAddress] of Object.entries(POOL_CONFIG.tickerToPool)) {

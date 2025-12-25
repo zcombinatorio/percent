@@ -28,6 +28,7 @@ import { ExecutionService } from './execution.service';
 import { LoggerService } from './logger.service';
 import { Commitment } from '@app/types/execution.interface';
 import { decryptKeypair, encryptKeypair } from '../utils/crypto';
+import { loadPoolAuthorities } from './router.service';
 
 /**
  * Service for persisting and loading state from PostgreSQL database
@@ -261,6 +262,9 @@ export class PersistenceService implements IPersistenceService {
       const configData = row.config as any;
       const authorityData = configData.defaultAuthority || configData.authority;
 
+      // Load pool authorities from environment variables
+      const poolAuthorities = loadPoolAuthorities(this.logger);
+
       const config: IModeratorConfig = {
         baseMint: new PublicKey(row.config.baseMint),
         quoteMint: new PublicKey(row.config.quoteMint),
@@ -269,7 +273,7 @@ export class PersistenceService implements IPersistenceService {
         defaultAuthority: decryptKeypair(authorityData, encryptionKey),
         rpcEndpoint: row.config.rpcUrl,
         dammWithdrawalPercentage: row.config.dammWithdrawalPercentage,
-        // poolAuthorities loaded from env vars in router.service.ts
+        poolAuthorities,
       };
 
       return {
