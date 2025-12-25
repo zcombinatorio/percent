@@ -49,7 +49,7 @@ export interface IModeratorInfo {
     mint: string;
     decimals: number;
   };
-  authority: string;
+  poolAuthorities: Record<string, string>;  // Map of pool address -> authority public key (from env vars)
   dammWithdrawalPercentage?: number;
 }
 

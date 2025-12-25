@@ -299,13 +299,22 @@ export class PersistenceService implements IPersistenceService {
         throw new Error('Moderator state not found');
       }
 
-      // Determine which authority to use based on proposal's spot pool address
-      let authority = moderatorState.config.defaultAuthority;
-      if (row.spot_pool_address && moderatorState.config.poolAuthorities) {
-        const poolAuthority = moderatorState.config.poolAuthorities.get(row.spot_pool_address);
-        if (poolAuthority) {
-          authority = poolAuthority;
-        }
+      // Get authority from environment variable - no fallback to database
+      if (!row.spot_pool_address) {
+        throw new Error(`Proposal ${row.proposal_id} has no spot_pool_address - cannot determine authority`);
+      }
+
+      if (!moderatorState.config.poolAuthorities) {
+        throw new Error(
+          `No pool authorities configured. Set MANAGER_PRIVATE_KEY_<TICKER> environment variable for pool ${row.spot_pool_address}`
+        );
+      }
+
+      const authority = moderatorState.config.poolAuthorities.get(row.spot_pool_address);
+      if (!authority) {
+        throw new Error(
+          `No authority configured for pool ${row.spot_pool_address}. Set MANAGER_PRIVATE_KEY_<TICKER> environment variable`
+        );
       }
 
       // Create logger first

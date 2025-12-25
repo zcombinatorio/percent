@@ -96,23 +96,30 @@ export class Moderator implements IModerator {
   }
 
   /**
-   * Get the appropriate authority keypair for a given pool
-   * @param poolAddress - DAMM pool address (optional)
-   * @returns Authority keypair for the pool, or default if not mapped
+   * Get the authority keypair for a specific pool
+   * @param poolAddress - DAMM pool address (required)
+   * @returns Authority keypair for the pool
+   * @throws Error if poolAddress is not provided or not configured
    */
-  getAuthorityForPool(poolAddress?: string): Keypair {
-    // If no pool-specific authorities configured, use default
+  getAuthorityForPool(poolAddress: string): Keypair {
+    if (!poolAddress) {
+      throw new Error('Pool address is required - no fallback to database authority');
+    }
+
     if (!this.config.poolAuthorities) {
-      return this.config.defaultAuthority;
+      throw new Error(
+        `No pool authorities configured. Set MANAGER_PRIVATE_KEY_<TICKER> environment variable for pool ${poolAddress}`
+      );
     }
 
-    // If poolAddress not provided or not mapped, use default
-    if (!poolAddress || !this.config.poolAuthorities.has(poolAddress)) {
-      return this.config.defaultAuthority;
+    const authority = this.config.poolAuthorities.get(poolAddress);
+    if (!authority) {
+      throw new Error(
+        `No authority configured for pool ${poolAddress}. Set MANAGER_PRIVATE_KEY_<TICKER> environment variable`
+      );
     }
 
-    // Return pool-specific authority
-    return this.config.poolAuthorities.get(poolAddress)!;
+    return authority;
   }
 
   /**
@@ -120,6 +127,14 @@ export class Moderator implements IModerator {
    * @returns Object containing moderator info
    */
   async info(): Promise<IModeratorInfo> {
+    // Build pool authorities map from env vars (not from DB)
+    const poolAuthorities: Record<string, string> = {};
+    if (this.config.poolAuthorities) {
+      for (const [poolAddress, keypair] of this.config.poolAuthorities) {
+        poolAuthorities[poolAddress] = keypair.publicKey.toBase58();
+      }
+    }
+
     const info: IModeratorInfo = {
       id: this.id,
       protocolName: this.protocolName,
@@ -132,7 +147,7 @@ export class Moderator implements IModerator {
         mint: this.config.quoteMint.toBase58(),
         decimals: this.config.quoteDecimals
       },
-      authority: this.config.defaultAuthority.publicKey.toBase58(),
+      poolAuthorities,
       dammWithdrawalPercentage: this.config.dammWithdrawalPercentage,
     };
 
@@ -173,6 +188,11 @@ export class Moderator implements IModerator {
     const proposalIdCounter = await this.getProposalIdCounter() + 1;
     try {
       this.logger.info('Creating proposal');
+
+      // Require spotPoolAddress for authority lookup - no fallback to database
+      if (!params.spotPoolAddress) {
+        throw new Error('spotPoolAddress is required to determine authority keypair');
+      }
 
       // Select appropriate authority based on pool address
       const authority = this.getAuthorityForPool(params.spotPoolAddress);
