@@ -109,6 +109,7 @@ export default function HistoryPage() {
           tokenSlug={tokenSlug}
           tokenSymbol={tokenSymbol}
           tokenIcon={icon}
+          poolAddress={poolAddress}
           baseMint={baseMint}
         />
 

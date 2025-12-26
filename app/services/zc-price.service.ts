@@ -1,0 +1,98 @@
+/*
+ * Copyright (C) 2025 Spice Finance Inc.
+ *
+ * This file is part of Z Combinator.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/**
+ * Service for fetching ZC/USD price from DexScreener
+ */
+export class ZcPriceService {
+  private static instance: ZcPriceService;
+  private priceCache: { price: number; timestamp: number } | null = null;
+  private readonly CACHE_DURATION = 30000; // 30 seconds
+  private readonly ZC_ADDRESS = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
+  private readonly FALLBACK_PRICE = 0;
+
+  private constructor() {}
+
+  static getInstance(): ZcPriceService {
+    if (!ZcPriceService.instance) {
+      ZcPriceService.instance = new ZcPriceService();
+    }
+    return ZcPriceService.instance;
+  }
+
+  /**
+   * Fetch current ZC/USD price from DexScreener
+   * Uses 30-second cache to avoid rate limiting
+   */
+  async getZcPrice(): Promise<number> {
+    // Check cache
+    if (this.priceCache && (Date.now() - this.priceCache.timestamp) < this.CACHE_DURATION) {
+      return this.priceCache.price;
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.dexscreener.com/latest/dex/tokens/${this.ZC_ADDRESS}`
+      );
+
+      if (!response.ok) {
+        console.warn('DexScreener API error for ZC, using fallback price');
+        return this.FALLBACK_PRICE;
+      }
+
+      const data = await response.json() as any;
+      const pairs = data.pairs || [];
+
+      if (pairs.length === 0) {
+        console.warn('No ZC pairs found, using fallback price');
+        return this.FALLBACK_PRICE;
+      }
+
+      // Sort by liquidity and take the most liquid pair
+      const sortedPairs = pairs.sort((a: any, b: any) =>
+        (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
+      );
+
+      const zcPrice = parseFloat(sortedPairs[0]?.priceUsd || '0');
+
+      if (isNaN(zcPrice) || zcPrice < 0) {
+        console.warn('Invalid ZC price, using fallback');
+        return this.FALLBACK_PRICE;
+      }
+
+      // Cache the result
+      this.priceCache = {
+        price: zcPrice,
+        timestamp: Date.now()
+      };
+
+      return zcPrice;
+    } catch (error) {
+      console.error('Error fetching ZC price:', error);
+      return this.FALLBACK_PRICE;
+    }
+  }
+
+  /**
+   * Clear the price cache (useful for testing)
+   */
+  clearCache(): void {
+    this.priceCache = null;
+  }
+}

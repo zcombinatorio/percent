@@ -15,6 +15,7 @@ interface ChartBoxProps {
   calculateVolume?: (amountIn: string, isBaseToQuote: boolean, market: number) => number;
   moderatorId?: number;
   className?: string;
+  userWalletAddress?: string | null;
 }
 
 export function ChartBox({
@@ -27,12 +28,22 @@ export function ChartBox({
   getTokenUsed,
   calculateVolume,
   moderatorId,
-  className
+  className,
+  userWalletAddress
 }: ChartBoxProps) {
   // Get display label for the selected market (strip URLs and trim)
   const selectedLabel = marketLabels?.[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`;
   const [view, setView] = useState<'chart' | 'history'>('chart');
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [showOnlyMyTrades, setShowOnlyMyTrades] = useState(false);
+
+  // Filter trades to show only user's trades when filter is active
+  const filteredTrades = useMemo(() => {
+    if (showOnlyMyTrades && userWalletAddress) {
+      return trades.filter(t => t.userAddress === userWalletAddress);
+    }
+    return trades;
+  }, [trades, showOnlyMyTrades, userWalletAddress]);
 
   // Calculate volume for this specific market's trades
   const marketVolume = useMemo(() => {
@@ -119,7 +130,17 @@ export function ChartBox({
           <table className="w-full text-sm">
             <thead className="text-[#6B6E71] font-medium uppercase">
               <tr>
-                <th className="py-3 pl-3 text-left font-medium w-[240px]">Trader</th>
+                <th className="py-3 pl-3 text-left font-medium w-[240px]">
+                  Trader
+                  {userWalletAddress && (
+                    <button
+                      onClick={() => setShowOnlyMyTrades(!showOnlyMyTrades)}
+                      className={`ml-2 cursor-pointer transition-colors hover:text-[#FFFFFF] ${showOnlyMyTrades ? 'text-[#DDDDD7]' : 'text-[#6B6E71]'}`}
+                    >
+                      [YOU ONLY]
+                    </button>
+                  )}
+                </th>
                 <th className="py-3 text-left font-medium w-[100px]">Trade</th>
                 <th className="py-3 text-left font-medium w-[120px]">MCAP</th>
                 <th className="py-3 text-left font-medium w-[140px]">Amount</th>
@@ -134,14 +155,14 @@ export function ChartBox({
                   Loading trades...
                 </td>
               </tr>
-            ) : trades.length === 0 ? (
+            ) : filteredTrades.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-[#6B6E71]">
-                  No trades yet
+                  {showOnlyMyTrades ? 'No trades by you yet' : 'No trades yet'}
                 </td>
               </tr>
             ) : (
-              trades.map((trade) => (
+              filteredTrades.map((trade) => (
                 <tr
                   key={trade.id}
                   className="group border-t border-[#191919] hover:bg-[#1a1a1a] transition-colors"

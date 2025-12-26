@@ -19,11 +19,12 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Wallet, FileText } from 'lucide-react';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import Image from 'next/image';
+import { api } from '@/lib/api';
 
 interface HeaderProps {
   walletAddress: string | null;
@@ -36,24 +37,51 @@ interface HeaderProps {
   tokenSlug?: string; // NEW: Dynamic token routing
   tokenSymbol?: string; // NEW: Display symbol (ZC, OOGWAY, etc.)
   tokenIcon?: string | null; // NEW: Dynamic token icon URL
+  poolAddress?: string | null; // NEW: Pool address for Axiom.trade links
   baseMint?: string | null; // NEW: Token mint address for Jupiter links
+  isCreateAuthorized?: boolean; // Whether user can create (vs propose)
 }
 
-export default function Header({ walletAddress, authenticated, solBalance, baseTokenBalance, login, isPassMode = true, tokenSlug = 'zc', tokenSymbol = 'ZC', tokenIcon = null, baseMint = null }: HeaderProps) {
+export default function Header({ walletAddress, authenticated, solBalance, baseTokenBalance, login, isPassMode = true, tokenSlug = 'zc', tokenSymbol = 'ZC', tokenIcon = null, poolAddress = null, baseMint = null, isCreateAuthorized }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   // Auto-detect active tab from pathname
   const activeTab = pathname.includes('/history')
     ? 'history'
-    : pathname.includes('/rank')
-      ? 'rank'
-      : pathname.includes('/create')
-        ? 'create'
+    : pathname.includes('/create')
+      ? 'create'
+      : pathname.includes('/stake')
+        ? 'stake'
         : 'live';
   const { exportWallet } = useSolanaWallets();
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
   const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
+
+  // Check authorization for /zc/ route (only when prop not provided)
+  const [zcAuthorized, setZcAuthorized] = useState(true);
+  useEffect(() => {
+    if (tokenSlug !== 'zc' || isCreateAuthorized !== undefined) return;
+
+    const checkAuth = async () => {
+      if (!walletAddress) {
+        setZcAuthorized(false);
+        return;
+      }
+      try {
+        const result = await api.getPoolByNameWithAuth('zc', walletAddress);
+        setZcAuthorized(result?.isAuthorized || false);
+      } catch {
+        setZcAuthorized(false);
+      }
+    };
+    checkAuth();
+  }, [walletAddress, tokenSlug, isCreateAuthorized]);
+
+  // Determine if user can create (vs propose) for tab label
+  const canCreate = isCreateAuthorized !== undefined
+    ? isCreateAuthorized
+    : (tokenSlug !== 'zc' || zcAuthorized);
 
   // Format token balance with K, M, B abbreviations
   const formatTokenBalance = (balance: number): string => {
@@ -153,9 +181,9 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
       {/* Right side: Links */}
       <nav className="hidden md:flex items-center gap-3 sm:gap-6">
         {/* Current token link (for non-ZC tokens) */}
-        {tokenSlug !== 'zc' && baseMint && (
+        {tokenSlug !== 'zc' && poolAddress && (
           <a
-            href={`https://jup.ag/tokens/${baseMint}`}
+            href={`https://axiom.trade/meme/${poolAddress}`}
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors"
@@ -264,16 +292,16 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
           </button>
           {tokenSlug === 'zc' && (
             <button
-              onClick={() => router.push(`/${tokenSlug}/rank`)}
+              onClick={() => router.push(`/${tokenSlug}/stake`)}
               className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-              style={activeTab === 'rank' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-              onMouseEnter={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#9B9E9F'; }}
-              onMouseLeave={(e) => { if (activeTab !== 'rank') e.currentTarget.style.color = '#6B6E71'; }}
+              style={activeTab === 'stake' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+              onMouseEnter={(e) => { if (activeTab !== 'stake') e.currentTarget.style.color = '#9B9E9F'; }}
+              onMouseLeave={(e) => { if (activeTab !== 'stake') e.currentTarget.style.color = '#6B6E71'; }}
             >
-              {activeTab === 'rank' && (
+              {activeTab === 'stake' && (
                 <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
               )}
-              Rankings
+              Stake
             </button>
           )}
           <button
@@ -286,7 +314,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             {activeTab === 'create' && (
               <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
-            Create
+            {canCreate ? 'Create' : 'Propose'}
           </button>
           <a
             href="https://v1.zcombinator.io/launch"

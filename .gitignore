@@ -37,6 +37,7 @@ wallet-zc.json
 walletprivy.json
 arb-wallet.json
 arb-wallets/
+stake-admin.json
 
 # Temporary files
 tmp/

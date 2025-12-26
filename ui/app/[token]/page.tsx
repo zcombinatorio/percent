@@ -218,6 +218,7 @@ export default function HomePage() {
             tokenSlug={tokenSlug}
             tokenSymbol={tokenSymbol}
             tokenIcon={icon}
+            poolAddress={poolAddress}
             baseMint={baseMint}
           />
 
@@ -249,6 +250,7 @@ export default function HomePage() {
           tokenSlug={tokenSlug}
           tokenSymbol={tokenSymbol}
           tokenIcon={icon}
+          poolAddress={poolAddress}
           baseMint={baseMint}
         />
 
@@ -356,6 +358,7 @@ export default function HomePage() {
                         getTokenUsed={getTokenUsed}
                         calculateVolume={calculateVolume}
                         moderatorId={moderatorId ?? undefined}
+                        userWalletAddress={walletAddress}
                       />
                     </div>
                   </div>
