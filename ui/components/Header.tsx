@@ -181,9 +181,9 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
       {/* Right side: Links */}
       <nav className="hidden md:flex items-center gap-3 sm:gap-6">
         {/* Current token link (for non-ZC tokens) */}
-        {tokenSlug !== 'zc' && poolAddress && (
+        {tokenSlug !== 'zc' && baseMint && (
           <a
-            href={`https://axiom.trade/meme/${poolAddress}`}
+            href={`https://jup.ag/tokens/${baseMint}`}
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors"
