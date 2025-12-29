@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { PublicKey, Connection, Transaction } from "@solana/web3.js";
 import { getAssociatedTokenAddress, getAccount, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
+import { Program, AnchorProvider, BN, Wallet } from "@coral-xyz/anchor";
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { useTokenContext } from '@/providers/TokenContext';
-import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { useTransactionSigner } from '@/hooks/useTransactionSigner';
+import { getConnection } from '@/lib/programs/utils';
 import toast from 'react-hot-toast';
 import Header from '@/components/Header';
 import StakingVaultIDL from '@/lib/staking-vault-idl.json';
@@ -17,15 +18,6 @@ const PROGRAM_ID = new PublicKey("47rZ1jgK7zU6XAgffAfXkDX1JkiiRi4HRPBytossWR12")
 
 // Hardcoded exit mode target date - January 15, 2026
 const EXIT_MODE_TARGET_DATE = new Date('2026-01-15T00:00:00Z').getTime() / 1000;
-
-interface SolanaWalletProvider {
-  signAndSendTransaction: (transaction: Transaction) => Promise<{ signature: string }>;
-}
-
-interface WindowWithWallets extends Window {
-  solana?: SolanaWalletProvider;
-  solflare?: SolanaWalletProvider;
-}
 
 interface StakerTrade {
   id: number;
@@ -52,7 +44,7 @@ interface Staker {
 
 export function StakeContent() {
   const { ready, authenticated, walletAddress, login } = usePrivyWallet();
-  const { wallets } = useSolanaWallets();
+  const { signTransaction } = useTransactionSigner();
   const { tokenSlug, baseMint, baseDecimals, tokenSymbol, icon } = useTokenContext();
   const { sol: solBalance, baseToken: baseTokenBalance } = useWalletBalances({
     walletAddress,
@@ -98,39 +90,36 @@ export function StakeContent() {
   const [totalShares, setTotalShares] = useState<number>(0);
   const [slashedAmount, setSlashedAmount] = useState<number>(0);
 
-  const connection = useMemo(() => new Connection(process.env.NEXT_PUBLIC_RPC_URL || "https://api.mainnet-beta.solana.com"), []);
+  const connection = useMemo(() => getConnection(), []);
 
   const wallet = useMemo(() => {
     if (!walletAddress) return null;
     return new PublicKey(walletAddress);
   }, [walletAddress]);
 
-  const getProvider = useCallback(() => {
-    if (typeof window === 'undefined') return null;
+  // Create Anchor provider using Privy's signTransaction
+  const provider = useMemo(() => {
+    if (!wallet) return null;
 
-    const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
-    if (!wallet || !walletProvider) return null;
+    // Create a wallet adapter compatible with Anchor
+    const walletAdapter: Wallet = {
+      publicKey: wallet,
+      signTransaction: signTransaction as Wallet['signTransaction'],
+      signAllTransactions: ((txs: Transaction[]) =>
+        Promise.all(txs.map(tx => signTransaction(tx)))
+      ) as Wallet['signAllTransactions'],
+      payer: undefined as any,
+    };
 
-    try {
-      const provider = new AnchorProvider(
-        connection,
-        walletProvider as unknown as AnchorProvider['wallet'],
-        { commitment: "confirmed" }
-      );
-      return provider;
-    } catch (error) {
-      console.error("Failed to create provider:", error);
-      return null;
-    }
-  }, [wallet, connection]);
+    return new AnchorProvider(connection, walletAdapter, {
+      commitment: 'confirmed',
+    });
+  }, [wallet, connection, signTransaction]);
 
-  const getProgram = useCallback((): Program | null => {
-    const provider = getProvider();
+  const program = useMemo(() => {
     if (!provider) return null;
     return new Program(StakingVaultIDL as unknown as Program['idl'], provider);
-  }, [getProvider]);
-
-  const program = useMemo(() => getProgram(), [getProgram]);
+  }, [provider]);
 
   const calculateAPY = useCallback((): number => {
     if (totalAssets === 0 || rewardRate === 0) return 0;
@@ -505,8 +494,7 @@ export function StakeContent() {
       return;
     }
 
-    const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
-    if (!wallet || !walletProvider) {
+    if (!wallet) {
       toast.error('Please connect your wallet first');
       return;
     }
@@ -559,7 +547,8 @@ export function StakeContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = wallet;
 
-      const { signature } = await walletProvider.signAndSendTransaction(transaction);
+      const signedTx = await signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
       await connection.confirmTransaction({
         signature,
         blockhash,
@@ -584,8 +573,7 @@ export function StakeContent() {
 
   // Request unstake - starts 24h unbonding period (always 100% of shares)
   const handleRequestUnstake = async () => {
-    const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
-    if (!wallet || !walletProvider) {
+    if (!wallet) {
       toast.error('Please connect your wallet first');
       return;
     }
@@ -629,7 +617,8 @@ export function StakeContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = wallet;
 
-      const { signature } = await walletProvider.signAndSendTransaction(transaction);
+      const signedTx = await signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
       await connection.confirmTransaction({
         signature,
         blockhash,
@@ -653,8 +642,7 @@ export function StakeContent() {
 
   // Cancel unstake - re-stakes unbonding shares (only when vault not frozen)
   const handleCancelUnstake = async () => {
-    const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
-    if (!wallet || !walletProvider) {
+    if (!wallet) {
       toast.error('Please connect your wallet first');
       return;
     }
@@ -695,7 +683,8 @@ export function StakeContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = wallet;
 
-      const { signature } = await walletProvider.signAndSendTransaction(transaction);
+      const signedTx = await signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
       await connection.confirmTransaction({
         signature,
         blockhash,
@@ -719,8 +708,7 @@ export function StakeContent() {
 
   // Complete unstake - withdraw tokens after 24h unbonding period
   const handleCompleteUnstake = async () => {
-    const walletProvider = (window as WindowWithWallets).solana || (window as WindowWithWallets).solflare;
-    if (!wallet || !walletProvider) {
+    if (!wallet) {
       toast.error('Please connect your wallet first');
       return;
     }
@@ -785,7 +773,8 @@ export function StakeContent() {
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = wallet;
 
-      const { signature } = await walletProvider.signAndSendTransaction(transaction);
+      const signedTx = await signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
       await connection.confirmTransaction({
         signature,
         blockhash,
