@@ -19,7 +19,7 @@
 
 import { Router } from 'express';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import bs58 from 'bs58';
 import { getPool } from '../../app/utils/database';
 import { SolPriceService } from '../../app/services/sol-price.service';
 import { ZcPriceService } from '../../app/services/zc-price.service';
@@ -27,9 +27,17 @@ import { POOL_METADATA } from '../config/pools';
 
 const router = Router();
 
-// Vault program ID and ZC token mint
+// Vault program ID
 const PROGRAM_ID = new PublicKey("47rZ1jgK7zU6XAgffAfXkDX1JkiiRi4HRPBytossWR12");
-const ZC_TOKEN_MINT = new PublicKey("GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC");
+
+// UserStake account discriminator from IDL: [102, 53, 163, 107, 9, 138, 87, 153]
+const USER_STAKE_DISCRIMINATOR = Buffer.from([102, 53, 163, 107, 9, 138, 87, 153]);
+
+// UserStake account layout offsets:
+// discriminator (8) + owner (32) + shares (8) + unbonding_shares (8) + ...
+const USER_STAKE_OWNER_OFFSET = 8;
+const USER_STAKE_SHARES_OFFSET = 40;
+const USER_STAKE_UNBONDING_SHARES_OFFSET = 48;
 
 // Cache for staker volume data (30 second TTL)
 let volumeCache: { data: any; timestamp: number } | null = null;
@@ -59,33 +67,27 @@ router.get('/volume', async (_req, res) => {
       return res.json(volumeCache.data);
     }
 
-    // 1. Get shareMint PDA
-    const [shareMint] = PublicKey.findProgramAddressSync(
-      [Buffer.from("share_mint")],
-      PROGRAM_ID
-    );
-
-    // 2. Get ALL token accounts holding sZC using getProgramAccounts
+    // Get ALL UserStake accounts from the staking vault program
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
 
-    // Use getProgramAccounts with filters to get all sZC token accounts
-    const tokenAccounts = await connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
+    // Query UserStake accounts by discriminator
+    const userStakeAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
-        { dataSize: 165 }, // Token account size
-        { memcmp: { offset: 0, bytes: shareMint.toBase58() } } // Filter by mint
+        { memcmp: { offset: 0, bytes: bs58.encode(USER_STAKE_DISCRIMINATOR) } }
       ]
     });
 
-    // 3. Parse accounts and filter for balance > 0
+    // Parse accounts and filter for shares > 0
     const stakerAddresses: string[] = [];
-    for (const { account } of tokenAccounts) {
-      // Token account layout: mint (32) + owner (32) + amount (8) + ...
-      // Owner is at offset 32, amount is at offset 64
-      const owner = new PublicKey(account.data.slice(32, 64));
-      const amount = account.data.readBigUInt64LE(64);
+    for (const { account } of userStakeAccounts) {
+      // UserStake layout: discriminator (8) + owner (32) + shares (8) + unbonding_shares (8) + ...
+      const owner = new PublicKey(account.data.slice(USER_STAKE_OWNER_OFFSET, USER_STAKE_OWNER_OFFSET + 32));
+      const shares = account.data.readBigUInt64LE(USER_STAKE_SHARES_OFFSET);
+      const unbondingShares = account.data.readBigUInt64LE(USER_STAKE_UNBONDING_SHARES_OFFSET);
 
-      if (amount > 0n) {
+      // Include stakers with either active shares or unbonding shares
+      if (shares > 0n || unbondingShares > 0n) {
         stakerAddresses.push(owner.toBase58());
       }
     }
@@ -156,29 +158,25 @@ router.get('/trades', async (req, res) => {
       cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     }
 
-    // 1. Get shareMint PDA
-    const [shareMint] = PublicKey.findProgramAddressSync(
-      [Buffer.from("share_mint")],
-      PROGRAM_ID
-    );
-
-    // 2. Get ALL staker addresses using getProgramAccounts
+    // Get ALL UserStake accounts from the staking vault program
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
 
-    const tokenAccounts = await connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
+    // Query UserStake accounts by discriminator
+    const userStakeAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
-        { dataSize: 165 },
-        { memcmp: { offset: 0, bytes: shareMint.toBase58() } }
+        { memcmp: { offset: 0, bytes: bs58.encode(USER_STAKE_DISCRIMINATOR) } }
       ]
     });
 
-    // 3. Parse staker addresses
+    // Parse staker addresses (include those with shares or unbonding shares)
     const stakerAddresses: string[] = [];
-    for (const { account } of tokenAccounts) {
-      const owner = new PublicKey(account.data.slice(32, 64));
-      const amount = account.data.readBigUInt64LE(64);
-      if (amount > 0n) {
+    for (const { account } of userStakeAccounts) {
+      const owner = new PublicKey(account.data.slice(USER_STAKE_OWNER_OFFSET, USER_STAKE_OWNER_OFFSET + 32));
+      const shares = account.data.readBigUInt64LE(USER_STAKE_SHARES_OFFSET);
+      const unbondingShares = account.data.readBigUInt64LE(USER_STAKE_UNBONDING_SHARES_OFFSET);
+
+      if (shares > 0n || unbondingShares > 0n) {
         stakerAddresses.push(owner.toBase58());
       }
     }
@@ -187,7 +185,7 @@ router.get('/trades', async (req, res) => {
       return res.json({ trades: [], count: 0 });
     }
 
-    // 4. Query trades for all stakers across ALL moderators, with market labels from proposals
+    // Query trades for all stakers across ALL moderators, with market labels from proposals
     const pool = getPool();
     const params: (string[] | number | Date)[] = [stakerAddresses];
     let query = `
@@ -272,39 +270,77 @@ router.get('/list', async (req, res) => {
       return res.json(stakersListCache.data);
     }
 
-    // 1. Get shareMint PDA
-    const [shareMint] = PublicKey.findProgramAddressSync(
-      [Buffer.from("share_mint")],
-      PROGRAM_ID
-    );
-
-    // 2. Get ALL token accounts holding sZC using getProgramAccounts
+    // Get ALL UserStake accounts from the staking vault program
     const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
 
-    const tokenAccounts = await connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
+    // Fetch VaultState to get exchange rate (total_assets / total_shares)
+    const [vaultState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("vault_state")],
+      PROGRAM_ID
+    );
+    const vaultStateAccount = await connection.getAccountInfo(vaultState);
+
+    let exchangeRate = 1;
+    if (vaultStateAccount) {
+      // VaultState layout: discriminator(8) + admin(32) + underlying_mint(32) + pda_bump(1) +
+      // operations_enabled(1) + is_frozen(1) + total_shares(8) + total_assets(8) + reserved_assets(8) +
+      // unbonding_period(8) + queued_rewards(8) + last_update_ts(8) + stream_start_ts(8) + stream_end_ts(8) + reward_rate(8)
+      const totalSharesOffset = 8 + 32 + 32 + 1 + 1 + 1; // 75
+      const totalAssetsOffset = totalSharesOffset + 8; // 83
+      const lastUpdateTsOffset = totalAssetsOffset + 8 + 8 + 8 + 8; // 83 + 32 = 115
+      const streamEndTsOffset = lastUpdateTsOffset + 8 + 8; // 131
+      const rewardRateOffset = streamEndTsOffset + 8; // 139
+
+      const totalShares = Number(vaultStateAccount.data.readBigUInt64LE(totalSharesOffset));
+      const totalAssets = Number(vaultStateAccount.data.readBigUInt64LE(totalAssetsOffset));
+      const lastUpdateTs = Number(vaultStateAccount.data.readBigInt64LE(lastUpdateTsOffset));
+      const streamEndTs = Number(vaultStateAccount.data.readBigInt64LE(streamEndTsOffset));
+      const rewardRate = Number(vaultStateAccount.data.readBigUInt64LE(rewardRateOffset));
+
+      // Calculate accrued rewards since last update (same as on-chain previewUnstake)
+      const now = Math.floor(Date.now() / 1000);
+      const effectiveTime = Math.min(now, streamEndTs);
+      const timeElapsed = Math.max(0, effectiveTime - lastUpdateTs);
+      const accruedRewards = rewardRate * timeElapsed;
+
+      // Live total assets = stored total_assets + accrued streaming rewards
+      const liveTotalAssets = totalAssets + accruedRewards;
+
+      if (totalShares > 0) {
+        exchangeRate = liveTotalAssets / totalShares;
+      }
+    }
+
+    // Query UserStake accounts by discriminator
+    const userStakeAccounts = await connection.getProgramAccounts(PROGRAM_ID, {
       filters: [
-        { dataSize: 165 },
-        { memcmp: { offset: 0, bytes: shareMint.toBase58() } }
+        { memcmp: { offset: 0, bytes: bs58.encode(USER_STAKE_DISCRIMINATOR) } }
       ]
     });
 
-    // 3. Parse accounts and collect staker data
+    // Parse accounts and collect staker data
     const stakers: { address: string; balance: string; balanceRaw: bigint }[] = [];
     let totalBalance = 0n;
 
-    for (const { account } of tokenAccounts) {
-      const owner = new PublicKey(account.data.slice(32, 64));
-      const amount = account.data.readBigUInt64LE(64);
+    for (const { account } of userStakeAccounts) {
+      const owner = new PublicKey(account.data.slice(USER_STAKE_OWNER_OFFSET, USER_STAKE_OWNER_OFFSET + 32));
+      const shares = account.data.readBigUInt64LE(USER_STAKE_SHARES_OFFSET);
+      const unbondingShares = account.data.readBigUInt64LE(USER_STAKE_UNBONDING_SHARES_OFFSET);
 
-      if (amount > 0n) {
-        const balanceNum = Number(amount) / 1e6; // sZC has 6 decimals
+      // Total staked = active shares + unbonding shares
+      const totalShares = shares + unbondingShares;
+
+      if (totalShares > 0n) {
+        // Convert shares to ZC value using exchange rate
+        const sharesNum = Number(totalShares) / 1e6;
+        const zcValue = sharesNum * exchangeRate;
         stakers.push({
           address: owner.toBase58(),
-          balance: balanceNum.toFixed(2),
-          balanceRaw: amount
+          balance: zcValue.toFixed(2),
+          balanceRaw: totalShares
         });
-        totalBalance += amount;
+        totalBalance += totalShares;
       }
     }
 
@@ -365,7 +401,7 @@ router.get('/list', async (req, res) => {
     const responseData = {
       stakers: stakersWithData,
       count: stakersWithData.length,
-      totalStaked: (Number(totalBalance) / 1e6).toFixed(2)
+      totalStaked: ((Number(totalBalance) / 1e6) * exchangeRate).toFixed(2)
     };
 
     // Update cache (only for ALL period)
