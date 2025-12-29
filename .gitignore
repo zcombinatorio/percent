@@ -43,3 +43,5 @@ stake-admin.json
 tmp/
 temp/
 *.tmp.env.test
+
+*.json
