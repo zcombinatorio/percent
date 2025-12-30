@@ -288,7 +288,7 @@ export default function HomePage() {
                         const rawContent = content.content || cleanedDescription || '';
 
                         const cardInner = (
-                          <div className="flex flex-col justify-between h-full">
+                          <div className="flex flex-col justify-between h-full overflow-hidden">
                             <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
                               QM {tokenSlug.toUpperCase()}-{proposal.id}
                               {githubUrl && (
@@ -300,7 +300,7 @@ export default function HomePage() {
                             <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
                               {content.title}
                             </div>
-                            <div className={`text-sm description-links ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#DDDDD7' }}>
+                            <div className={`text-sm description-links break-all ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#DDDDD7' }}>
                               {rawContent}
                             </div>
                           </div>
@@ -311,17 +311,17 @@ export default function HomePage() {
                             href={githubUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-[4] h-full"
+                            className="flex-[4] h-full min-w-0"
                             onMouseEnter={() => setIsLiveProposalHovered(true)}
                             onMouseLeave={() => setIsLiveProposalHovered(false)}
                           >
-                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full">
+                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full overflow-hidden">
                               {cardInner}
                             </div>
                           </a>
                         ) : (
                           <div
-                            className="flex-[4] bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 transition-all duration-300"
+                            className="flex-[4] min-w-0 bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 transition-all duration-300"
                             onMouseEnter={() => setIsLiveProposalHovered(true)}
                             onMouseLeave={() => setIsLiveProposalHovered(false)}
                           >
