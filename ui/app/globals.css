@@ -252,6 +252,35 @@ body {
   caret-color: transparent;
 }
 
+/* Small variant for 3-digit inputs (128px × 180px) */
+.editable-flip-card-container.small {
+  width: 128px;
+  height: 180px;
+  font-size: 90px;
+}
+
+.editable-flip-card-container.small .editable-flip-card-upper {
+  border-radius: 20px 20px 0 0;
+  padding-bottom: 3px;
+}
+
+.editable-flip-card-container.small .editable-flip-card-lower {
+  border-radius: 0 0 20px 20px;
+  padding-top: 3px;
+}
+
+.editable-flip-card-container.small .editable-flip-card-upper .editable-flip-card-text {
+  transform: translateY(calc(50% + 3px));
+}
+
+.editable-flip-card-container.small .editable-flip-card-lower .editable-flip-card-text {
+  transform: translateY(calc(-50% - 3px));
+}
+
+.editable-flip-card-container.small .editable-flip-card-input {
+  font-size: 90px;
+}
+
 .description-links a:hover {
   text-decoration: underline !important;
 }

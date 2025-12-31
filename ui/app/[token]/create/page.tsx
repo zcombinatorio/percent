@@ -95,6 +95,7 @@ export default function CreatePage() {
   // Refs for flip card inputs to manage auto-focus
   const firstDigitRef = useRef<HTMLInputElement>(null);
   const secondDigitRef = useRef<HTMLInputElement>(null);
+  const thirdDigitRef = useRef<HTMLInputElement>(null);
 
   // Ref for choice input to maintain focus when navigating
   const choiceInputRef = useRef<HTMLInputElement>(null);
@@ -627,34 +628,52 @@ export default function CreatePage() {
 
                       {/* Bordered Container for Flip Cards */}
                       <div className="border border-[#191919] rounded-[6px] py-6 px-4">
-                        {/* Massive Flip Cards */}
-                        <div className="flex items-center justify-center gap-4">
+                        {/* Flip Cards - 3 digits for up to 999 hours */}
+                        <div className="flex items-center justify-center gap-2">
                           <EditableFlipCard
                             ref={firstDigitRef}
-                            digit={proposalLengthHours.padStart(2, '0')[0]}
+                            digit={proposalLengthHours.padStart(3, '0')[0]}
                             onChange={(val) => {
-                              const ones = proposalLengthHours.padStart(2, '0')[1];
-                              const newHours = parseInt(val + ones) || 0;
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(val + padded[1] + padded[2]) || 0;
                               setProposalLengthHours(newHours.toString());
                             }}
                             onValueEntered={() => {
-                              // Auto-focus and select second digit for immediate editing
                               if (secondDigitRef.current) {
                                 secondDigitRef.current.focus();
                                 secondDigitRef.current.select();
                               }
                             }}
                             disabled={isSubmitting}
+                            size="small"
                           />
                           <EditableFlipCard
                             ref={secondDigitRef}
-                            digit={proposalLengthHours.padStart(2, '0')[1]}
+                            digit={proposalLengthHours.padStart(3, '0')[1]}
                             onChange={(val) => {
-                              const tens = proposalLengthHours.padStart(2, '0')[0];
-                              const newHours = parseInt(tens + val) || 0;
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(padded[0] + val + padded[2]) || 0;
+                              setProposalLengthHours(newHours.toString());
+                            }}
+                            onValueEntered={() => {
+                              if (thirdDigitRef.current) {
+                                thirdDigitRef.current.focus();
+                                thirdDigitRef.current.select();
+                              }
+                            }}
+                            disabled={isSubmitting}
+                            size="small"
+                          />
+                          <EditableFlipCard
+                            ref={thirdDigitRef}
+                            digit={proposalLengthHours.padStart(3, '0')[2]}
+                            onChange={(val) => {
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(padded[0] + padded[1] + val) || 0;
                               setProposalLengthHours(newHours.toString());
                             }}
                             disabled={isSubmitting}
+                            size="small"
                           />
                         </div>
 
