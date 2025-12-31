@@ -7,10 +7,11 @@ interface EditableFlipCardProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   onValueEntered?: () => void; // Callback after user types a value
+  size?: 'default' | 'small';
 }
 
 const EditableFlipCard = forwardRef<HTMLInputElement, EditableFlipCardProps>(
-  ({ digit, onChange, disabled, onValueEntered }, ref) => {
+  ({ digit, onChange, disabled, onValueEntered, size = 'default' }, ref) => {
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,7 +64,7 @@ const EditableFlipCard = forwardRef<HTMLInputElement, EditableFlipCardProps>(
 
   return (
     <div
-      className={`editable-flip-card-container ${isFocused ? 'focused' : ''} ${disabled ? 'disabled' : ''}`}
+      className={`editable-flip-card-container ${size === 'small' ? 'small' : ''} ${isFocused ? 'focused' : ''} ${disabled ? 'disabled' : ''}`}
       onClick={handleClick}
     >
       {/* Upper Half */}

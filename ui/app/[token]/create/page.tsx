@@ -11,6 +11,7 @@ import Header from '@/components/Header';
 import EditableFlipCard from '@/components/EditableFlipCard';
 import toast from 'react-hot-toast';
 import bs58 from 'bs58';
+import { handleMarkdownKeyDown } from '@/lib/renderMarkdown';
 
 export default function CreatePage() {
   const searchParams = useSearchParams();
@@ -95,6 +96,7 @@ export default function CreatePage() {
   // Refs for flip card inputs to manage auto-focus
   const firstDigitRef = useRef<HTMLInputElement>(null);
   const secondDigitRef = useRef<HTMLInputElement>(null);
+  const thirdDigitRef = useRef<HTMLInputElement>(null);
 
   // Ref for choice input to maintain focus when navigating
   const choiceInputRef = useRef<HTMLInputElement>(null);
@@ -434,6 +436,7 @@ export default function CreatePage() {
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
+                        onKeyDown={(e) => handleMarkdownKeyDown(e, setTitle)}
                         placeholder="Mint $ZC as reward for next Combinator founder?"
                         className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
                         style={{
@@ -455,6 +458,7 @@ export default function CreatePage() {
                         id="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
+                        onKeyDown={(e) => handleMarkdownKeyDown(e, setDescription)}
                         placeholder="For Combinator to be successful, it needs launchers. Providing a $ZC incentive will assist with this effort."
                         className="w-full flex-1 px-3 py-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono resize-none"
                         style={{
@@ -627,34 +631,52 @@ export default function CreatePage() {
 
                       {/* Bordered Container for Flip Cards */}
                       <div className="border border-[#191919] rounded-[6px] py-6 px-4">
-                        {/* Massive Flip Cards */}
-                        <div className="flex items-center justify-center gap-4">
+                        {/* Flip Cards - 3 digits for up to 999 hours */}
+                        <div className="flex items-center justify-center gap-2">
                           <EditableFlipCard
                             ref={firstDigitRef}
-                            digit={proposalLengthHours.padStart(2, '0')[0]}
+                            digit={proposalLengthHours.padStart(3, '0')[0]}
                             onChange={(val) => {
-                              const ones = proposalLengthHours.padStart(2, '0')[1];
-                              const newHours = parseInt(val + ones) || 0;
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(val + padded[1] + padded[2]) || 0;
                               setProposalLengthHours(newHours.toString());
                             }}
                             onValueEntered={() => {
-                              // Auto-focus and select second digit for immediate editing
                               if (secondDigitRef.current) {
                                 secondDigitRef.current.focus();
                                 secondDigitRef.current.select();
                               }
                             }}
                             disabled={isSubmitting}
+                            size="small"
                           />
                           <EditableFlipCard
                             ref={secondDigitRef}
-                            digit={proposalLengthHours.padStart(2, '0')[1]}
+                            digit={proposalLengthHours.padStart(3, '0')[1]}
                             onChange={(val) => {
-                              const tens = proposalLengthHours.padStart(2, '0')[0];
-                              const newHours = parseInt(tens + val) || 0;
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(padded[0] + val + padded[2]) || 0;
+                              setProposalLengthHours(newHours.toString());
+                            }}
+                            onValueEntered={() => {
+                              if (thirdDigitRef.current) {
+                                thirdDigitRef.current.focus();
+                                thirdDigitRef.current.select();
+                              }
+                            }}
+                            disabled={isSubmitting}
+                            size="small"
+                          />
+                          <EditableFlipCard
+                            ref={thirdDigitRef}
+                            digit={proposalLengthHours.padStart(3, '0')[2]}
+                            onChange={(val) => {
+                              const padded = proposalLengthHours.padStart(3, '0');
+                              const newHours = parseInt(padded[0] + padded[1] + val) || 0;
                               setProposalLengthHours(newHours.toString());
                             }}
                             disabled={isSubmitting}
+                            size="small"
                           />
                         </div>
 
