@@ -11,6 +11,7 @@ import { useClaimablePositions } from '@/hooks/useClaimablePositions';
 import { formatNumber } from '@/lib/formatters';
 import toast from 'react-hot-toast';
 import { getProposalContent } from '@/lib/proposalContent';
+import { MarkdownText } from '@/lib/renderMarkdown';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CheckCircle2 } from 'lucide-react';
 import { claimWinnings } from '@/lib/trading';
@@ -199,14 +200,14 @@ export default function HistoryPage() {
                         </div>
                       </div>
 
-                      <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>{proposalContent.title}</div>
+                      <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}><MarkdownText>{proposalContent.title}</MarkdownText></div>
 
                       {/* Show summary or full content based on hover */}
                       <div className={`text-sm ${proposalRewards.length > 0 ? 'mb-6' : ''}`} style={{ color: '#DDDDD7' }}>
                         {isHovered ? (
-                          proposalContent.content || <p>{proposal.description}</p>
+                          proposalContent.content || <MarkdownText>{proposal.description}</MarkdownText>
                         ) : (
-                          summaryPreview
+                          <MarkdownText>{summaryPreview}</MarkdownText>
                         )}
                       </div>
 
@@ -334,14 +335,14 @@ export default function HistoryPage() {
                           </div>
                         </div>
 
-                        <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}>{proposalContent.title}</div>
+                        <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}><MarkdownText>{proposalContent.title}</MarkdownText></div>
 
                         {/* Show summary or full content based on hover */}
                         <div className={`text-sm ${proposalRewards.length > 0 ? 'mb-6' : ''}`} style={{ color: '#DDDDD7' }}>
                           {isHovered ? (
-                            proposalContent.content || <p>{proposal.description}</p>
+                            proposalContent.content || <MarkdownText>{proposal.description}</MarkdownText>
                           ) : (
-                            summaryPreview
+                            <MarkdownText>{summaryPreview}</MarkdownText>
                           )}
                         </div>
 

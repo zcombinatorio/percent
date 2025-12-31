@@ -11,6 +11,7 @@ import Header from '@/components/Header';
 import EditableFlipCard from '@/components/EditableFlipCard';
 import toast from 'react-hot-toast';
 import bs58 from 'bs58';
+import { handleMarkdownKeyDown } from '@/lib/renderMarkdown';
 
 export default function CreatePage() {
   const searchParams = useSearchParams();
@@ -435,6 +436,7 @@ export default function CreatePage() {
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
+                        onKeyDown={(e) => handleMarkdownKeyDown(e, setTitle)}
                         placeholder="Mint $ZC as reward for next Combinator founder?"
                         className="w-full h-[56px] px-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono"
                         style={{
@@ -456,6 +458,7 @@ export default function CreatePage() {
                         id="description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
+                        onKeyDown={(e) => handleMarkdownKeyDown(e, setDescription)}
                         placeholder="For Combinator to be successful, it needs launchers. Providing a $ZC incentive will assist with this effort."
                         className="w-full flex-1 px-3 py-3 bg-[#2a2a2a] rounded-[6px] text-white placeholder-gray-600 focus:outline-none border border-[#191919] text-2xl font-ibm-plex-mono resize-none"
                         style={{

@@ -18,6 +18,7 @@ import { useUserBalances } from '@/hooks/useUserBalances';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
 import { getProposalContent } from '@/lib/proposalContent';
 import { getEffectiveMarketCount, filterMarketData } from '@/lib/proposal-overrides';
+import { MarkdownText } from '@/lib/renderMarkdown';
 import { useTokenContext } from '@/providers/TokenContext';
 
 const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').then(mod => mod.LivePriceDisplay), {
@@ -285,7 +286,6 @@ export default function HomePage() {
                         }
 
                         const content = getProposalContent(proposal.id, proposal.title, cleanedDescription, moderatorId?.toString());
-                        const rawContent = content.content || cleanedDescription || '';
 
                         const cardInner = (
                           <div className="flex flex-col justify-between h-full overflow-hidden">
@@ -298,10 +298,10 @@ export default function HomePage() {
                               )}
                             </h1>
                             <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
-                              {content.title}
+                              <MarkdownText>{content.title}</MarkdownText>
                             </div>
                             <div className={`text-sm description-links break-all ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#DDDDD7' }}>
-                              {rawContent}
+                              {content.content ? content.content : <MarkdownText>{cleanedDescription || ''}</MarkdownText>}
                             </div>
                           </div>
                         );
