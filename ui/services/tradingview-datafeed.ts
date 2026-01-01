@@ -98,8 +98,8 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       session: '24x7',
       timezone: 'Etc/UTC',
       ticker: symbolName,
-      exchange: 'PERCENT',
-      listed_exchange: 'PERCENT',
+      exchange: '',
+      listed_exchange: '',
       minmov: 1,
       pricescale: 1, // USD market cap values
       has_intraday: true,
