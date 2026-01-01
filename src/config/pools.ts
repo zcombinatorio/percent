@@ -79,6 +79,7 @@ const POOL_WHITELIST: Record<string, string[]> = {
   // SURF-SOL DAMM Pool (production)
   [TICKER_TO_POOL.SURF]: [
     '4GctbRKwsQjECaY1nL8HiqkgvEUAi8EyhU1ezNmhB3hg',
+    'BV9MxX2veiQwLeWqwzPcMWPEhzV9r47G63b3W3qcDH7X',
   ],
 };
 
