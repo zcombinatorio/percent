@@ -25,7 +25,7 @@ import { SolPriceService } from './sol-price.service';
 import { AMMState } from '../types/amm.interface';
 import { Decimal } from 'decimal.js';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { CpAmm, getPriceFromSqrtPrice } from '@meteora-ag/cp-amm-sdk';
+import { CpAmm, getPriceFromSqrtPrice, getTokenDecimals } from '@meteora-ag/cp-amm-sdk';
 
 /**
  * Scheduler service for managing automatic TWAP cranking and proposal finalization
@@ -401,13 +401,15 @@ export class SchedulerService implements ISchedulerService {
       const poolPubkey = new PublicKey(spotPoolAddress);
       const poolState = await cpAmm.fetchPoolState(poolPubkey);
 
+      // Get token decimals from the mints
+      const tokenAMint = poolState.tokenAMint;
+      const tokenBMint = poolState.tokenBMint;
+      const [tokenADecimal, tokenBDecimal] = await Promise.all([
+        getTokenDecimals(connection, tokenAMint),
+        getTokenDecimals(connection, tokenBMint),
+      ]);
+
       // Calculate price from sqrt price
-      // tokenADecimal and tokenBDecimal come from Meteora's pool state
-      const tokenADecimal = (poolState as any).tokenADecimal;
-      const tokenBDecimal = (poolState as any).tokenBDecimal;
-      if (tokenADecimal === undefined || tokenBDecimal === undefined) {
-        throw new Error(`Pool ${spotPoolAddress} missing decimal configuration in Meteora state`);
-      }
       const priceDecimal = getPriceFromSqrtPrice(
         poolState.sqrtPrice,
         tokenADecimal,
@@ -434,7 +436,10 @@ export class SchedulerService implements ISchedulerService {
 
       this.logger.info(`Recorded spot price for proposal #${proposalId}: $${marketCapUSD.toFixed(2)}`);
     } catch (error) {
-      this.logger.error(`Failed to record spot price for proposal #${proposalId}:`, error);
+      this.logger.error(`Failed to record spot price for proposal #${proposalId}`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       // Don't cancel task on individual failures - might be transient network issues
     }
   }
