@@ -10,7 +10,7 @@ interface CountdownTimerProps {
 }
 
 export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: CountdownTimerProps) => {
-  const [digits, setDigits] = useState<string[]>(['0', '0', '0', '0', '0', '0']);
+  const [digits, setDigits] = useState<string[]>(['0', '0', '0', '0', '0', '0', '0']);
   const [hasEnded, setHasEnded] = useState(false);
 
   useEffect(() => {
@@ -19,7 +19,7 @@ export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: Countdown
       const diff = endsAt - now;
 
       if (diff <= 0) {
-        setDigits(['0', '0', '0', '0', '0', '0']);
+        setDigits(['0', '0', '0', '0', '0', '0', '0']);
         // Only trigger onTimerEnd if proposal is pending and we haven't already triggered
         if (!hasEnded && isPending) {
           setHasEnded(true);
@@ -32,13 +32,14 @@ export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: Countdown
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-      const hoursStr = hours.toString().padStart(2, '0');
+      const hoursStr = hours.toString().padStart(3, '0');
       const minutesStr = minutes.toString().padStart(2, '0');
       const secondsStr = seconds.toString().padStart(2, '0');
 
       setDigits([
         hoursStr[0],
         hoursStr[1],
+        hoursStr[2],
         minutesStr[0],
         minutesStr[1],
         secondsStr[0],
@@ -58,6 +59,7 @@ export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: Countdown
       <div className="flex gap-1">
         <FlipCard digit={digits[0]} />
         <FlipCard digit={digits[1]} />
+        <FlipCard digit={digits[2]} />
       </div>
 
       {/* Separator */}
@@ -65,8 +67,8 @@ export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: Countdown
 
       {/* Minutes */}
       <div className="flex gap-1">
-        <FlipCard digit={digits[2]} />
         <FlipCard digit={digits[3]} />
+        <FlipCard digit={digits[4]} />
       </div>
 
       {/* Separator */}
@@ -74,8 +76,8 @@ export const CountdownTimer = memo(({ endsAt, onTimerEnd, isPending }: Countdown
 
       {/* Seconds */}
       <div className="flex gap-1">
-        <FlipCard digit={digits[4]} />
         <FlipCard digit={digits[5]} />
+        <FlipCard digit={digits[6]} />
       </div>
     </div>
   );
