@@ -17,12 +17,12 @@ dotenv.config();
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
-const MODERATOR_ID = 6;
-const PROPOSAL_ID = 1; // <-- UPDATE THIS
-const WINNING_INDEX = 3; // Option 4 (0-indexed)
+const MODERATOR_ID = 4;
+const PROPOSAL_ID = 20; // <-- UPDATE THIS
+const WINNING_INDEX = 7; // Option 8 (0-indexed)
 
 async function main() {
-  const surfManagerPath = process.env.MANAGER_PRIVATE_KEY_SURF;
+  const surfManagerPath = process.env.MANAGER_PRIVATE_KEY_SURFTEST;
   if (!surfManagerPath) {
     throw new Error('MANAGER_PRIVATE_KEY_SURF not set');
   }
