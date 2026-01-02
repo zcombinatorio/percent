@@ -18,7 +18,7 @@
  */
 
 import { Connection, PublicKey } from '@solana/web3.js';
-import { CpAmm, PoolState, getPriceFromSqrtPrice } from '@meteora-ag/cp-amm-sdk';
+import { CpAmm, PoolState, getPriceFromSqrtPrice, getTokenDecimals } from '@meteora-ag/cp-amm-sdk';
 import { Decimal } from 'decimal.js';
 
 interface AMMPriceData {
@@ -104,15 +104,14 @@ export class MainnetPriceService {
         return null;
       }
 
+      // Get token decimals from the mints
+      const [tokenADecimal, tokenBDecimal] = await Promise.all([
+        getTokenDecimals(this.connection, poolState.tokenAMint),
+        getTokenDecimals(this.connection, poolState.tokenBMint),
+      ]);
+
       // Get price from the sqrt price stored in the pool
       // The price represents tokenB/tokenA (quote/base)
-      const tokenADecimal = (poolState as any).tokenADecimal;
-      const tokenBDecimal = (poolState as any).tokenBDecimal;
-      if (tokenADecimal === undefined || tokenBDecimal === undefined) {
-        console.error(`Pool ${poolAddress} missing decimal configuration in Meteora state`);
-        return null;
-      }
-
       const priceDecimal = getPriceFromSqrtPrice(
         poolState.sqrtPrice,
         tokenADecimal,
