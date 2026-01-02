@@ -522,7 +522,7 @@ export class Moderator implements IModerator {
             tokenA: depositResult.deposited.tokenX,
             tokenB: depositResult.deposited.tokenY
           };
-          depositSignature = depositResult.signature;
+          depositSignature = depositResult.signatures[0];
         } else {
           confirmedAmounts = { tokenA: '0', tokenB: '0' };
           depositSignature = 'no-deposit-needed';
