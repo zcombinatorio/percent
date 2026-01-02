@@ -201,18 +201,20 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
   // Set up chart price subscription for pass/fail markets
   useEffect(() => {
+    if (moderatorId === null) return; // Wait for moderatorId to be available
+
     const priceService = getPriceStreamService();
 
     // Subscribe to chart prices for this proposal (includes pass, fail, and spot)
-    priceService.subscribeToChartPrices(proposalId, handleChartPriceUpdate);
-    console.log('[LivePriceDisplay] Subscribed to chart prices for proposal', proposalId);
+    priceService.subscribeToChartPrices(moderatorId, proposalId, handleChartPriceUpdate);
+    console.log('[LivePriceDisplay] Subscribed to chart prices for proposal', proposalId, 'moderator', moderatorId);
 
     // Cleanup on unmount
     return () => {
-      priceService.unsubscribeFromChartPrices(proposalId, handleChartPriceUpdate);
-      console.log('[LivePriceDisplay] Unsubscribed from chart prices for proposal', proposalId);
+      priceService.unsubscribeFromChartPrices(moderatorId, proposalId, handleChartPriceUpdate);
+      console.log('[LivePriceDisplay] Unsubscribed from chart prices for proposal', proposalId, 'moderator', moderatorId);
     };
-  }, [proposalId, handleChartPriceUpdate]);
+  }, [proposalId, moderatorId, handleChartPriceUpdate]);
 
   // Call the callback when prices update
   useEffect(() => {

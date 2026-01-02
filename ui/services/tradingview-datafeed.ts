@@ -40,6 +40,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   // NOTE: solPrice and totalSupply no longer needed - backend calculates market cap USD
   // All prices (pass, fail, spot) and trade prices are pre-calculated as market cap USD
 
+  // Bound handlers stored as properties to ensure same reference for subscribe/unsubscribe
+  private boundHandleTradeUpdate = this.handleTradeUpdate.bind(this);
+  private boundHandlePriceUpdate = this.handlePriceUpdate.bind(this);
+
   constructor(proposalId: number, market: number, spotPoolAddress?: string, moderatorId?: number, marketLabel?: string, tokenSymbol?: string) {
     this.proposalId = proposalId;
     this.market = market;
@@ -227,13 +231,19 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     // Subscribe to both trade and price updates via WebSocket
     const priceService = getPriceStreamService();
 
+    // moderatorId is required for subscriptions
+    if (this.moderatorId === undefined) {
+      console.warn('[TradingView Datafeed] moderatorId not set, cannot subscribe to real-time updates');
+      return;
+    }
+
     if (!isSpotMarket) {
       // Subscribe to trade updates for conditional markets
-      priceService.subscribeToTrades(this.proposalId, this.handleTradeUpdate.bind(this));
+      priceService.subscribeToTrades(this.moderatorId, this.proposalId, this.boundHandleTradeUpdate);
     }
 
     // Subscribe to chart price updates for all markets (conditional and spot)
-    priceService.subscribeToChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
+    priceService.subscribeToChartPrices(this.moderatorId, this.proposalId, this.boundHandlePriceUpdate);
   }
 
   /**
@@ -384,10 +394,10 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
     this.subscribers.delete(listenerGuid);
 
     // If no more subscribers, unsubscribe from trades and prices
-    if (this.subscribers.size === 0) {
+    if (this.subscribers.size === 0 && this.moderatorId !== undefined) {
       const priceService = getPriceStreamService();
-      priceService.unsubscribeFromTrades(this.proposalId, this.handleTradeUpdate.bind(this));
-      priceService.unsubscribeFromChartPrices(this.proposalId, this.handlePriceUpdate.bind(this));
+      priceService.unsubscribeFromTrades(this.moderatorId, this.proposalId, this.boundHandleTradeUpdate);
+      priceService.unsubscribeFromChartPrices(this.moderatorId, this.proposalId, this.boundHandlePriceUpdate);
     }
   }
 }

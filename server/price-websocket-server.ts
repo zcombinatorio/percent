@@ -35,11 +35,12 @@ interface PriceData {
 interface ClientSubscription {
   tokens: Set<string>;
   poolAddresses?: Map<string, string>; // token -> pool mapping
-  proposals: Set<number>; // subscribed proposal IDs for trades
+  proposals: Set<string>; // subscribed proposals as "moderatorId-proposalId" keys
 }
 
 interface TradeEvent {
   type: 'TRADE';
+  moderatorId: number;
   proposalId: number;
   market: number;  // Market index: 0=fail, 1=pass (or higher for multi-market)
   userAddress: string;
@@ -65,7 +66,7 @@ class PriceWebSocketServer {
   private mainnetService = getMainnetPriceService();
   private mainnetPools: Set<string> = new Set(); // Track which pools are on mainnet
   private pgClient: Client | null = null;
-  private subscribedProposals: Set<number> = new Set();
+  private subscribedProposals: Set<string> = new Set(); // "moderatorId-proposalId" keys
   private solPrice: number = 150; // Default SOL price in USD
   private SOL_ADDRESS = 'So11111111111111111111111111111111111111112';
 
@@ -177,22 +178,36 @@ class PriceWebSocketServer {
         break;
 
       case 'SUBSCRIBE_TRADES':
-        if (data.proposalId && typeof data.proposalId === 'number') {
-          console.log('Client subscribing to trades for proposal:', data.proposalId);
-          client.proposals.add(data.proposalId);
-          this.subscribedProposals.add(data.proposalId);
+        // Use typeof checks only - avoids falsy check failing for ID 0
+        if (typeof data.proposalId === 'number' &&
+            typeof data.moderatorId === 'number') {
+          const subscriptionKey = `${data.moderatorId}-${data.proposalId}`;
+          console.log('Client subscribing to trades for proposal:', data.proposalId, 'moderator:', data.moderatorId);
+          client.proposals.add(subscriptionKey);
+          this.subscribedProposals.add(subscriptionKey);
 
           // Send acknowledgment
           ws.send(JSON.stringify({
             type: 'TRADES_SUBSCRIBED',
-            proposalId: data.proposalId
+            proposalId: data.proposalId,
+            moderatorId: data.moderatorId
+          }));
+        } else if (typeof data.proposalId === 'number') {
+          // Legacy support: warn but don't subscribe without moderatorId
+          console.warn('SUBSCRIBE_TRADES missing moderatorId - subscription ignored:', data.proposalId);
+          ws.send(JSON.stringify({
+            type: 'ERROR',
+            message: 'SUBSCRIBE_TRADES requires both proposalId and moderatorId'
           }));
         }
         break;
 
       case 'UNSUBSCRIBE_TRADES':
-        if (data.proposalId && typeof data.proposalId === 'number') {
-          client.proposals.delete(data.proposalId);
+        // Use typeof checks only - avoids falsy check failing for ID 0
+        if (typeof data.proposalId === 'number' &&
+            typeof data.moderatorId === 'number') {
+          const subscriptionKey = `${data.moderatorId}-${data.proposalId}`;
+          client.proposals.delete(subscriptionKey);
           this.updateSubscribedProposals();
         }
         break;
@@ -368,9 +383,9 @@ class PriceWebSocketServer {
 
   private updateSubscribedProposals() {
     // Update the set of all subscribed proposals across all clients
-    const allProposals = new Set<number>();
+    const allProposals = new Set<string>();
     this.clients.forEach(subscription => {
-      subscription.proposals.forEach(proposalId => allProposals.add(proposalId));
+      subscription.proposals.forEach(key => allProposals.add(key));
     });
     this.subscribedProposals = allProposals;
   }
@@ -430,18 +445,35 @@ class PriceWebSocketServer {
       // Get trades from last 5 seconds for all subscribed proposals
       // Table name must match schema_vqm.sql: qm_trade_history
       if (this.subscribedProposals.size > 0) {
-        const proposalIds = Array.from(this.subscribedProposals).join(',');
+        // Parse subscription keys to get (moderatorId, proposalId) pairs
+        const subscriptionPairs: { moderatorId: number; proposalId: number }[] = [];
+        this.subscribedProposals.forEach(key => {
+          const [modId, propId] = key.split('-').map(Number);
+          if (!isNaN(modId) && !isNaN(propId)) {
+            subscriptionPairs.push({ moderatorId: modId, proposalId: propId });
+          }
+        });
+
+        if (subscriptionPairs.length === 0) return;
+
+        // Build WHERE clause for (moderator_id, proposal_id) pairs
+        const whereClauses = subscriptionPairs
+          .map((_, i) => `(moderator_id = $${i * 2 + 1} AND proposal_id = $${i * 2 + 2})`)
+          .join(' OR ');
+        const params = subscriptionPairs.flatMap(p => [p.moderatorId, p.proposalId]);
+
         const query = `
           SELECT * FROM qm_trade_history
-          WHERE proposal_id IN (${proposalIds})
+          WHERE (${whereClauses})
           AND timestamp > NOW() - INTERVAL '5 seconds'
           ORDER BY timestamp DESC
         `;
 
-        const result = await this.pgClient.query(query);
+        const result = await this.pgClient.query(query, params);
         result.rows.forEach(trade => {
           this.broadcastTrade({
             type: 'TRADE',
+            moderatorId: trade.moderator_id,
             proposalId: trade.proposal_id,
             market: trade.market,
             userAddress: trade.user_address,
@@ -464,6 +496,12 @@ class PriceWebSocketServer {
     const moderatorId = tradeData.moderatorId || tradeData.moderator_id;
     const priceInSol = parseFloat(tradeData.price);
 
+    // Validate required fields
+    if (moderatorId === undefined || proposalId === undefined) {
+      console.error('[WebSocket Server] Trade notification missing moderatorId or proposalId:', tradeData);
+      return;
+    }
+
     // Calculate market cap USD: price (SOL) × actual supply × SOL/USD
     const actualSupply = await this.getProposalTotalSupply(moderatorId, proposalId);
     const marketCapUsd = priceInSol * actualSupply * this.solPrice;
@@ -471,6 +509,7 @@ class PriceWebSocketServer {
     // Broadcast to all clients subscribed to this proposal with BOTH formats
     const trade: TradeEvent & { marketCapUsd: number } = {
       type: 'TRADE',
+      moderatorId: moderatorId,
       proposalId: proposalId,
       market: tradeData.market,
       userAddress: tradeData.userAddress || tradeData.user_address,
@@ -497,6 +536,12 @@ class PriceWebSocketServer {
     const market = priceData.market;
     const priceValue = parseFloat(priceData.price);
 
+    // Validate required fields
+    if (moderatorId === undefined || proposalId === undefined) {
+      console.error('[WebSocket Server] Price notification missing moderatorId or proposalId:', priceData);
+      return;
+    }
+
     let marketCapUsd: number;
 
     // Check if this is a spot market price (market=-1, already in USD) or conditional market (in SOL)
@@ -514,6 +559,7 @@ class PriceWebSocketServer {
     // Broadcast price update with BOTH formats for backwards compatibility
     const priceUpdate = {
       type: 'PRICE_UPDATE',
+      moderatorId: moderatorId,
       proposalId: proposalId,
       market: market,
       price: priceValue,              // OLD: for legacy clients (SOL for pass/fail, USD for spot)
@@ -521,33 +567,35 @@ class PriceWebSocketServer {
       timestamp: priceData.timestamp || new Date().toISOString()
     };
 
-    console.log(`[WebSocket Server] Broadcasting price update: proposal ${priceUpdate.proposalId}, market ${priceUpdate.market}, marketCap $${marketCapUsd.toFixed(2)}`);
+    console.log(`[WebSocket Server] Broadcasting price update: proposal ${priceUpdate.proposalId} (moderator ${moderatorId}), market ${priceUpdate.market}, marketCap $${marketCapUsd.toFixed(2)}`);
     console.log(`[WebSocket Server] Subscribed proposals:`, Array.from(this.subscribedProposals));
     this.broadcastPrice(priceUpdate);
   }
 
   private broadcastTrade(trade: TradeEvent) {
+    const subscriptionKey = `${trade.moderatorId}-${trade.proposalId}`;
     this.clients.forEach((subscription, ws) => {
-      if (subscription.proposals.has(trade.proposalId) && ws.readyState === 1) {
+      if (subscription.proposals.has(subscriptionKey) && ws.readyState === 1) {
         ws.send(JSON.stringify(trade));
       }
     });
-    console.log(`Trade broadcast for proposal ${trade.proposalId}: market ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
+    console.log(`Trade broadcast for proposal ${trade.proposalId} (moderator ${trade.moderatorId}): market ${trade.market} ${trade.isBaseToQuote ? 'sell' : 'buy'}`);
   }
 
   private broadcastPrice(priceUpdate: any) {
     console.log('[WebSocket Server] Broadcasting priceUpdate object:', JSON.stringify(priceUpdate, null, 2));
 
+    const subscriptionKey = `${priceUpdate.moderatorId}-${priceUpdate.proposalId}`;
     let clientCount = 0;
     this.clients.forEach((subscription, ws) => {
-      if (subscription.proposals.has(priceUpdate.proposalId) && ws.readyState === 1) {
+      if (subscription.proposals.has(subscriptionKey) && ws.readyState === 1) {
         const message = JSON.stringify(priceUpdate);
         console.log('[WebSocket Server] Sending message to client:', message);
         ws.send(message);
         clientCount++;
       }
     });
-    console.log(`[WebSocket Server] Price broadcast sent to ${clientCount} client(s) for proposal ${priceUpdate.proposalId}`);
+    console.log(`[WebSocket Server] Price broadcast sent to ${clientCount} client(s) for proposal ${priceUpdate.proposalId} (moderator ${priceUpdate.moderatorId})`);
     console.log(`Price broadcast for proposal ${priceUpdate.proposalId}: ${priceUpdate.market} @ ${priceUpdate.price}`);
   }
 

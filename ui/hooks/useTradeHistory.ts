@@ -39,6 +39,7 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const proposalIdRef = useRef(proposalId);
+  const moderatorIdRef = useRef(moderatorId);
 
   const fetchTrades = useCallback(async () => {
     if (proposalId === null) return;
@@ -67,10 +68,14 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     }
   }, [proposalId, moderatorId]);
 
-  // Update proposalId ref
+  // Update refs
   useEffect(() => {
     proposalIdRef.current = proposalId;
   }, [proposalId]);
+
+  useEffect(() => {
+    moderatorIdRef.current = moderatorId;
+  }, [moderatorId]);
 
   // WebSocket connection for real-time trade updates
   const connectWebSocket = useCallback(() => {
@@ -93,9 +98,18 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
         setError(null);
         reconnectAttemptsRef.current = 0;
 
-        // Subscribe to trades for this proposal
+        // Subscribe to trades for this proposal (requires moderatorId)
+        // Use ref to avoid stale closure - moderatorId may have changed since connectWebSocket was created
+        const modId = typeof moderatorIdRef.current === 'string'
+          ? parseInt(moderatorIdRef.current, 10)
+          : moderatorIdRef.current;
+        if (modId === undefined || isNaN(modId)) {
+          console.warn('Trade WebSocket: moderatorId not available, cannot subscribe');
+          return;
+        }
         ws.send(JSON.stringify({
           type: 'SUBSCRIBE_TRADES',
+          moderatorId: modId,
           proposalId: proposalIdRef.current
         }));
       };
@@ -104,7 +118,13 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
         try {
           const data = JSON.parse(event.data);
 
-          if (data.type === 'TRADE' && data.proposalId === proposalIdRef.current) {
+          // Check both proposalId AND moderatorId to ensure we only process trades for our specific proposal
+          const expectedModId = typeof moderatorIdRef.current === 'string'
+            ? parseInt(moderatorIdRef.current, 10)
+            : moderatorIdRef.current;
+          if (data.type === 'TRADE' &&
+              data.proposalId === proposalIdRef.current &&
+              data.moderatorId === expectedModId) {
             // New trade received, add to the beginning of the array
             const newTrade: Trade = {
               id: data.id || Date.now(),
@@ -180,10 +200,16 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
       // Send unsubscribe if connected
       if (proposalIdRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
-          wsRef.current.send(JSON.stringify({
-            type: 'UNSUBSCRIBE_TRADES',
-            proposalId: proposalIdRef.current
-          }));
+          const modId = typeof moderatorIdRef.current === 'string'
+            ? parseInt(moderatorIdRef.current, 10)
+            : moderatorIdRef.current;
+          if (modId !== undefined && !isNaN(modId)) {
+            wsRef.current.send(JSON.stringify({
+              type: 'UNSUBSCRIBE_TRADES',
+              moderatorId: modId,
+              proposalId: proposalIdRef.current
+            }));
+          }
         } catch (err) {
           console.error('Error unsubscribing from trades:', err);
         }
