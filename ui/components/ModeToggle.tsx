@@ -120,8 +120,12 @@ function MarqueeText({ children, isSelected, className, style }: {
 }
 
 export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPercent, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
-  // Check if TWAP data has loaded (at least one non-null value)
+  // Check if all data has loaded (need TWAP, live prices, and SOL price to compute expected TWAP in USD)
+  // Show skeleton until all are ready to avoid reordering flicker
   const hasTwapData = marketCaps.some(cap => cap != null);
+  const hasLivePrices = livePrices.some(price => price != null);
+  const hasSolPrice = solPrice != null;
+  const hasAllData = hasTwapData && hasLivePrices && hasSolPrice;
 
   // Convert current TWAPs from SOL to USD (for display)
   const marketCapsUsd = marketCaps.map(cap =>
@@ -147,14 +151,13 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
 
   // Sort indices by expected final TWAP (highest first) for ranking display
-  // Falls back to current TWAP when live prices aren't loaded yet to avoid reordering flicker
-  // Don't sort at all until TWAP data exists - prevents index→sorted flicker
-  const sortedIndices = hasTwapData
+  // Only sort once we have all data to avoid reordering flicker
+  const sortedIndices = hasAllData
     ? marketLabels
         .map((_, index) => index)
         .sort((a, b) => {
-          const aVal = expectedFinalTwapsUsd[a] ?? marketCapsUsd[a] ?? -Infinity;
-          const bVal = expectedFinalTwapsUsd[b] ?? marketCapsUsd[b] ?? -Infinity;
+          const aVal = expectedFinalTwapsUsd[a] ?? -Infinity;
+          const bVal = expectedFinalTwapsUsd[b] ?? -Infinity;
           return bVal - aVal; // Descending order
         })
     : marketLabels.map((_, index) => index);
@@ -166,8 +169,8 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
           II. Select Coin (TWAP)
         </span>
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
-          {!hasTwapData ? (
-            // Loading skeleton - show placeholder rows until TWAP data loads
+          {!hasAllData ? (
+            // Loading skeleton - show placeholder rows until all data loads
             marketLabels.map((_, index) => (
               <div key={index} className="flex items-center justify-between select-none">
                 <div className="h-6 bg-[#2a2a2a] rounded animate-pulse flex-1 mr-3" style={{ maxWidth: '200px' }} />
