@@ -50,7 +50,9 @@ const getMaxSigDigits = (values: (number | null)[]): number => {
 
 interface ModeToggleProps {
   marketLabels: string[];
-  marketCaps: (number | null)[];
+  marketCaps: (number | null)[];       // Current TWAP values
+  livePrices: (number | null)[];       // Current spot prices
+  timeElapsedPercent: number;          // 0-1 representing market progress
   selectedIndex: number;
   onSelect: (index: number) => void;
   solPrice?: number | null;
@@ -117,21 +119,31 @@ function MarqueeText({ children, isSelected, className, style }: {
   );
 }
 
-export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
-  // Convert TWAPs from SOL to USD
-  const marketCapsUsd = marketCaps.map(cap =>
-    cap != null && solPrice ? cap * solPrice : null
+export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPercent, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
+  // Calculate expected final TWAP for each market
+  // Formula: expectedFinal = currentTwap × elapsed% + spotPrice × remaining%
+  const expectedFinalTwaps = marketCaps.map((twap, i) => {
+    const spotPrice = livePrices[i];
+    if (twap == null || spotPrice == null) return null;
+
+    const remainingPercent = 1 - timeElapsedPercent;
+    return twap * timeElapsedPercent + spotPrice * remainingPercent;
+  });
+
+  // Convert expected final TWAPs from SOL to USD
+  const expectedFinalTwapsUsd = expectedFinalTwaps.map(twap =>
+    twap != null && solPrice ? twap * solPrice : null
   );
 
   // Calculate max significant digits across all values for consistent formatting (capped at 4)
-  const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
+  const maxSigDigits = Math.min(getMaxSigDigits(expectedFinalTwapsUsd), 4);
 
-  // Sort indices by TWAP (highest first) for ranking display
+  // Sort indices by expected final TWAP (highest first) for ranking display
   const sortedIndices = marketLabels
     .map((_, index) => index)
     .sort((a, b) => {
-      const aVal = marketCapsUsd[a] ?? -Infinity;
-      const bVal = marketCapsUsd[b] ?? -Infinity;
+      const aVal = expectedFinalTwapsUsd[a] ?? -Infinity;
+      const bVal = expectedFinalTwapsUsd[b] ?? -Infinity;
       return bVal - aVal; // Descending order
     });
 
@@ -145,12 +157,12 @@ export function ModeToggle({ marketLabels, marketCaps, selectedIndex, onSelect, 
           {sortedIndices.map((originalIndex, rank) => {
             const label = marketLabels[originalIndex];
             const isSelected = selectedIndex === originalIndex;
-            const marketCapUsd = marketCapsUsd[originalIndex];
+            const expectedFinalUsd = expectedFinalTwapsUsd[originalIndex];
             const { displayText, url } = parseLabel(label);
 
             const labelContent = (
               <>
-                {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
+                {displayText} ({expectedFinalUsd != null ? formatWithSigDigits(expectedFinalUsd, maxSigDigits) : '...'})
               </>
             );
 
