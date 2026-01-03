@@ -120,7 +120,12 @@ function MarqueeText({ children, isSelected, className, style }: {
 }
 
 export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPercent, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
-  // Calculate expected final TWAP for each market
+  // Convert current TWAPs from SOL to USD (for display)
+  const marketCapsUsd = marketCaps.map(cap =>
+    cap != null && solPrice ? cap * solPrice : null
+  );
+
+  // Calculate expected final TWAP for each market (for sorting)
   // Formula: expectedFinal = currentTwap × elapsed% + spotPrice × remaining%
   const expectedFinalTwaps = marketCaps.map((twap, i) => {
     const spotPrice = livePrices[i];
@@ -130,13 +135,13 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
     return twap * timeElapsedPercent + spotPrice * remainingPercent;
   });
 
-  // Convert expected final TWAPs from SOL to USD
+  // Convert expected final TWAPs from SOL to USD (for sorting)
   const expectedFinalTwapsUsd = expectedFinalTwaps.map(twap =>
     twap != null && solPrice ? twap * solPrice : null
   );
 
   // Calculate max significant digits across all values for consistent formatting (capped at 4)
-  const maxSigDigits = Math.min(getMaxSigDigits(expectedFinalTwapsUsd), 4);
+  const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
 
   // Sort indices by expected final TWAP (highest first) for ranking display
   const sortedIndices = marketLabels
@@ -157,12 +162,12 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
           {sortedIndices.map((originalIndex, rank) => {
             const label = marketLabels[originalIndex];
             const isSelected = selectedIndex === originalIndex;
-            const expectedFinalUsd = expectedFinalTwapsUsd[originalIndex];
+            const marketCapUsd = marketCapsUsd[originalIndex];
             const { displayText, url } = parseLabel(label);
 
             const labelContent = (
               <>
-                {displayText} ({expectedFinalUsd != null ? formatWithSigDigits(expectedFinalUsd, maxSigDigits) : '...'})
+                {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
               </>
             );
 
