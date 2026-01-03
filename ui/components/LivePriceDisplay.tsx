@@ -46,6 +46,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasWebSocketData, setHasWebSocketData] = useState(false);
 
   // Re-initialize arrays when marketCount changes
   useEffect(() => {
@@ -181,9 +182,12 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     return () => clearInterval(interval);
   }, [proposalId, moderatorId, marketCount]);
 
-  // Handle chart price updates for N-ary markets
+  // Handle chart price updates for N-ary markets (from WebSocket)
   const handleChartPriceUpdate = useCallback((update: ChartPriceUpdate) => {
     console.log('[LivePriceDisplay] Chart price update:', update);
+
+    // Mark that we've received real-time WebSocket data
+    setHasWebSocketData(true);
 
     // Use marketCapUsd if available (new backend), otherwise price field (legacy)
     const marketCapValue = update.marketCapUsd ?? update.price;
@@ -216,18 +220,22 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     };
   }, [proposalId, moderatorId, handleChartPriceUpdate]);
 
-  // Call the callback when prices update
+  // Call the callback when prices update (only after WebSocket data received)
+  // This prevents flickering from stale chart data before real-time prices arrive
   useEffect(() => {
-    console.log('[LivePriceDisplay] Prices changed, calling onPricesUpdate:', {
+    console.log('[LivePriceDisplay] Prices changed:', {
       prices,
-      hasCallback: !!onPricesUpdate
+      hasCallback: !!onPricesUpdate,
+      hasWebSocketData
     });
 
-    if (onPricesUpdate && prices.length > 0) {
+    // Only propagate prices to parent after WebSocket has sent real-time data
+    // This avoids showing stale chart prices that would cause reordering flicker
+    if (onPricesUpdate && prices.length > 0 && hasWebSocketData) {
       onPricesUpdate(prices);
-      console.log('[LivePriceDisplay] onPricesUpdate called successfully');
+      console.log('[LivePriceDisplay] onPricesUpdate called with WebSocket prices');
     }
-  }, [prices, onPricesUpdate]);
+  }, [prices, onPricesUpdate, hasWebSocketData]);
 
 
   if (error) {
