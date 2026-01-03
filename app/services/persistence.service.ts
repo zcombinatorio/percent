@@ -162,6 +162,60 @@ export class PersistenceService implements IPersistenceService {
   }
 
   /**
+   * Load the latest proposal data (highest proposal_id) without full deserialization
+   * Handles non-sequential proposal IDs by querying MAX(proposal_id)
+   * @returns The raw proposal data or null if no proposals exist
+   */
+  async loadLatestProposalData(): Promise<IProposalDB | null> {
+    try {
+      const result = await this.pool.query<IProposalDB>(
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 ORDER BY proposal_id DESC LIMIT 1',
+        [this.moderatorId]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error('Failed to load latest proposal data', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Load raw proposal data from the database without full deserialization
+   * Used for read-only endpoints that don't need execution capabilities
+   * @param proposalId - The proposal ID
+   * @returns The raw proposal data or null if not found
+   */
+  async loadProposalData(proposalId: number): Promise<IProposalDB | null> {
+    try {
+      const result = await this.pool.query<IProposalDB>(
+        'SELECT * FROM qm_proposals WHERE moderator_id = $1 AND proposal_id = $2',
+        [this.moderatorId, proposalId]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      return result.rows[0];
+    } catch (error) {
+      this.logger.error('Failed to load proposal data', {
+        proposalId,
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Load all proposals from the database
    * @returns An array of proposals
    */
