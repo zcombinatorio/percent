@@ -242,6 +242,32 @@ export default function ExplorePage() {
     });
   }, [proposals]);
 
+  // Compute the most recent proposal ID for each moderator (project)
+  // Most recent = live proposal, or highest ID if none are live
+  const latestProposalByModerator = useMemo(() => {
+    const latest = new Map<number, number>();
+    for (const proposal of proposals) {
+      const current = latest.get(proposal.moderatorId);
+      if (current === undefined) {
+        latest.set(proposal.moderatorId, proposal.id);
+      } else {
+        // Prefer live proposals, otherwise take higher ID
+        const currentProposal = proposals.find(p => p.moderatorId === proposal.moderatorId && p.id === current);
+        const isCurrentLive = currentProposal?.status === 'Pending';
+        const isNewLive = proposal.status === 'Pending';
+
+        if (isNewLive && !isCurrentLive) {
+          latest.set(proposal.moderatorId, proposal.id);
+        } else if (!isNewLive && isCurrentLive) {
+          // Keep current (it's live)
+        } else if (proposal.id > current) {
+          latest.set(proposal.moderatorId, proposal.id);
+        }
+      }
+    }
+    return latest;
+  }, [proposals]);
+
   // Memoized callbacks to prevent re-renders
   const handleHover = useCallback((proposalId: number, moderatorId: number) => {
     setHoveredProposalId(proposalId);
@@ -255,8 +281,10 @@ export default function ExplorePage() {
 
   const handleCardClick = useCallback((proposal: ExploreProposal) => {
     const tokenSlug = getTokenSlug(proposal.moderatorId);
-    router.push(`/${tokenSlug}`);
-  }, [router]);
+    const latestId = latestProposalByModerator.get(proposal.moderatorId);
+    const isHistorical = latestId !== proposal.id;
+    router.push(`/${tokenSlug}${isHistorical ? '?historical=true' : ''}`);
+  }, [router, latestProposalByModerator]);
 
   if (loading) {
     return (

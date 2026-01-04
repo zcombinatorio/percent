@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import { usePrivyWallet } from '@/hooks/usePrivyWallet';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
@@ -38,7 +39,19 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: tokenContextLoading } = useTokenContext();
+
+  // Show toast for historical QM navigation (only once)
+  const hasShownHistoricalToast = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('historical') === 'true' && !hasShownHistoricalToast.current) {
+      hasShownHistoricalToast.current = true;
+      toast('Historical QM view coming soon', { icon: '🕐' });
+      // Clean up the URL
+      router.replace(`/${tokenSlug}`, { scroll: false });
+    }
+  }, [searchParams, router, tokenSlug]);
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
 
   // Only fetch proposals after TokenContext has loaded to ensure correct moderatorId

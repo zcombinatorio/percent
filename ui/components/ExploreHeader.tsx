@@ -59,7 +59,18 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
         </div>
 
         {/* Right side: Links */}
-        <nav className="hidden md:flex items-center gap-3 sm:gap-6">
+        <nav className="flex items-center gap-3 sm:gap-6">
+          <a
+            href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors"
+            style={{ color: '#6B6E71' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
+          >
+            <span className="text-sm">$ZC</span>
+          </a>
           <a
             href="https://docs.combinator.trade/"
             target="_blank"
