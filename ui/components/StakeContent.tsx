@@ -1013,7 +1013,7 @@ export function StakeContent() {
                             stakerTrades.map((trade) => {
                               const isBuy = !trade.isBaseToQuote;
                               const amount = parseFloat(trade.amountIn);
-                              const tokenUsed = trade.isBaseToQuote ? 'ZC' : 'SOL';
+                              const tokenUsed = trade.isBaseToQuote ? trade.ticker : 'SOL';
 
                               const removeTrailingZeros = (num: string): string => {
                                 return num.replace(/\.?0+$/, '');
