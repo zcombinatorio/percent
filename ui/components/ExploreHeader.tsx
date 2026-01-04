@@ -22,11 +22,15 @@
 import Image from 'next/image';
 import { FileText } from 'lucide-react';
 
+interface ExploreHeaderProps {
+  activeTab?: 'markets' | 'projects';
+}
+
 /**
- * Simplified header for the /explore page
- * Shows logo (links to landing), nav links on right, and a History tab indicator
+ * Shared header for /markets and /projects pages
+ * Shows logo (links to landing), nav links on right, and tab navigation
  */
-export default function ExploreHeader() {
+export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderProps) {
   return (
     <div style={{ backgroundColor: '#0a0a0a' }}>
       {/* First Row: Logo and nav links */}
@@ -113,16 +117,29 @@ export default function ExploreHeader() {
         </nav>
       </div>
 
-      {/* Second Row: History Tab */}
+      {/* Second Row: Tab Navigation */}
       <div className="px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
-          <div
-            className="text-sm py-1 px-4 relative"
-            style={{ color: '#DDDDD7' }}
+          <a
+            href="/markets"
+            className="text-sm py-1 px-4 relative transition-colors"
+            style={{ color: activeTab === 'markets' ? '#DDDDD7' : '#6B6E71' }}
           >
-            <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
-            Explore
-          </div>
+            {activeTab === 'markets' && (
+              <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+            )}
+            Markets
+          </a>
+          <a
+            href="/projects"
+            className="text-sm py-1 px-4 relative transition-colors"
+            style={{ color: activeTab === 'projects' ? '#DDDDD7' : '#6B6E71' }}
+          >
+            {activeTab === 'projects' && (
+              <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+            )}
+            Projects
+          </a>
         </div>
       </div>
     </div>

@@ -261,7 +261,7 @@ export default function ExplorePage() {
   if (loading) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-        <ExploreHeader />
+        <ExploreHeader activeTab="markets" />
         <div className="flex items-center justify-center h-[calc(100vh-112px)]">
           <div className="text-[#B0AFAB]">Loading proposals...</div>
         </div>
@@ -272,7 +272,7 @@ export default function ExplorePage() {
   if (error) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-        <ExploreHeader />
+        <ExploreHeader activeTab="markets" />
         <div className="flex items-center justify-center h-[calc(100vh-112px)]">
           <div className="text-red-400">{error}</div>
         </div>
@@ -282,12 +282,12 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-      <ExploreHeader />
+      <ExploreHeader activeTab="markets" />
 
       <main className="flex justify-center">
         <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8 px-4 md:px-0">
           {/* Page heading */}
-          <h2 className="text-2xl font-medium mb-6" style={{ color: '#E9E9E3' }}>Explore All Quantum Markets</h2>
+          <h2 className="text-2xl font-medium mb-6" style={{ color: '#E9E9E3' }}>All Quantum Markets</h2>
 
           {/* Mobile: Simple vertical stack */}
           <div className="md:hidden flex flex-col gap-4 pb-8">
