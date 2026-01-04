@@ -20,6 +20,7 @@
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { VaultClient } from '@zcomb/vault-sdk';
+import * as futarchy from '@zcomb/programs-sdk';
 
 export type SignTransaction = (tx: Transaction) => Promise<Transaction>;
 
@@ -96,4 +97,42 @@ export function createReadOnlyVaultClient(): VaultClient {
   });
 
   return new VaultClient(provider);
+}
+
+// ============================================================================
+// Futarchy SDK Client Creation (for @zcomb/programs-sdk)
+// ============================================================================
+
+/**
+ * Create a FutarchyClient instance for interacting with futarchy programs
+ * (vault, AMM, moderator, proposal)
+ */
+export function createFutarchyClient(
+  userPublicKey: PublicKey,
+  signTransaction: SignTransaction
+): futarchy.FutarchyClient {
+  const provider = createProvider(userPublicKey, signTransaction);
+  return new futarchy.FutarchyClient(provider);
+}
+
+/**
+ * Create a read-only FutarchyClient (for queries only, no signing)
+ */
+export function createReadOnlyFutarchyClient(): futarchy.FutarchyClient {
+  const connection = getConnection();
+
+  // Create a dummy wallet for read-only operations
+  const dummyPublicKey = PublicKey.default;
+  const dummyWallet: Wallet = {
+    publicKey: dummyPublicKey,
+    signTransaction: async () => { throw new Error('Read-only client cannot sign'); },
+    signAllTransactions: async () => { throw new Error('Read-only client cannot sign'); },
+    payer: undefined as any,
+  };
+
+  const provider = new AnchorProvider(connection, dummyWallet, {
+    commitment: 'confirmed',
+  });
+
+  return new futarchy.FutarchyClient(provider);
 }
