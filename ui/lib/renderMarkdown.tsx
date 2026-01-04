@@ -1,6 +1,7 @@
 'use client';
 
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface MarkdownTextProps {
   children: string | null | undefined;
@@ -19,8 +20,9 @@ export function MarkdownText({ children, className, style }: MarkdownTextProps) 
   }
 
   return (
-    <span className={className} style={style}>
+    <span className={`break-words ${className || ''}`} style={style}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           // Render paragraphs as spans to avoid block-level styling issues
           p: ({ children }) => <span>{children}</span>,
@@ -28,13 +30,14 @@ export function MarkdownText({ children, className, style }: MarkdownTextProps) 
           strong: ({ children }) => <strong className="font-bold">{children}</strong>,
           // Italic text
           em: ({ children }) => <em className="italic">{children}</em>,
-          // Links - preserve existing link styling
+          // Links - break anywhere for long URLs
           a: ({ href, children }) => (
             <a
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:underline"
+              className="hover:underline break-all"
+              style={{ color: '#BEE8FC' }}
             >
               {children}
             </a>

@@ -191,6 +191,91 @@ export class PersistenceService implements IPersistenceService {
   }
 
   /**
+   * Load proposal summaries from the database (lightweight, no deserialization)
+   * Used for listing proposals without requiring authority keys
+   * @returns An array of proposal summary objects
+   */
+  async loadProposalSummaries(): Promise<Array<{
+    id: number;
+    title: string;
+    description?: string;
+    status: string;
+    winningMarketIndex?: number;
+    winningMarketLabel?: string;
+    createdAt: number;
+    finalizedAt: number;
+    baseDecimals: number;
+    quoteDecimals: number;
+    markets: number;
+    marketLabels?: string[];
+    passThresholdBps: number;
+    spotPoolAddress?: string;
+    totalSupply?: number;
+  }>> {
+    try {
+      // Query proposals with latest TWAP data for finalized proposals
+      const result = await this.pool.query<IProposalDB & { twaps?: string[] }>(
+        `SELECT p.id, p.proposal_id, p.title, p.description, p.status, p.created_at, p.finalized_at,
+                p.base_decimals, p.quote_decimals, p.markets, p.market_labels, p.twap_config,
+                p.spot_pool_address, p.total_supply,
+                (SELECT twaps FROM qm_twap_history t
+                 WHERE t.moderator_id = p.moderator_id AND t.proposal_id = p.proposal_id
+                 ORDER BY t.timestamp DESC LIMIT 1) as twaps
+         FROM qm_proposals p
+         WHERE p.moderator_id = $1
+         ORDER BY p.id`,
+        [this.moderatorId]
+      );
+
+      return result.rows.map(row => {
+        // Parse TWAP config to get passThresholdBps
+        let passThresholdBps = 5000; // default
+        if (row.twap_config) {
+          const twapConfig = typeof row.twap_config === 'string'
+            ? JSON.parse(row.twap_config)
+            : row.twap_config;
+          passThresholdBps = twapConfig.passThresholdBps ?? 5000;
+        }
+
+        // Compute winning market for finalized proposals
+        let winningMarketIndex: number | undefined;
+        let winningMarketLabel: string | undefined;
+        if (row.status === 'Finalized' && row.twaps && row.twaps.length > 0) {
+          // Find the market with the highest TWAP
+          const twapValues = row.twaps.map(t => parseFloat(t));
+          const maxTwap = Math.max(...twapValues);
+          winningMarketIndex = twapValues.indexOf(maxTwap);
+          winningMarketLabel = row.market_labels?.[winningMarketIndex];
+        }
+
+        return {
+          id: row.proposal_id,
+          title: row.title,
+          description: row.description,
+          status: row.status,
+          winningMarketIndex,
+          winningMarketLabel,
+          createdAt: new Date(row.created_at).getTime(),
+          finalizedAt: new Date(row.finalized_at).getTime(),
+          baseDecimals: row.base_decimals,
+          quoteDecimals: row.quote_decimals,
+          markets: row.markets,
+          marketLabels: row.market_labels,
+          passThresholdBps,
+          spotPoolAddress: row.spot_pool_address,
+          totalSupply: row.total_supply,
+        };
+      });
+    } catch (error) {
+      this.logger.error('Failed to load proposal summaries', {
+        moderatorId: this.moderatorId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Save moderator state to the database
    * @param proposalCounter - The proposal counter
    * @param config - The moderator config

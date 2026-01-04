@@ -49,8 +49,20 @@ export default function HomePage() {
   );
   const [livePrices, setLivePrices] = useState<(number | null)[]>([]);
   const [twapData, setTwapData] = useState<(number | null)[]>([]);
-  const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
   const [isPassMode, setIsPassMode] = useState(true);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isProposalModalOpen) {
+        setIsProposalModalOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isProposalModalOpen]);
 
   // Fetch wallet balances for current token
   const { sol: solBalance, baseToken: baseTokenBalance, refetch: refetchWalletBalances } = useWalletBalances({
@@ -312,46 +324,84 @@ export default function HomePage() {
 
                         const content = getProposalContent(proposal.id, proposal.title, cleanedDescription, moderatorId?.toString());
 
-                        const cardInner = (
-                          <div className="flex flex-col justify-between h-full overflow-hidden">
-                            <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
-                              QM {tokenSlug.toUpperCase()}-{proposal.id}
-                              {githubUrl && (
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                </svg>
-                              )}
-                            </h1>
-                            <div className={`text-lg font-normal mb-2 ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#E9E9E3' }}>
-                              <MarkdownText>{content.title}</MarkdownText>
+                        return (
+                          <>
+                            {/* Clickable Card */}
+                            <div
+                              className="flex-[4] min-w-0 bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer"
+                              onClick={() => setIsProposalModalOpen(true)}
+                            >
+                              <div className="flex flex-col justify-between h-full overflow-hidden">
+                                <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase" style={{ color: '#DDDDD7' }}>
+                                  QM {tokenSlug.toUpperCase()}-{proposal.id}
+                                </h1>
+                                <div className="text-lg font-normal mb-2 line-clamp-1 description-links" style={{ color: '#E9E9E3' }}>
+                                  <MarkdownText>{content.title}</MarkdownText>
+                                </div>
+                                <div className="text-sm description-links break-all line-clamp-1" style={{ color: '#DDDDD7' }}>
+                                  {content.content ? content.content : <MarkdownText>{cleanedDescription || ''}</MarkdownText>}
+                                </div>
+                              </div>
                             </div>
-                            <div className={`text-sm description-links break-all ${!isLiveProposalHovered ? 'line-clamp-1' : ''}`} style={{ color: '#DDDDD7' }}>
-                              {content.content ? content.content : <MarkdownText>{cleanedDescription || ''}</MarkdownText>}
-                            </div>
-                          </div>
-                        );
 
-                        return githubUrl ? (
-                          <a
-                            href={githubUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-[4] h-full min-w-0"
-                            onMouseEnter={() => setIsLiveProposalHovered(true)}
-                            onMouseLeave={() => setIsLiveProposalHovered(false)}
-                          >
-                            <div className="bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 hover:border-[#2A2A2A] transition-all duration-300 cursor-pointer h-full overflow-hidden">
-                              {cardInner}
-                            </div>
-                          </a>
-                        ) : (
-                          <div
-                            className="flex-[4] min-w-0 bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 transition-all duration-300"
-                            onMouseEnter={() => setIsLiveProposalHovered(true)}
-                            onMouseLeave={() => setIsLiveProposalHovered(false)}
-                          >
-                            {cardInner}
-                          </div>
+                            {/* Modal Popup */}
+                            {isProposalModalOpen && (
+                              <div
+                                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                                onClick={() => setIsProposalModalOpen(false)}
+                              >
+                                {/* Backdrop */}
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+                                {/* Modal Content - same styling as card */}
+                                <div
+                                  className="relative bg-[#121212] border border-[#191919] rounded-[9px] pt-4 pb-5 px-5 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {/* Modal Header - same as card header */}
+                                  <h1 className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] mb-6 uppercase flex items-center justify-between" style={{ color: '#DDDDD7' }}>
+                                    QM {tokenSlug.toUpperCase()}-{proposal.id}
+                                    <button
+                                      onClick={() => setIsProposalModalOpen(false)}
+                                      className="text-[#DDDDD7] hover:text-white transition-colors cursor-pointer"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </h1>
+
+                                  {/* Scrollable Content */}
+                                  <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                                    <div className="text-lg font-normal mb-2 description-links" style={{ color: '#E9E9E3' }}>
+                                      <MarkdownText>{content.title}</MarkdownText>
+                                    </div>
+                                    <div className="text-sm description-links break-all leading-relaxed" style={{ color: '#DDDDD7' }}>
+                                      {content.content ? content.content : <MarkdownText>{cleanedDescription || ''}</MarkdownText>}
+                                    </div>
+
+                                    {/* GitHub link if available */}
+                                    {githubUrl && (
+                                      <a
+                                        href={githubUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-sm mt-4 text-[#DDDDD7] hover:text-white transition-colors"
+                                      >
+                                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                          <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+                                        </svg>
+                                        View on GitHub
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                        </svg>
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         );
                       })()}
 

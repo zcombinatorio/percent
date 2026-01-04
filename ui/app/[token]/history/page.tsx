@@ -177,11 +177,11 @@ export default function HistoryPage() {
                         );
                       }
                     }}
-                    className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 ${
+                    className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 overflow-hidden ${
                       hasClaimableRewards ? 'cursor-pointer hover:border-[#2A2A2A]' : ''
                     } ${isCurrentlyClaiming ? 'opacity-60 pointer-events-none' : ''}`}
                   >
-                    <div className="text-white flex flex-col">
+                    <div className="text-white flex flex-col min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-6">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>
@@ -204,7 +204,7 @@ export default function HistoryPage() {
                       <div className="text-lg font-normal mb-2" style={{ color: '#E9E9E3' }}><MarkdownText>{proposalContent.title}</MarkdownText></div>
 
                       {/* Show summary or full content based on hover */}
-                      <div className={`text-sm ${proposalRewards.length > 0 ? 'mb-6' : ''}`} style={{ color: '#DDDDD7' }}>
+                      <div className={`text-sm break-all ${proposalRewards.length > 0 ? 'mb-6' : ''}`} style={{ color: '#DDDDD7' }}>
                         {isHovered ? (
                           proposalContent.content || <MarkdownText>{proposal.description}</MarkdownText>
                         ) : (
@@ -312,11 +312,11 @@ export default function HistoryPage() {
                           );
                         }
                       }}
-                      className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 ml-4 mb-4 ${
+                      className={`bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300 ml-4 mb-4 overflow-hidden ${
                         hasClaimableRewards ? 'cursor-pointer hover:border-[#2A2A2A]' : ''
                       } ${isCurrentlyClaiming ? 'opacity-60 pointer-events-none' : ''}`}
                     >
-                      <div className="text-white flex flex-col">
+                      <div className="text-white flex flex-col min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-6">
                           <div className="flex items-center gap-2 flex-wrap">
                             <div className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em]" style={{ color: '#DDDDD7' }}>{tokenSlug.toUpperCase()}-{proposal.id}</div>

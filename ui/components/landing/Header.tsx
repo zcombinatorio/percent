@@ -79,7 +79,7 @@ export default function Header() {
           </nav>
         </div>
         <a
-          href="/zc"
+          href="/explore"
           className="bg-white text-black px-4 py-1.5 font-medium hover:opacity-90 transition-opacity rounded-full"
         >
           Enter here

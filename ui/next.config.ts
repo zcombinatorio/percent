@@ -4,6 +4,20 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'arweave.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'wsrv.nl',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.mypinata.cloud',
+      },
+    ],
   },
   compiler: {
     // Remove console.log in production but keep console.error and console.warn for debugging

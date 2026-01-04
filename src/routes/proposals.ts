@@ -109,6 +109,93 @@ const router = Router();
 // Apply moderator middleware to all routes (default moderator is 1)
 router.use(attachModerator);
 
+// Production moderator IDs for /all endpoint
+const PRODUCTION_MODERATOR_IDS = [2, 6]; // ZC, SURF
+
+/**
+ * GET /api/proposals/all
+ * Returns all proposals from production pools (ZC, SURF)
+ * No authentication required - public read-only endpoint
+ * Uses lightweight query that doesn't require authority keys
+ */
+router.get('/all', async (_req, res, next) => {
+  try {
+    logger.info('[GET /all] Fetching all proposals from production pools');
+
+    const allProposals: Array<{
+      id: number;
+      title: string;
+      description?: string;
+      status: string;
+      winningMarketIndex?: number;
+      winningMarketLabel?: string;
+      createdAt: number;
+      finalizedAt: number;
+      passThresholdBps: number;
+      markets: number;
+      marketLabels?: string[];
+      totalSupply?: number;
+      baseDecimals: number;
+      quoteDecimals: number;
+      poolAddress: string | null;
+      poolName: string;
+      moderatorId: number;
+      tokenTicker: string;
+      tokenIcon: string | null;
+    }> = [];
+
+    // Fetch proposal summaries from each production moderator (lightweight, no deserialization)
+    for (const modId of PRODUCTION_MODERATOR_IDS) {
+      const persistenceService = new PersistenceService(modId, logger.createChild('persistence'));
+      const proposals = await persistenceService.loadProposalSummaries();
+
+      for (const p of proposals) {
+        const poolAddress = p.spotPoolAddress || null;
+        const poolMeta = poolAddress ? POOL_METADATA[poolAddress] : null;
+
+        allProposals.push({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          status: p.status,
+          winningMarketIndex: p.winningMarketIndex,
+          winningMarketLabel: p.winningMarketLabel,
+          createdAt: p.createdAt,
+          finalizedAt: p.finalizedAt,
+          passThresholdBps: p.passThresholdBps,
+          markets: p.markets,
+          marketLabels: p.marketLabels,
+          totalSupply: p.totalSupply,
+          baseDecimals: p.baseDecimals,
+          quoteDecimals: p.quoteDecimals,
+          poolAddress,
+          poolName: poolMeta?.ticker || 'unknown',
+          moderatorId: modId,
+          tokenTicker: poolMeta?.ticker?.toUpperCase() || 'UNKNOWN',
+          tokenIcon: poolMeta?.icon || null,
+        });
+      }
+    }
+
+    // Sort by creation time (newest first)
+    allProposals.sort((a, b) => b.createdAt - a.createdAt);
+
+    logger.info('[GET /all] Fetched all proposals successfully', {
+      count: allProposals.length,
+      moderatorIds: PRODUCTION_MODERATOR_IDS
+    });
+
+    res.json({
+      proposals: allProposals,
+    });
+  } catch (error) {
+    logger.error('[GET /all] Failed to fetch all proposals', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    next(error);
+  }
+});
+
 router.get('/', async (req, res, next) => {
   try {
     const moderatorId = req.moderatorId;

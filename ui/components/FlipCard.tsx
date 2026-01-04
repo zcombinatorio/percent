@@ -4,12 +4,21 @@ import { useEffect, useState, memo } from 'react';
 
 interface FlipCardProps {
   digit: string;
+  size?: 'default' | 'mini';
 }
 
-export const FlipCard = memo(function FlipCard({ digit }: FlipCardProps) {
+export const FlipCard = memo(function FlipCard({ digit, size = 'default' }: FlipCardProps) {
   const [currentDigit, setCurrentDigit] = useState(digit);
   const [previousDigit, setPreviousDigit] = useState(digit);
   const [isFlipping, setIsFlipping] = useState(false);
+
+  // Class names based on size
+  const suffix = size === 'mini' ? '-mini' : '';
+  const containerClass = `flip-card-container${suffix}`;
+  const upperClass = `flip-card-upper${suffix}`;
+  const lowerClass = `flip-card-lower${suffix}`;
+  const upperFlipClass = `flip-card-upper-flip${suffix}`;
+  const lowerFlipClass = `flip-card-lower-flip${suffix}`;
 
   useEffect(() => {
     if (digit !== currentDigit) {
@@ -27,14 +36,14 @@ export const FlipCard = memo(function FlipCard({ digit }: FlipCardProps) {
   }, [digit, currentDigit]);
 
   return (
-    <div className="flip-card-container">
+    <div className={containerClass}>
       {/* Static upper half */}
-      <div className="flip-card-upper">
+      <div className={upperClass}>
         <span>{currentDigit}</span>
       </div>
 
       {/* Static lower half */}
-      <div className="flip-card-lower">
+      <div className={lowerClass}>
         <span>{currentDigit}</span>
       </div>
 
@@ -42,12 +51,12 @@ export const FlipCard = memo(function FlipCard({ digit }: FlipCardProps) {
       {isFlipping && (
         <>
           {/* Upper half that flips down */}
-          <div className="flip-card-upper-flip">
+          <div className={upperFlipClass}>
             <span>{previousDigit}</span>
           </div>
 
           {/* Lower half that gets revealed */}
-          <div className="flip-card-lower-flip">
+          <div className={lowerFlipClass}>
             <span>{currentDigit}</span>
           </div>
         </>

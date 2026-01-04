@@ -47,6 +47,35 @@ class GovernanceAPI {
     }
   }
 
+  /**
+   * Fetch all proposals from production pools (ZC, OOGWAY, SURF)
+   * Used by the /explore page to show all proposals across all tokens
+   */
+  async getAllProposals(): Promise<Array<ProposalListItem & {
+    moderatorId: number;
+    tokenTicker: string;
+    tokenIcon: string | null;
+  }>> {
+    try {
+      const url = buildApiUrl(API_BASE_URL, '/api/proposals/all');
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Failed to fetch all proposals');
+      }
+      const data = await response.json();
+      // Transform each proposal to UI format (Finalized -> Passed/Failed)
+      return data.proposals.map((p: any) => ({
+        ...transformProposalListItem(p),
+        moderatorId: p.moderatorId,
+        tokenTicker: p.tokenTicker,
+        tokenIcon: p.tokenIcon,
+      }));
+    } catch (error) {
+      console.error('[api.getAllProposals] Error:', error);
+      return [];
+    }
+  }
+
   async getPoolByName(name: string): Promise<{
     pool: {
       poolAddress: string;

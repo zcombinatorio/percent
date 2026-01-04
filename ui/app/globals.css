@@ -146,10 +146,92 @@ body {
   }
 }
 
+/* Mini flipdown countdown clock styles (50% scale) */
+.flip-card-container-mini {
+  position: relative;
+  width: 20px;
+  height: 28px;
+  perspective: 200px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.flip-card-upper-mini,
+.flip-card-lower-mini,
+.flip-card-upper-flip-mini,
+.flip-card-lower-flip-mini {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  overflow: hidden;
+  background: #121212;
+  border: 1px solid #191919;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backface-visibility: hidden;
+}
+
+.flip-card-upper-mini,
+.flip-card-upper-flip-mini {
+  top: 0;
+  border-radius: 3px 3px 0 0;
+  border-bottom: none;
+  align-items: flex-end;
+  padding-bottom: 0.5px;
+}
+
+.flip-card-lower-mini,
+.flip-card-lower-flip-mini {
+  bottom: 0;
+  border-radius: 0 0 3px 3px;
+  border-top: 0.5px solid #2A2A2A;
+  align-items: flex-start;
+  padding-top: 0.5px;
+}
+
+.flip-card-upper-mini span,
+.flip-card-upper-flip-mini span {
+  color: #DDDDD7;
+  user-select: none;
+  line-height: 1;
+  transform: translateY(calc(50% + 0.5px));
+}
+
+.flip-card-lower-mini span,
+.flip-card-lower-flip-mini span {
+  color: #DDDDD7;
+  user-select: none;
+  line-height: 1;
+  transform: translateY(calc(-50% - 0.5px));
+}
+
+/* Mini flip animation */
+.flip-card-upper-flip-mini {
+  animation: flip-down 600ms ease-in-out;
+  transform-origin: bottom;
+  transform-style: preserve-3d;
+  z-index: 2;
+}
+
+.flip-card-lower-flip-mini {
+  opacity: 0;
+  animation: fade-in 300ms 300ms ease-in forwards;
+  z-index: 1;
+}
+
 /* Description link styling */
 .description-links a {
-  color: inherit !important;
+  color: #BEE8FC !important;
   text-decoration: none !important;
+  word-break: break-all;
+}
+
+.description-links a:hover {
+  text-decoration: underline !important;
 }
 
 /* Editable Flip Card - 5x larger (200px × 280px) */
