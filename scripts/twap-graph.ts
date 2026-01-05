@@ -336,17 +336,26 @@ async function main() {
   }
   const priceLeaderSegments = calculateLeaderSegments(priceLeaderAtEachPoint);
 
-  // 2. TWAP Leader - which market has highest TWAP observation at each point
-  // 3. Expected Winner - which market has highest aggregation (cumulative TWAP)
+  // 2. TWAP Leader - which market has highest current TWAP value at each point
+  // 3. Expected Winner - using UI formula: expectedFinal = currentTwap × elapsed% + currentPrice × remaining%
+  //    This projects what final TWAP would be if current price holds for remaining time
+
   // Map TWAP history to chart timestamps
   const twapData = twapHistory.data.sort((a, b) =>
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
+  // Get proposal timing for elapsed percentage calculation
+  const proposalStartTime = proposal.createdAt;
+  const proposalEndTime = proposal.finalizedAt || (proposal.createdAt + 7 * 24 * 60 * 60 * 1000); // Default 7 days if not finalized
+  const totalDuration = proposalEndTime - proposalStartTime;
+
   const twapLeaderAtEachPoint: number[] = [];
   const expectedWinnerAtEachPoint: number[] = [];
 
-  for (const ts of timestamps) {
+  for (let i = 0; i < timestamps.length; i++) {
+    const ts = timestamps[i];
+
     // Find closest TWAP entry to this timestamp
     let closestEntry: TWAPHistoryEntry | null = null;
     let closestDiff = Infinity;
@@ -361,7 +370,7 @@ async function main() {
     }
 
     if (closestEntry) {
-      // TWAP leader - highest current TWAP observation
+      // TWAP Leader - market with highest current TWAP value
       let maxTwap = -Infinity;
       let twapLeader = 0;
       for (let m = 0; m < closestEntry.twaps.length; m++) {
@@ -373,17 +382,39 @@ async function main() {
       }
       twapLeaderAtEachPoint.push(twapLeader);
 
-      // Expected winner - highest aggregation
-      let maxAgg = -Infinity;
-      let aggLeader = 0;
-      for (let m = 0; m < closestEntry.aggregations.length; m++) {
-        const agg = parseFloat(closestEntry.aggregations[m]);
-        if (agg > maxAgg) {
-          maxAgg = agg;
-          aggLeader = m;
+      // Expected Winner - using same formula as UI (ModeToggle.tsx):
+      // expectedFinal = currentTwap × elapsed% + currentPrice × remaining%
+      const currentTime = new Date(closestEntry.timestamp).getTime();
+      const elapsedPercent = Math.min(1, Math.max(0, (currentTime - proposalStartTime) / totalDuration));
+      const remainingPercent = 1 - elapsedPercent;
+
+      let maxExpected = -Infinity;
+      let expectedLeader = 0;
+      for (let m = 0; m < closestEntry.twaps.length; m++) {
+        const currentTwap = parseFloat(closestEntry.twaps[m]);
+        // Get current price for this market at this timestamp from our price series
+        const currentPrice = series[m][i];
+
+        if (isNaN(currentPrice)) {
+          continue;
+        }
+
+        // The series contains premium %, but we need actual price for the formula
+        // Get the raw conditional price from our marketPriceMaps
+        const marketMap = marketPriceMaps.get(m) || [];
+        const rawPrice = getPriceAt(marketMap, ts);
+
+        if (!rawPrice) continue;
+
+        // Formula: expectedFinal = currentTwap × elapsed% + currentPrice × remaining%
+        const expectedFinal = currentTwap * elapsedPercent + rawPrice * remainingPercent;
+
+        if (expectedFinal > maxExpected) {
+          maxExpected = expectedFinal;
+          expectedLeader = m;
         }
       }
-      expectedWinnerAtEachPoint.push(aggLeader);
+      expectedWinnerAtEachPoint.push(expectedLeader);
     } else {
       twapLeaderAtEachPoint.push(0);
       expectedWinnerAtEachPoint.push(0);
@@ -452,7 +483,7 @@ async function main() {
 </head>
 <body>
   <div class="container">
-    <h1>Premium/Discount vs Spot Over Time</h1>
+    <h1>Conditionals vs Spot Over Time</h1>
     <div class="subtitle">${proposal.title} | ${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}</div>
 
     <div class="chart-container">
