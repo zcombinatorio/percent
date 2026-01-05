@@ -98,7 +98,7 @@ const POOL_METADATA: Record<string, PoolMetadata> = {
     moderatorId: 2,
     poolType: 'dlmm',
     withdrawalPercentage: 50,
-    icon: 'https://wsrv.nl/?w=128&h=128&default=1&url=https%3A%2F%2Folive-imaginative-aardvark-508.mypinata.cloud%2Fipfs%2FQmY56Yz44o1EhTJfy6b4uhKCXpNGYvmFdsRX9yuiX1X45a',
+    icon: 'https://pbs.twimg.com/profile_images/1991222874401587200/V0ARKOcE_400x400.jpg',
   },
   // oogway DAMM Pool (Meteora CP-AMM)
   [TICKER_TO_POOL.OOGWAY]: {

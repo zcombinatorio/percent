@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: '*.mypinata.cloud',
       },
+      {
+        protocol: 'https',
+        hostname: 'pbs.twimg.com',
+      },
     ],
   },
   compiler: {
