@@ -289,7 +289,7 @@ export default function ExplorePage() {
   if (loading) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-        <ExploreHeader activeTab="markets" />
+        <ExploreHeader />
         <div className="flex items-center justify-center h-[calc(100vh-112px)]">
           <div className="text-[#B0AFAB]">Loading proposals...</div>
         </div>
@@ -300,7 +300,7 @@ export default function ExplorePage() {
   if (error) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-        <ExploreHeader activeTab="markets" />
+        <ExploreHeader />
         <div className="flex items-center justify-center h-[calc(100vh-112px)]">
           <div className="text-red-400">{error}</div>
         </div>
@@ -310,7 +310,7 @@ export default function ExplorePage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0a0a0a' }}>
-      <ExploreHeader activeTab="markets" />
+      <ExploreHeader />
 
       <main className="flex justify-center">
         <div className="w-full max-w-[1332px] 2xl:max-w-[1512px] pt-8 px-4 md:px-0">

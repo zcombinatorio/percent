@@ -19,25 +19,70 @@
 
 'use client';
 
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
-import { FileText } from 'lucide-react';
+import { FileText, Code, Wallet } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useSolanaWallets } from '@privy-io/react-auth/solana';
+import { usePrivyWallet } from '@/hooks/usePrivyWallet';
+import { useWalletBalances } from '@/hooks/useWalletBalances';
+
+// ZC token constants for balance display
+const ZC_MINT = 'GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC';
+const ZC_DECIMALS = 6;
+const ZC_ICON = 'https://pbs.twimg.com/profile_images/1991222874401587200/V0ARKOcE_400x400.jpg';
 
 interface ExploreHeaderProps {
-  activeTab?: 'markets' | 'projects';
+  activeTab?: 'markets' | 'projects' | 'stake';
+}
+
+// Format token balance with K, M, B abbreviations
+function formatTokenBalance(balance: number): string {
+  const absBalance = Math.abs(balance);
+  if (absBalance >= 1e9) {
+    return (balance / 1e9).toFixed(3) + 'B';
+  } else if (absBalance >= 1e6) {
+    return (balance / 1e6).toFixed(3) + 'M';
+  } else if (absBalance >= 1e3) {
+    return (balance / 1e3).toFixed(3) + 'K';
+  } else {
+    return balance.toFixed(3);
+  }
 }
 
 /**
- * Shared header for /markets and /projects pages
- * Shows logo (links to landing), nav links on right, and tab navigation
+ * Shared header for /markets, /projects, /stake, /launch pages
+ * Shows logo, wallet/login, nav links, and tab navigation
  */
-export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderProps) {
+export default function ExploreHeader({ activeTab: activeTabProp }: ExploreHeaderProps) {
+  const pathname = usePathname();
+
+  // Auto-detect active tab from pathname
+  const activeTab = activeTabProp ?? (
+    pathname.includes('/projects') ? 'projects'
+    : pathname.includes('/stake') ? 'stake'
+    : 'markets'
+  );
+
+  const { authenticated, walletAddress, login } = usePrivyWallet();
+  const { exportWallet } = useSolanaWallets();
+  const { baseToken: zcBalance } = useWalletBalances({
+    walletAddress,
+    baseMint: ZC_MINT,
+    baseDecimals: ZC_DECIMALS,
+  });
+  const [isHoveringWallet, setIsHoveringWallet] = useState(false);
+  const walletPrefix = walletAddress ? walletAddress.slice(0, 6) : 'N/A';
+
   return (
     <div style={{ backgroundColor: '#0a0a0a' }}>
       {/* First Row: Logo and nav links */}
       <div className="h-14 flex items-center justify-between px-4 md:px-8">
-        {/* Left side: Logo */}
-        <div className="flex items-center">
-          <a
+        {/* Left side: Logo / wallet / balances */}
+        <div className="flex items-center gap-2 md:gap-4 text-gray-400">
+          <Link
             href="/"
             className="hover:opacity-80 transition-opacity"
           >
@@ -55,7 +100,47 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
               height={16}
               className="md:hidden"
             />
-          </a>
+          </Link>
+          <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
+          {!authenticated && login && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center border border-[#191919]" style={{ backgroundColor: '#121212' }}>
+                <Wallet className="w-3 h-3" style={{ color: '#BEE8FC' }} />
+              </div>
+              <span
+                onClick={login}
+                className="text-sm font-ibm-plex-mono font-medium cursor-pointer transition-colors"
+                style={{ color: '#BEE8FC', fontFamily: 'IBM Plex Mono, monospace' }}
+              >
+                Click to log in
+              </span>
+            </div>
+          )}
+          {authenticated && walletAddress && (
+            <>
+              <div
+                className="flex items-center gap-1.5 cursor-pointer transition-colors"
+                onMouseEnter={() => setIsHoveringWallet(true)}
+                onMouseLeave={() => setIsHoveringWallet(false)}
+                onClick={() => exportWallet()}
+              >
+                <div className="w-5 h-5 rounded-full flex items-center justify-center border border-[#191919]" style={{ backgroundColor: '#121212' }}>
+                  <Wallet className="w-3 h-3 transition-colors" style={{ color: isHoveringWallet ? '#BEE8FC' : '#ffffff' }} />
+                </div>
+                <span
+                  className="text-sm font-ibm-plex-mono font-medium transition-colors"
+                  style={{ color: isHoveringWallet ? '#BEE8FC' : '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}
+                >
+                  {isHoveringWallet ? 'Export or copy' : walletPrefix}
+                </span>
+              </div>
+              <span className="text-2xl" style={{ color: '#2D2D2D' }}>/</span>
+              <div className="flex items-center gap-1.5">
+                <Image src={ZC_ICON} alt="ZC" width={20} height={20} className="rounded-full border border-[#191919]" />
+                <span className="text-sm font-ibm-plex-mono font-medium" style={{ color: '#DDDDD7', fontFamily: 'IBM Plex Mono, monospace' }}>{formatTokenBalance(zcBalance)}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right side: Links */}
@@ -82,6 +167,18 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
           >
             <FileText className="w-4 h-4 sm:hidden" />
             <span className="hidden sm:inline text-sm">Docs</span>
+          </a>
+          <a
+            href="https://docs.combinator.trade/api-reference/quantum-markets/overview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors"
+            style={{ color: '#6B6E71' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
+          >
+            <Code className="w-4 h-4 sm:hidden" />
+            <span className="hidden sm:inline text-sm">API</span>
           </a>
           <a
             href="https://github.com/zcombinatorio"
@@ -131,7 +228,7 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
       {/* Second Row: Tab Navigation */}
       <div className="px-4 md:px-8 border-b border-[#292929]">
         <div className="flex">
-          <a
+          <Link
             href="/markets"
             className="text-sm py-1 px-4 relative transition-colors"
             style={{ color: activeTab === 'markets' ? '#DDDDD7' : '#6B6E71' }}
@@ -140,8 +237,8 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
               <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
             Markets
-          </a>
-          <a
+          </Link>
+          <Link
             href="/projects"
             className="text-sm py-1 px-4 relative transition-colors"
             style={{ color: activeTab === 'projects' ? '#DDDDD7' : '#6B6E71' }}
@@ -150,7 +247,32 @@ export default function ExploreHeader({ activeTab = 'markets' }: ExploreHeaderPr
               <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
             )}
             Projects
-          </a>
+          </Link>
+          <Link
+            href="/stake"
+            className="text-sm py-1 px-4 relative transition-colors"
+            style={{ color: activeTab === 'stake' ? '#DDDDD7' : '#6B6E71' }}
+          >
+            {activeTab === 'stake' && (
+              <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+            )}
+            Stake
+          </Link>
+          <button
+            onClick={() => toast(
+              <span>
+                Please reach out to @handsdiff on{' '}
+                <a href="https://x.com/handsdiff" target="_blank" rel="noopener noreferrer" className="underline text-[#BEE8FC]">X</a>
+                {' '}or{' '}
+                <a href="https://t.me/handsdiff" target="_blank" rel="noopener noreferrer" className="underline text-[#BEE8FC]">Telegram</a>
+                {' '}to discuss launching a QM-enabled token.
+              </span>
+            )}
+            className="text-sm py-1 px-4 relative transition-colors cursor-pointer"
+            style={{ color: '#6B6E71' }}
+          >
+            Launch
+          </button>
         </div>
       </div>
     </div>

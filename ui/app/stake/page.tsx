@@ -19,8 +19,13 @@
 
 'use client';
 
+import { TokenProvider } from '@/providers/TokenContext';
 import { StakeContent } from '@/components/StakeContent';
 
 export default function StakePage() {
-  return <StakeContent useExploreHeader={false} />;
+  return (
+    <TokenProvider tokenSlug="zc">
+      <StakeContent />
+    </TokenProvider>
+  );
 }

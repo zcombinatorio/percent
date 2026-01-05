@@ -21,7 +21,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Wallet, FileText } from 'lucide-react';
+import { Wallet, FileText, Code } from 'lucide-react';
 import { useSolanaWallets } from '@privy-io/react-auth/solana';
 import Image from 'next/image';
 import { api } from '@/lib/api';
@@ -48,10 +48,10 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
   // Auto-detect active tab from pathname
   const activeTab = pathname.includes('/history')
     ? 'history'
-    : pathname.includes('/create')
-      ? 'create'
-      : pathname.includes('/stake')
-        ? 'stake'
+    : pathname.includes('/stake')
+      ? 'stake'
+      : pathname.includes('/create')
+        ? 'create'
         : 'live';
   const { exportWallet } = useSolanaWallets();
   const [isHoveringWallet, setIsHoveringWallet] = useState(false);
@@ -179,8 +179,8 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
 
       {/* Right side: Links */}
       <nav className="hidden md:flex items-center gap-3 sm:gap-6">
-        {/* Current token link (for non-ZC tokens) */}
-        {tokenSlug !== 'zc' && baseMint && (
+        {/* Current token link */}
+        {baseMint && (
           <a
             href={`https://jup.ag/tokens/${baseMint}`}
             target="_blank"
@@ -193,18 +193,6 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             <span className="text-sm">${tokenSymbol}</span>
           </a>
         )}
-        {/* ZC link (always show) */}
-        <a
-          href="https://jup.ag/tokens/GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="transition-colors"
-          style={{ color: '#6B6E71' }}
-          onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
-          onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
-        >
-          <span className="text-sm">$ZC</span>
-        </a>
         <a
           href="https://docs.combinator.trade/"
           target="_blank"
@@ -216,6 +204,18 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
         >
           <FileText className="w-4 h-4 sm:hidden" />
           <span className="hidden sm:inline text-sm">Docs</span>
+        </a>
+        <a
+          href="https://docs.combinator.trade/api-reference/quantum-markets/overview"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition-colors"
+          style={{ color: '#6B6E71' }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
+        >
+          <Code className="w-4 h-4 sm:hidden" />
+          <span className="hidden sm:inline text-sm">API</span>
         </a>
         <a
           href="https://github.com/zcombinatorio"
@@ -289,6 +289,18 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
             )}
             History
           </button>
+          <button
+            onClick={() => router.push(`/${tokenSlug}/create`)}
+            className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
+            style={activeTab === 'create' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
+            onMouseEnter={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#9B9E9F'; }}
+            onMouseLeave={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#6B6E71'; }}
+          >
+            {activeTab === 'create' && (
+              <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
+            )}
+            {canCreate ? 'Create' : 'Propose'}
+          </button>
           {tokenSlug === 'zc' && (
             <button
               onClick={() => router.push(`/${tokenSlug}/stake`)}
@@ -303,27 +315,6 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
               Stake
             </button>
           )}
-          <button
-            onClick={() => router.push(`/${tokenSlug}/create`)}
-            className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-            style={activeTab === 'create' ? { color: '#DDDDD7' } : { color: '#6B6E71' }}
-            onMouseEnter={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#9B9E9F'; }}
-            onMouseLeave={(e) => { if (activeTab !== 'create') e.currentTarget.style.color = '#6B6E71'; }}
-          >
-            {activeTab === 'create' && (
-              <div className="absolute -bottom-[4px] left-0 right-0 h-[2px] z-10" style={{ backgroundColor: '#DDDDD7' }} />
-            )}
-            {canCreate ? 'Create' : 'Propose'}
-          </button>
-          <a
-            href="https://v1.zcombinator.io/launch"
-            className="text-sm py-1 px-4 transition-all duration-200 ease-in-out cursor-pointer my-0.5 hover:bg-white/10 hover:rounded relative"
-            style={{ color: '#6B6E71' }}
-            onMouseEnter={(e) => e.currentTarget.style.color = '#9B9E9F'}
-            onMouseLeave={(e) => e.currentTarget.style.color = '#6B6E71'}
-          >
-            Launch
-          </a>
         </div>
       </div>
     </div>

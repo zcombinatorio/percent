@@ -10,8 +10,13 @@ import { useTokenContext } from '@/providers/TokenContext';
 import { useTransactionSigner } from '@/hooks/useTransactionSigner';
 import { getConnection } from '@/lib/programs/utils';
 import toast from 'react-hot-toast';
+import ExploreHeader from '@/components/ExploreHeader';
 import Header from '@/components/Header';
 import StakingVaultIDL from '@/lib/staking-vault-idl.json';
+
+interface StakeContentProps {
+  useExploreHeader?: boolean;
+}
 
 const ZC_TOKEN_MINT = new PublicKey("GVvPZpC6ymCoiHzYJ7CWZ8LhVn9tL2AUpRjSAsLh6jZC");
 const PROGRAM_ID = new PublicKey("47rZ1jgK7zU6XAgffAfXkDX1JkiiRi4HRPBytossWR12");
@@ -42,7 +47,7 @@ interface Staker {
   volumeUsd: string;
 }
 
-export function StakeContent() {
+export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
   const { ready, authenticated, walletAddress, login } = usePrivyWallet();
   const { signTransaction } = useTransactionSigner();
   const { tokenSlug, baseMint, baseDecimals, tokenSymbol, icon } = useTokenContext();
@@ -807,23 +812,24 @@ export function StakeContent() {
     return num.toLocaleString();
   };
 
-  const hasWalletBalance = solBalance > 0 || baseTokenBalance > 0;
-
   return (
     <div className="flex h-screen" style={{ backgroundColor: '#0a0a0a' }}>
       <div className="flex-1 flex flex-col">
-        <Header
-          walletAddress={walletAddress}
-          authenticated={authenticated}
-          solBalance={solBalance}
-          baseTokenBalance={baseTokenBalance}
-          hasWalletBalance={hasWalletBalance}
-          login={login}
-          isPassMode={true}
-          tokenSlug={tokenSlug}
-          tokenSymbol={tokenSymbol}
-          tokenIcon={icon}
-        />
+        {useExploreHeader ? (
+          <ExploreHeader />
+        ) : (
+          <Header
+            walletAddress={walletAddress}
+            authenticated={authenticated}
+            solBalance={solBalance}
+            baseTokenBalance={baseTokenBalance}
+            login={login}
+            tokenSlug={tokenSlug}
+            tokenSymbol={tokenSymbol}
+            tokenIcon={icon}
+            baseMint={baseMint}
+          />
+        )}
 
         {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
