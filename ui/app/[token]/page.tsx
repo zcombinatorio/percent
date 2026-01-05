@@ -62,8 +62,20 @@ export default function HomePage() {
   );
   const [livePrices, setLivePrices] = useState<(number | null)[]>([]);
   const [twapData, setTwapData] = useState<(number | null)[]>([]);
-  const [isLiveProposalHovered, setIsLiveProposalHovered] = useState(false);
+  const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
   const [isPassMode, setIsPassMode] = useState(true);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isProposalModalOpen) {
+        setIsProposalModalOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isProposalModalOpen]);
 
   // Fetch wallet balances for current token
   const { sol: solBalance, baseToken: baseTokenBalance, refetch: refetchWalletBalances } = useWalletBalances({
@@ -343,8 +355,6 @@ export default function HomePage() {
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        );
 
                             {/* Modal Popup */}
                             {isProposalModalOpen && (

@@ -104,7 +104,7 @@ export default function Header({ walletAddress, authenticated, solBalance, baseT
         {/* Left side: Logo / wallet / balances / links */}
         <div className="flex items-center gap-2 md:gap-4 text-gray-400">
           <a
-            href="/"
+            href="/markets"
             className="hover:opacity-80 transition-opacity"
           >
             <Image
