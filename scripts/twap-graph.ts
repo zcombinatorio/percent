@@ -24,6 +24,20 @@ const MODERATOR_ID = parseInt(process.argv[2]) || 6;
 const PROPOSAL_ID = parseInt(process.argv[3]) || 9;
 const FROM_DATE = process.argv[4] || '';  // Empty = show full proposal history
 
+interface TWAPHistoryEntry {
+  id: number;
+  timestamp: string;
+  twaps: string[];
+  aggregations: string[];
+}
+
+interface TWAPHistoryResponse {
+  moderatorId: number;
+  proposalId: number;
+  count: number;
+  data: TWAPHistoryEntry[];
+}
+
 interface ChartDataEntry {
   timestamp: string;
   market: string | number;
@@ -74,6 +88,18 @@ async function fetchProposal(moderatorId: number, proposalId: number): Promise<P
   return response.json() as Promise<ProposalData>;
 }
 
+async function fetchTWAPHistory(moderatorId: number, proposalId: number, from?: string): Promise<TWAPHistoryResponse> {
+  let url = `${API_BASE_URL}/api/history/${proposalId}/twap?moderatorId=${moderatorId}`;
+  if (from) {
+    url += `&from=${encodeURIComponent(from)}`;
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch TWAP history: ${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<TWAPHistoryResponse>;
+}
+
 async function fetchChartData(moderatorId: number, proposalId: number, from?: string): Promise<ChartDataResponse> {
   let url = `${API_BASE_URL}/api/history/${proposalId}/chart?moderatorId=${moderatorId}&interval=5m`;
   if (from) {
@@ -120,6 +146,16 @@ async function main() {
     }
   } catch (error) {
     console.error(`${COLORS.red}Failed to fetch chart data:${COLORS.reset}`, error);
+    process.exit(1);
+  }
+
+  // Fetch TWAP history for leader calculations
+  let twapHistory: TWAPHistoryResponse;
+  try {
+    twapHistory = await fetchTWAPHistory(MODERATOR_ID, PROPOSAL_ID, fromDate);
+    console.log(`${COLORS.bright}TWAP history points:${COLORS.reset} ${twapHistory.data.length}`);
+  } catch (error) {
+    console.error(`${COLORS.red}Failed to fetch TWAP history:${COLORS.reset}`, error);
     process.exit(1);
   }
 
@@ -250,14 +286,45 @@ async function main() {
     color: string;
   }
 
-  const leaderSegments: LeaderSegment[] = [];
-  let currentLeader = -1;
-  let segmentStart = 0;
+  // Helper to calculate leader segments from a series of leader indices
+  function calculateLeaderSegments(leaderAtEachPoint: number[]): LeaderSegment[] {
+    const segments: LeaderSegment[] = [];
+    let currentLeader = -1;
+    let segmentStart = 0;
 
+    for (let i = 0; i < leaderAtEachPoint.length; i++) {
+      const leader = leaderAtEachPoint[i];
+      if (leader !== currentLeader) {
+        if (currentLeader !== -1) {
+          segments.push({
+            startIdx: segmentStart,
+            endIdx: i - 1,
+            leader: currentLeader,
+            color: chartColors[currentLeader % chartColors.length]
+          });
+        }
+        currentLeader = leader;
+        segmentStart = i;
+      }
+    }
+
+    if (currentLeader !== -1) {
+      segments.push({
+        startIdx: segmentStart,
+        endIdx: leaderAtEachPoint.length - 1,
+        leader: currentLeader,
+        color: chartColors[currentLeader % chartColors.length]
+      });
+    }
+
+    return segments;
+  }
+
+  // 1. Price Leader - which market has highest premium at each timestamp
+  const priceLeaderAtEachPoint: number[] = [];
   for (let i = 0; i < timestamps.length; i++) {
     let maxValue = -Infinity;
     let leader = -1;
-
     for (let m = 0; m < series.length; m++) {
       const val = series[m][i];
       if (!isNaN(val) && val > maxValue) {
@@ -265,33 +332,69 @@ async function main() {
         leader = m;
       }
     }
+    priceLeaderAtEachPoint.push(leader);
+  }
+  const priceLeaderSegments = calculateLeaderSegments(priceLeaderAtEachPoint);
 
-    if (leader !== currentLeader) {
-      if (currentLeader !== -1) {
-        leaderSegments.push({
-          startIdx: segmentStart,
-          endIdx: i - 1,
-          leader: currentLeader,
-          color: chartColors[currentLeader % chartColors.length]
-        });
+  // 2. TWAP Leader - which market has highest TWAP observation at each point
+  // 3. Expected Winner - which market has highest aggregation (cumulative TWAP)
+  // Map TWAP history to chart timestamps
+  const twapData = twapHistory.data.sort((a, b) =>
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  const twapLeaderAtEachPoint: number[] = [];
+  const expectedWinnerAtEachPoint: number[] = [];
+
+  for (const ts of timestamps) {
+    // Find closest TWAP entry to this timestamp
+    let closestEntry: TWAPHistoryEntry | null = null;
+    let closestDiff = Infinity;
+
+    for (const entry of twapData) {
+      const entryTime = new Date(entry.timestamp).getTime();
+      const diff = Math.abs(entryTime - ts);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestEntry = entry;
       }
-      currentLeader = leader;
-      segmentStart = i;
+    }
+
+    if (closestEntry) {
+      // TWAP leader - highest current TWAP observation
+      let maxTwap = -Infinity;
+      let twapLeader = 0;
+      for (let m = 0; m < closestEntry.twaps.length; m++) {
+        const twap = parseFloat(closestEntry.twaps[m]);
+        if (twap > maxTwap) {
+          maxTwap = twap;
+          twapLeader = m;
+        }
+      }
+      twapLeaderAtEachPoint.push(twapLeader);
+
+      // Expected winner - highest aggregation
+      let maxAgg = -Infinity;
+      let aggLeader = 0;
+      for (let m = 0; m < closestEntry.aggregations.length; m++) {
+        const agg = parseFloat(closestEntry.aggregations[m]);
+        if (agg > maxAgg) {
+          maxAgg = agg;
+          aggLeader = m;
+        }
+      }
+      expectedWinnerAtEachPoint.push(aggLeader);
+    } else {
+      twapLeaderAtEachPoint.push(0);
+      expectedWinnerAtEachPoint.push(0);
     }
   }
 
-  // Close final segment
-  if (currentLeader !== -1) {
-    leaderSegments.push({
-      startIdx: segmentStart,
-      endIdx: timestamps.length - 1,
-      leader: currentLeader,
-      color: chartColors[currentLeader % chartColors.length]
-    });
-  }
+  const twapLeaderSegments = calculateLeaderSegments(twapLeaderAtEachPoint);
+  const expectedWinnerSegments = calculateLeaderSegments(expectedWinnerAtEachPoint);
 
-  // Create annotation boxes for each segment
-  const annotations = leaderSegments.map((seg, idx) => ({
+  // Create annotation boxes for price leader (main chart shading)
+  const annotations = priceLeaderSegments.map((seg) => ({
     type: 'box',
     xMin: chartLabels[seg.startIdx],
     xMax: chartLabels[seg.endIdx],
@@ -300,12 +403,20 @@ async function main() {
   }));
 
   // Log leader segments
-  console.log(`\n${COLORS.bright}Leader Segments (background shading):${COLORS.reset}`);
-  for (const seg of leaderSegments) {
-    const startDate = new Date(timestamps[seg.startIdx]).toLocaleString();
-    const endDate = new Date(timestamps[seg.endIdx]).toLocaleString();
+  console.log(`\n${COLORS.bright}Price Leader Segments:${COLORS.reset}`);
+  for (const seg of priceLeaderSegments) {
     const duration = ((timestamps[seg.endIdx] - timestamps[seg.startIdx]) / (1000 * 60 * 60)).toFixed(1);
-    console.log(`  ${labels[seg.leader]}: ${startDate} → ${endDate} (${duration}h)`);
+    console.log(`  ${labels[seg.leader]}: ${duration}h`);
+  }
+  console.log(`\n${COLORS.bright}TWAP Leader Segments:${COLORS.reset}`);
+  for (const seg of twapLeaderSegments) {
+    const duration = ((timestamps[seg.endIdx] - timestamps[seg.startIdx]) / (1000 * 60 * 60)).toFixed(1);
+    console.log(`  ${labels[seg.leader]}: ${duration}h`);
+  }
+  console.log(`\n${COLORS.bright}Expected Winner Segments:${COLORS.reset}`);
+  for (const seg of expectedWinnerSegments) {
+    const duration = ((timestamps[seg.endIdx] - timestamps[seg.startIdx]) / (1000 * 60 * 60)).toFixed(1);
+    console.log(`  ${labels[seg.leader]}: ${duration}h`);
   }
 
   const html = `<!DOCTYPE html>
@@ -327,6 +438,16 @@ async function main() {
     h1 { font-size: 24px; margin-bottom: 8px; }
     .subtitle { color: #888; margin-bottom: 20px; }
     .chart-container { background: #111; border-radius: 12px; padding: 20px; }
+    .controls { margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+    .controls label { font-size: 13px; color: #888; }
+    .controls select { background: #222; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .controls select:hover { border-color: #666; }
+    .leader-bars { margin-top: 16px; }
+    .leader-bar { margin-bottom: 16px; }
+    .leader-bar:last-child { margin-bottom: 0; }
+    .leader-bar-label { font-size: 12px; color: #888; margin-bottom: 6px; margin-left: var(--chart-left-padding, 0); }
+    .leader-bar-track { height: 24px; border-radius: 4px; display: flex; overflow: hidden; background: #222; margin-left: var(--chart-left-padding, 0); margin-right: var(--chart-right-padding, 0); }
+    .leader-bar-segment { height: 100%; opacity: 0.5; }
   </style>
 </head>
 <body>
@@ -335,13 +456,32 @@ async function main() {
     <div class="subtitle">${proposal.title} | ${startTime.toLocaleDateString()} - ${endTime.toLocaleDateString()}</div>
 
     <div class="chart-container">
+      <div class="controls">
+        <label for="overlay-select">Chart Overlay:</label>
+        <select id="overlay-select">
+          <option value="price">Price Leader</option>
+          <option value="twap">TWAP Leader</option>
+          <option value="expected">Expected Winner</option>
+        </select>
+      </div>
       <canvas id="chart"></canvas>
+
+      <div class="leader-bars" id="leader-bars-container">
+        <div class="leader-bar" id="bar1-container">
+          <div class="leader-bar-label" id="bar1-label">TWAP Leader</div>
+          <div class="leader-bar-track" id="bar1"></div>
+        </div>
+        <div class="leader-bar" id="bar2-container">
+          <div class="leader-bar-label" id="bar2-label">Expected Winner</div>
+          <div class="leader-bar-track" id="bar2"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     const ctx = document.getElementById('chart').getContext('2d');
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: ${JSON.stringify(chartLabels)},
@@ -372,6 +512,8 @@ async function main() {
             ticks: { color: '#888', maxTicksLimit: 8 }
           },
           y: {
+            min: -20,
+            max: 40,
             grid: { color: '#333' },
             ticks: {
               color: '#888',
@@ -380,6 +522,72 @@ async function main() {
           }
         }
       }
+    });
+
+    // Leader bar data
+    const totalPoints = ${timestamps.length};
+    const chartLabelsData = ${JSON.stringify(chartLabels)};
+    const allSegments = {
+      price: { segments: ${JSON.stringify(priceLeaderSegments)}, label: 'Price Leader' },
+      twap: { segments: ${JSON.stringify(twapLeaderSegments)}, label: 'TWAP Leader' },
+      expected: { segments: ${JSON.stringify(expectedWinnerSegments)}, label: 'Expected Winner' }
+    };
+    const marketLabels = ${JSON.stringify(labels)};
+
+    function segmentsToAnnotations(segments) {
+      return segments.map(seg => ({
+        type: 'box',
+        xMin: chartLabelsData[seg.startIdx],
+        xMax: chartLabelsData[seg.endIdx],
+        backgroundColor: seg.color + '25',
+        borderWidth: 0,
+      }));
+    }
+
+    function renderLeaderBar(barId, segments) {
+      const bar = document.getElementById(barId);
+      bar.innerHTML = '';
+      segments.forEach(seg => {
+        const width = ((seg.endIdx - seg.startIdx + 1) / totalPoints) * 100;
+        const div = document.createElement('div');
+        div.className = 'leader-bar-segment';
+        div.style.width = width + '%';
+        div.style.backgroundColor = seg.color;
+        div.title = marketLabels[seg.leader] + ' (' + width.toFixed(1) + '%)';
+        bar.appendChild(div);
+      });
+    }
+
+    function updateDisplay(overlayType) {
+      // Update chart annotations
+      chart.options.plugins.annotation.annotations = segmentsToAnnotations(allSegments[overlayType].segments);
+      chart.update();
+
+      // Determine which two types to show as bars (the ones not selected)
+      const types = ['price', 'twap', 'expected'];
+      const barTypes = types.filter(t => t !== overlayType);
+
+      document.getElementById('bar1-label').textContent = allSegments[barTypes[0]].label;
+      renderLeaderBar('bar1', allSegments[barTypes[0]].segments);
+
+      document.getElementById('bar2-label').textContent = allSegments[barTypes[1]].label;
+      renderLeaderBar('bar2', allSegments[barTypes[1]].segments);
+    }
+
+    // Wait for chart to render, then align bars with chart area
+    setTimeout(() => {
+      const chartArea = chart.chartArea;
+      const container = document.querySelector('.leader-bars');
+      if (chartArea && container) {
+        container.style.setProperty('--chart-left-padding', chartArea.left + 'px');
+        container.style.setProperty('--chart-right-padding', (chart.width - chartArea.right) + 'px');
+      }
+      updateDisplay('price');
+    }, 100);
+
+    // Handle dropdown change
+    document.getElementById('overlay-select').addEventListener('change', (e) => {
+      updateDisplay(e.target.value);
     });
   </script>
 </body>
