@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import MarketChart from './MarketChart';
 import type { Trade } from '@/hooks/useTradeHistory';
+import { useMarketVolume } from '@/hooks/useMarketVolume';
 
 interface ChartBoxProps {
   proposalId: number;
@@ -12,7 +13,6 @@ interface ChartBoxProps {
   tradesLoading: boolean;
   getTimeAgo: (timestamp: string) => string;
   getTokenUsed: (isBaseToQuote: boolean, market: number) => string;
-  calculateVolume?: (amountIn: string, isBaseToQuote: boolean, market: number) => number;
   moderatorId?: number;
   className?: string;
   userWalletAddress?: string | null;
@@ -27,7 +27,6 @@ export function ChartBox({
   tradesLoading,
   getTimeAgo,
   getTokenUsed,
-  calculateVolume,
   moderatorId,
   className,
   userWalletAddress,
@@ -39,21 +38,19 @@ export function ChartBox({
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [showOnlyMyTrades, setShowOnlyMyTrades] = useState(false);
 
-  // Filter trades to show only user's trades when filter is active
-  const filteredTrades = useMemo(() => {
-    if (showOnlyMyTrades && userWalletAddress) {
-      return trades.filter(t => t.userAddress === userWalletAddress);
-    }
-    return trades;
-  }, [trades, showOnlyMyTrades, userWalletAddress]);
+  // Fetch volume from API (aggregated server-side, all historical trades)
+  const { volumeByMarket } = useMarketVolume(proposalId, moderatorId);
 
-  // Calculate volume for this specific market's trades
-  const marketVolume = useMemo(() => {
-    if (!calculateVolume || trades.length === 0) return 0;
-    return trades.reduce((sum, trade) => {
-      return sum + calculateVolume(trade.amountIn, trade.isBaseToQuote, trade.market);
-    }, 0);
-  }, [trades, calculateVolume]);
+  // Get volume for the selected market (matches old behavior, but with all historical data)
+  const marketVolume = volumeByMarket.get(selectedMarketIndex) || 0;
+
+  // Filter trades to show only user's trades when filter is active
+  const filteredTrades = trades.filter(t => {
+    if (showOnlyMyTrades && userWalletAddress) {
+      return t.userAddress === userWalletAddress;
+    }
+    return true;
+  });
 
   // Format volume with K/M/B suffixes
   const formatVolume = (volume: number): string => {

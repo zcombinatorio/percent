@@ -206,9 +206,96 @@ router.get('/:id/trades', async (req, res, next) => {
 });
 
 /**
+ * Get total trade volume for a proposal
+ * GET /:id/volume?from=&to=
+ *
+ * Query parameters:
+ * - from: ISO date string (optional)
+ * - to: ISO date string (optional)
+ *
+ * Returns volume per market and total volume, with USD conversion
+ */
+router.get('/:id/volume', async (req, res, next) => {
+  try {
+    const proposalId = getProposalId(req);
+    const moderatorId = req.moderatorId;
+
+    const { from, to } = req.query;
+
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (from && typeof from === 'string') {
+      fromDate = new Date(from);
+      if (isNaN(fromDate.getTime())) {
+        logger.warn('[GET /:id/volume] Invalid from date format', {
+          proposalId,
+          from
+        });
+        return res.status(400).json({ error: 'Invalid from date format' });
+      }
+    }
+
+    if (to && typeof to === 'string') {
+      toDate = new Date(to);
+      if (isNaN(toDate.getTime())) {
+        logger.warn('[GET /:id/volume] Invalid to date format', {
+          proposalId,
+          to
+        });
+        return res.status(400).json({ error: 'Invalid to date format' });
+      }
+    }
+
+    const volumeData = await HistoryService.getTradeVolume(
+      moderatorId,
+      proposalId,
+      fromDate,
+      toDate
+    );
+
+    // Get current SOL/USD price for USD conversion
+    const { SolPriceService } = await import('../../app/services/sol-price.service');
+    const solPriceService = SolPriceService.getInstance();
+    const solPrice = await solPriceService.getSolPrice();
+
+    logger.info('[GET /:id/volume] Volume data retrieved', {
+      proposalId,
+      moderatorId,
+      totalVolume: volumeData.totalVolume.toString(),
+      totalTradeCount: volumeData.totalTradeCount,
+      marketCount: volumeData.byMarket.length,
+      from: fromDate?.toISOString(),
+      to: toDate?.toISOString()
+    });
+
+    res.json({
+      moderatorId,
+      proposalId,
+      solPrice,
+      totalVolume: volumeData.totalVolume.toString(),
+      totalVolumeUsd: volumeData.totalVolume.times(solPrice).toNumber(),
+      totalTradeCount: volumeData.totalTradeCount,
+      byMarket: volumeData.byMarket.map(m => ({
+        market: m.market,
+        volume: m.volume.toString(),
+        volumeUsd: m.volume.times(solPrice).toNumber(),
+        tradeCount: m.tradeCount,
+      }))
+    });
+  } catch (error) {
+    logger.error('[GET /:id/volume] Failed to get volume data', {
+      error: error instanceof Error ? error.message : String(error),
+      proposalId: req.params.id
+    });
+    next(error);
+  }
+});
+
+/**
  * Get chart data for a proposal
  * GET /:id/chart?interval=&from=&to=
- * 
+ *
  * Query parameters:
  * - interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d' (required)
  * - from: ISO date string (optional)

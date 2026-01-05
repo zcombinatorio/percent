@@ -126,7 +126,6 @@ export default function HomePage() {
     refetch: refetchTrades,
     getTimeAgo,
     getTokenUsed,
-    calculateVolume
   } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol);
 
 
@@ -432,7 +431,6 @@ export default function HomePage() {
                         tradesLoading={tradesLoading}
                         getTimeAgo={getTimeAgo}
                         getTokenUsed={getTokenUsed}
-                        calculateVolume={calculateVolume}
                         moderatorId={moderatorId ?? undefined}
                         userWalletAddress={walletAddress}
                         tokenSymbol={tokenSymbol}

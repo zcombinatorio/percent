@@ -248,6 +248,74 @@ export class HistoryService {
   }
 
   /**
+   * Retrieves total trade volume for a proposal, grouped by market
+   * Calculates volume as SUM of amount_in for all trades
+   * @param moderatorId - ID of the moderator
+   * @param proposalId - Global proposal ID
+   * @param from - Optional start date filter
+   * @param to - Optional end date filter
+   * @returns Object with volume per market and total volume
+   * @throws Error if database query fails
+   */
+  static async getTradeVolume(
+    moderatorId: number,
+    proposalId: number,
+    from?: Date,
+    to?: Date
+  ): Promise<{
+    byMarket: { market: number; volume: Decimal; tradeCount: number }[];
+    totalVolume: Decimal;
+    totalTradeCount: number;
+  }> {
+    const pool = getPool();
+
+    // Calculate volume in SOL terms:
+    // - Buy (is_base_to_quote = false): user pays SOL, so amount_in is SOL
+    // - Sell (is_base_to_quote = true): user receives SOL, so amount_out is SOL
+    let query = `
+      SELECT
+        market,
+        SUM(CASE WHEN is_base_to_quote THEN amount_out ELSE amount_in END) as volume,
+        COUNT(*) as trade_count
+      FROM qm_trade_history
+      WHERE moderator_id = $1 AND proposal_id = $2
+    `;
+    const params: (number | Date)[] = [moderatorId, proposalId];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += ` GROUP BY market ORDER BY market`;
+
+    const result = await pool.query(query, params);
+
+    const byMarket = result.rows.map(row => ({
+      market: row.market,
+      volume: new Decimal(row.volume || 0),
+      tradeCount: parseInt(row.trade_count),
+    }));
+
+    const totalVolume = byMarket.reduce(
+      (sum, m) => sum.plus(m.volume),
+      new Decimal(0)
+    );
+
+    const totalTradeCount = byMarket.reduce(
+      (sum, m) => sum + m.tradeCount,
+      0
+    );
+
+    return { byMarket, totalVolume, totalTradeCount };
+  }
+
+  /**
    * Retrieves aggregated chart data for a proposal
    * Combines price and volume data into time-bucketed points for visualization
    * @param moderatorId - ID of the moderator
