@@ -26,6 +26,7 @@ import BN from 'bn.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 import { PersistenceService } from '../../app/services/persistence.service';
+import { IProposalDB } from '../../app/types/persistence.interface';
 import { RouterService } from '@app/services/router.service';
 import { LoggerService } from '../../app/services/logger.service';
 import { ProposalStatus } from '../../app/types/moderator.interface';
@@ -161,6 +162,75 @@ router.get('/', async (req, res, next) => {
     logger.error('[GET /] Failed to fetch proposals', {
       error: error instanceof Error ? error.message : String(error),
       moderatorId: req.moderatorId
+    });
+    next(error);
+  }
+});
+
+/**
+ * Get market status with calculated TWAPs for the latest proposal
+ * GET /market-status
+ *
+ * Returns the most recent proposal (highest ID) for the given moderator
+ * with calculated TWAP values for each market option
+ */
+router.get('/market-status', async (req, res, next) => {
+  try {
+    const moderatorId = req.moderatorId;
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
+
+    logger.info('[GET /market-status] Fetching latest proposal', { moderatorId });
+
+    // Get the latest proposal directly (handles non-sequential IDs)
+    const proposalData = await persistenceService.loadLatestProposalData();
+
+    if (!proposalData) {
+      logger.warn('[GET /market-status] No proposals found', { moderatorId });
+      return res.status(404).json({ error: 'No proposals found for this moderator' });
+    }
+
+    return sendMarketStatusResponseFromDB(res, moderatorId, proposalData, logger);
+  } catch (error) {
+    logger.error('[GET /market-status] Failed to fetch market status', {
+      error: error instanceof Error ? error.message : String(error),
+      moderatorId: req.moderatorId
+    });
+    next(error);
+  }
+});
+
+/**
+ * Get market status with calculated TWAPs for a specific proposal
+ * GET /:id/market-status
+ */
+router.get('/:id/market-status', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    const moderatorId = req.moderatorId;
+
+    if (isNaN(id) || id < 0) {
+      logger.warn('[GET /:id/market-status] Invalid proposal ID', {
+        providedId: req.params.id
+      });
+      return res.status(400).json({ error: 'Invalid proposal ID' });
+    }
+
+    const persistenceService = new PersistenceService(moderatorId, logger.createChild('persistence'));
+    const proposalData = await persistenceService.loadProposalData(id);
+
+    if (!proposalData) {
+      logger.warn('[GET /:id/market-status] Proposal not found', {
+        proposalId: id,
+        moderatorId
+      });
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    return sendMarketStatusResponseFromDB(res, moderatorId, proposalData, logger);
+  } catch (error) {
+    logger.error('[GET /:id/market-status] Failed to fetch market status', {
+      error: error instanceof Error ? error.message : String(error),
+      proposalId: req.params.id
     });
     next(error);
   }
@@ -826,5 +896,99 @@ async function recordSlashIfApplicable(
   });
 }
 
+
+/**
+ * Helper function to build and send market status response from raw DB data
+ * Uses raw database data without full proposal deserialization (no authority keypair required)
+ */
+function sendMarketStatusResponseFromDB(
+  res: any,
+  moderatorId: number,
+  proposalData: IProposalDB,
+  logger: any
+) {
+  // Parse TWAP oracle data (may be string or already parsed)
+  let twapData: any = null;
+  if (proposalData.twap_oracle_data) {
+    twapData = typeof proposalData.twap_oracle_data === 'string'
+      ? JSON.parse(proposalData.twap_oracle_data)
+      : proposalData.twap_oracle_data;
+  }
+
+  // Handle missing TWAP data gracefully
+  if (!twapData) {
+    logger.warn('[market-status] No TWAP data found', {
+      proposalId: proposalData.proposal_id,
+      moderatorId
+    });
+    return res.status(500).json({ error: 'Proposal has no TWAP data' });
+  }
+
+  // Calculate TWAP for each market (with defensive defaults)
+  const twapStartTime = (twapData.createdAt || 0) + (twapData.twapStartDelay || 0);
+  const finalizedAt = proposalData.finalized_at ? new Date(proposalData.finalized_at).getTime() : null;
+  const currentTime = finalizedAt || Date.now();
+  const timePassed = Math.max(0, currentTime - twapStartTime);
+  const initialTwapValue = twapData.initialTwapValue ?? 0;
+  const aggregations = twapData.aggregations || [];
+  const observations = twapData.observations || [];
+
+  const marketLabels = proposalData.market_labels || [];
+  const options = marketLabels.map((label: string, i: number) => {
+    const aggregation = parseFloat(aggregations[i] || '0');
+    const currentPrice = parseFloat(observations[i] || '0');
+
+    const twap = timePassed > 0
+      ? aggregation / timePassed
+      : initialTwapValue;
+
+    return {
+      index: i,
+      label,
+      twap,
+      currentPrice
+    };
+  });
+
+  // Find leading option (highest TWAP)
+  let leadingOption = null;
+  if (options.length > 0) {
+    const leading = options.reduce((max: any, opt: any) => opt.twap > max.twap ? opt : max);
+    leadingOption = {
+      index: leading.index,
+      label: leading.label,
+      twap: leading.twap
+    };
+  }
+
+  // Map status to user-friendly format
+  const status = proposalData.status === ProposalStatus.Pending ? 'live' :
+                 proposalData.status === ProposalStatus.Finalized ? 'completed' :
+                 proposalData.status;
+
+  const createdAt = proposalData.created_at ? new Date(proposalData.created_at).getTime() : null;
+  const proposalLength = proposalData.proposal_length ? parseInt(proposalData.proposal_length, 10) : 0;
+  const endsAt = createdAt ? createdAt + proposalLength : null;
+
+  logger.info('[market-status] Sending market status response', {
+    proposalId: proposalData.proposal_id,
+    moderatorId,
+    status,
+    optionCount: options.length
+  });
+
+  return res.json({
+    moderatorId,
+    proposalId: proposalData.proposal_id,
+    title: proposalData.title,
+    description: proposalData.description || null,
+    status,
+    createdAt,
+    endsAt,
+    finalizedAt,
+    options,
+    leadingOption
+  });
+}
 
 export default router;
