@@ -77,70 +77,12 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
       }
     };
 
-    // Fetch initial prices from chart endpoint
-    const fetchInitialPrices = async () => {
-      try {
-        console.log('[LivePriceDisplay] Fetching initial prices for proposal', proposalId);
-
-        // Get moderatorId from proposal first
-        const proposal = await api.getProposal(proposalId, moderatorId || undefined);
-        if (!proposal) {
-          console.warn('[LivePriceDisplay] Cannot fetch initial prices - proposal not found');
-          return;
-        }
-
-        console.log('[LivePriceDisplay] Proposal data:', {
-          proposalId,
-          moderatorId: proposal.moderatorId,
-          status: proposal.status
-        });
-
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/chart`, {
-          interval: '5m'
-        }, moderatorId ?? undefined);
-
-        console.log('[LivePriceDisplay] Fetching from URL:', url);
-        const response = await fetch(url);
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[LivePriceDisplay] Chart data received:', {
-            dataLength: data.data?.length || 0,
-            firstItems: data.data?.slice(0, 6)
-          });
-
-          if (data.data && data.data.length > 0) {
-            // Group chart data by market index (supports 2-4 markets)
-            const newPrices: (number | null)[] = Array(marketCount).fill(null);
-
-            for (const d of data.data) {
-              const marketIndex = typeof d.market === 'number' ? d.market : null;
-              if (marketIndex !== null && marketIndex >= 0 && marketIndex < marketCount) {
-                // Use most recent close price for each market
-                newPrices[marketIndex] = parseFloat(d.close);
-              }
-            }
-
-            console.log('[LivePriceDisplay] Setting initial prices:', newPrices);
-
-            setPrices(prev => newPrices.map((p, i) => p !== null ? p : prev[i]));
-
-            console.log('[LivePriceDisplay] Initial prices set successfully');
-          } else {
-            console.warn('[LivePriceDisplay] No chart data available');
-          }
-        } else {
-          console.error('[LivePriceDisplay] Chart fetch failed:', response.status, response.statusText);
-        }
-      } catch (error) {
-        console.error('[LivePriceDisplay] Error fetching initial prices:', error);
-        // Continue - WebSocket will update prices
-      }
-    };
+    // Note: We intentionally don't fetch initial prices from the chart endpoint here
+    // because it returns market cap USD values, but we need raw SOL prices for the
+    // TWAP projection calculation. The WebSocket will provide SOL prices directly.
+    // The UI will show loading state until WebSocket connects.
 
     fetchProposalDetails();
-    fetchInitialPrices();
     
     // Fetch TWAP data for governance decision
     const fetchTwap = async () => {
@@ -189,15 +131,16 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     // Mark that we've received real-time WebSocket data
     setHasWebSocketData(true);
 
-    // Use marketCapUsd if available (new backend), otherwise price field (legacy)
-    const marketCapValue = update.marketCapUsd ?? update.price;
+    // Use raw price in SOL for TWAP projection calculations
+    // (marketCapUsd is for display purposes only, not for the TWAP formula)
+    const priceValue = update.price;
     const marketIndex = typeof update.market === 'number' ? update.market : -1;
 
     // Only update if valid market index within our range
     if (marketIndex >= 0 && marketIndex < marketCount) {
       setPrices(prev => {
         const newPrices = [...prev];
-        newPrices[marketIndex] = marketCapValue;
+        newPrices[marketIndex] = priceValue;
         return newPrices;
       });
     }
