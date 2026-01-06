@@ -179,7 +179,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-1 md:gap-4">
         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2 text-center" style={{ color: '#DDDDD7' }}>
-          II. Select Coin (TWAP)
+          II. Select Coin (TWAP RANKED)
         </span>
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
           {!hasAllData ? (
