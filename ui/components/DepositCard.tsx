@@ -30,8 +30,9 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
   const { signTransaction } = useTransactionSigner();
   const [mode, setMode] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
-  const [selectedToken, setSelectedToken] = useState<'sol' | 'zc'>('sol');
+  const [selectedToken, setSelectedToken] = useState<'sol' | 'zc'>('zc');
   const [isDepositing, setIsDepositing] = useState(false);
+  const [justClickedToggle, setJustClickedToggle] = useState(false);
 
   // Check if market is completed (Passed or Failed)
   const isMarketCompleted = proposalStatus === 'Passed' || proposalStatus === 'Failed';
@@ -354,13 +355,23 @@ export function DepositCard({ proposalId, vaultPDA, solBalance, baseTokenBalance
             )}
             {/* Keep SOL/ZC toggle - user can switch to view different claimable amounts */}
             <button
-              onClick={() => setSelectedToken(selectedToken === 'sol' ? 'zc' : 'sol')}
-              className="flex items-center justify-center px-2 h-7 bg-[#333] rounded hover:bg-[#404040] transition cursor-pointer"
+              onClick={() => {
+                setSelectedToken(selectedToken === 'sol' ? 'zc' : 'sol');
+                setJustClickedToggle(true);
+              }}
+              onMouseLeave={() => setJustClickedToggle(false)}
+              className="group flex items-center justify-center px-2 h-7 bg-[#444] rounded hover:bg-[#555] transition cursor-pointer"
             >
               {selectedToken === 'sol' ? (
-                <span className="text-xs text-[#AFAFAF] font-bold">SOL</span>
+                <>
+                  <span className={`text-xs text-[#AFAFAF] font-bold ${justClickedToggle ? '' : 'group-hover:hidden'}`}>SOL</span>
+                  <span className={`text-xs text-[#AFAFAF] font-bold ${justClickedToggle ? 'hidden' : 'hidden group-hover:inline'}`}>{tokenSymbol}</span>
+                </>
               ) : (
-                <span className="text-xs text-[#AFAFAF] font-bold">{tokenSymbol}</span>
+                <>
+                  <span className={`text-xs text-[#AFAFAF] font-bold ${justClickedToggle ? '' : 'group-hover:hidden'}`}>{tokenSymbol}</span>
+                  <span className={`text-xs text-[#AFAFAF] font-bold ${justClickedToggle ? 'hidden' : 'hidden group-hover:inline'}`}>SOL</span>
+                </>
               )}
             </button>
           </div>
