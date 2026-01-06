@@ -173,7 +173,7 @@ export class TWAPService {
       // Log but don't crash - TWAP crank can fail if pool is finalized or other transient issues
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error(`Failed to crank TWAP for pool ${poolPdaStr}:`, errMsg);
-      logError('twap2', {
+      logError('twap', {
         action: 'crank',
         pool: poolPdaStr,
         proposal: proposalPdaStr,
