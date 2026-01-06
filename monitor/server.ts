@@ -40,14 +40,15 @@ const args = process.argv.slice(2).reduce((acc, arg, i, arr) => {
 }, {} as Record<string, string | boolean>);
 
 const PORT = Number(args.port) || 4000;
-const DEV = !!args.dev;
+const NO_AUTH = !!args['no-auth'];
+const DEV = !!args.dev; // Uses dev db tables
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Apply auth middleware unless --dev
-if (!DEV) app.use(requireAdminKey);
+// Apply auth middleware unless --no-auth
+if (!NO_AUTH) app.use(requireAdminKey);
 
 let monitor: Monitor;
 let lifecycle: LifecycleService;
@@ -71,7 +72,7 @@ const startServer = async () => {
     // ENV validation
     if (!process.env.DB_URL) throw Error('Missing DB_URL');
     if (!process.env.SOLANA_RPC_URL) throw Error('Missing SOLANA_RPC_URL');
-    if (!DEV && !process.env.ADMIN_API_KEY) throw Error('Missing ADMIN_API_KEY');
+    if (!NO_AUTH && !process.env.ADMIN_API_KEY) throw Error('Missing ADMIN_API_KEY');
 
     // Start monitor
     monitor = new Monitor(process.env.SOLANA_RPC_URL);
@@ -82,7 +83,9 @@ const startServer = async () => {
     lifecycle.start(monitor);
 
     app.listen(PORT, () => {
-      console.log(`Monitor running on port ${PORT}${DEV ? ' (developer mode)' : ''}`);
+      const flags = [DEV && 'dev', NO_AUTH && 'no-auth'].filter(Boolean);
+      const suffix = flags.length ? ` (${flags.join(', ')})` : '';
+      console.log(`Monitor running on port ${PORT}${suffix}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

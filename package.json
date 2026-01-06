@@ -10,7 +10,7 @@
     "create-proposal": "tsx scripts/create-proposal.ts",
     "state": "tsx scripts/fetch-state.ts",
     "monitor": "node dist/monitor/server.js",
-    "monitor:dev": "tsx monitor/server.ts --dev"
+    "monitor:dev": "tsx monitor/server.ts --dev --no-auth"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

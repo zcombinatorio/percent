@@ -20,18 +20,23 @@ This is opposed to another server, currently in `./src/*` and yet to be revamped
 `/clean`: Clears logs & persistance. 
 
 ## Usage
-For development, run 
+For development, run
 ```
-npm run monitor:dev`
+npm run monitor:dev
 ```
-which uses `tsx` & disables api key auth for the endpoints. 
+which uses `tsx` with `--no-auth` to disable API key auth & `--dev` to write to dev db tables.
 
-For production, run 
+For production, run
 ```
 npm run build && npm run monitor
 ```
-* Default port is 4000. Custom port can be specified via `--port <number>` 
-* The `--dev` CLI arg starts the server in development mode.
+
+**CLI Args**
+| Arg         | Description                      |
+|-------------|----------------------------------|
+| `--port`    | Custom port (default: 4000)      |
+| `--no-auth` | Disable API key authentication   |
+| `--dev`     | Use dev database tables          |
 
 ## Architecture
 
