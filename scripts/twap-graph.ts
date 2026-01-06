@@ -353,6 +353,15 @@ async function main() {
   const twapLeaderAtEachPoint: number[] = [];
   const expectedWinnerAtEachPoint: number[] = [];
 
+  // Track when 1.5x guarantee occurs (leader is mathematically guaranteed to win)
+  // This happens when: leaderAgg - loserAgg > 1.5 × leaderTWAP × remainingTime
+  let guaranteeTimestamp: number | null = null;
+  let guaranteeIndex: number | null = null;
+
+  // Track the required multiplier for challenger to overtake leader at each point
+  // Formula: requiredMultiplier = aggregationGap / (leaderTwap × remainingTime)
+  const requiredMultiplierAtEachPoint: (number | null)[] = [];
+
   for (let i = 0; i < timestamps.length; i++) {
     const ts = timestamps[i];
 
@@ -381,6 +390,59 @@ async function main() {
         }
       }
       twapLeaderAtEachPoint.push(twapLeader);
+
+      // 2x Guarantee calculation
+      // Check if leader is mathematically guaranteed to win even if:
+      // - Leader's price goes to 0 for remaining time (worst case for leader)
+      // - Loser's price goes to 2× leader's current price (best case for loser)
+      if (guaranteeTimestamp === null && closestEntry.aggregations.length >= 2) {
+        const currentTime = new Date(closestEntry.timestamp).getTime();
+        const remainingTime = Math.max(0, proposalEndTime - currentTime);
+
+        // Get leader and loser aggregations
+        const leaderAgg = parseFloat(closestEntry.aggregations[twapLeader]);
+
+        // Find the highest loser aggregation (for multi-market support)
+        let maxLoserAgg = -Infinity;
+        for (let m = 0; m < closestEntry.aggregations.length; m++) {
+          if (m !== twapLeader) {
+            const agg = parseFloat(closestEntry.aggregations[m]);
+            if (agg > maxLoserAgg) {
+              maxLoserAgg = agg;
+            }
+          }
+        }
+
+        // Use the leader's TWAP value as the observation price (since TWAP ≈ observation)
+        // This is in the same units as the aggregations
+        const leaderTwapValue = parseFloat(closestEntry.twaps[twapLeader]);
+
+        if (leaderTwapValue > 0 && maxLoserAgg !== -Infinity) {
+          const aggregationGap = leaderAgg - maxLoserAgg;
+          const maxLoserGain = 1.5 * leaderTwapValue * remainingTime;
+
+          // Leader is guaranteed if their current lead exceeds the max possible loser gain
+          if (aggregationGap > maxLoserGain) {
+            guaranteeTimestamp = ts;
+            guaranteeIndex = i;
+          }
+
+          // Calculate required multiplier for challenger to overtake
+          // Formula: multiplier = gap / (leaderTwap × remainingTime) + 1
+          // The "+1" accounts for the leader also continuing to accumulate
+          // (challenger needs to beat leader's final aggregation, not just current)
+          if (remainingTime > 0 && leaderTwapValue > 0) {
+            const requiredMultiplier = (aggregationGap / (leaderTwapValue * remainingTime)) + 1;
+            requiredMultiplierAtEachPoint.push(requiredMultiplier);
+          } else {
+            requiredMultiplierAtEachPoint.push(null);
+          }
+        } else {
+          requiredMultiplierAtEachPoint.push(null);
+        }
+      } else {
+        requiredMultiplierAtEachPoint.push(null);
+      }
 
       // Expected Winner - using same formula as UI (ModeToggle.tsx):
       // expectedFinal = currentTwap × elapsed% + currentPrice × remaining%
@@ -425,13 +487,35 @@ async function main() {
   const expectedWinnerSegments = calculateLeaderSegments(expectedWinnerAtEachPoint);
 
   // Create annotation boxes for price leader (main chart shading)
-  const annotations = priceLeaderSegments.map((seg) => ({
+  const annotations: any[] = priceLeaderSegments.map((seg) => ({
     type: 'box',
     xMin: chartLabels[seg.startIdx],
     xMax: chartLabels[seg.endIdx],
     backgroundColor: seg.color + '25', // Semi-transparent
     borderWidth: 0,
   }));
+
+  // Add 1.5x guarantee vertical line if it was reached
+  const guaranteeLabel = guaranteeIndex !== null ? chartLabels[guaranteeIndex] : null;
+  if (guaranteeLabel) {
+    annotations.push({
+      type: 'line',
+      xMin: guaranteeLabel,
+      xMax: guaranteeLabel,
+      borderColor: '#ef4444', // Red
+      borderWidth: 2,
+      borderDash: [6, 4],
+      label: {
+        display: true,
+        content: '1.5x Guarantee',
+        position: 'start',
+        backgroundColor: '#ef4444',
+        color: '#fff',
+        font: { size: 11, weight: 'bold' },
+        padding: 4,
+      }
+    });
+  }
 
   // Log leader segments
   console.log(`\n${COLORS.bright}Price Leader Segments:${COLORS.reset}`);
@@ -448,6 +532,72 @@ async function main() {
   for (const seg of expectedWinnerSegments) {
     const duration = ((timestamps[seg.endIdx] - timestamps[seg.startIdx]) / (1000 * 60 * 60)).toFixed(1);
     console.log(`  ${labels[seg.leader]}: ${duration}h`);
+  }
+
+  // Log 1.5x guarantee timestamp
+  if (guaranteeTimestamp) {
+    const guaranteeTime = new Date(guaranteeTimestamp);
+    const timeFromStart = ((guaranteeTimestamp - timestamps[0]) / (1000 * 60 * 60)).toFixed(1);
+    const percentComplete = ((guaranteeTimestamp - proposal.createdAt) / totalDuration * 100).toFixed(1);
+    console.log(`\n${COLORS.bright}${COLORS.red}1.5x Guarantee:${COLORS.reset} ${guaranteeTime.toLocaleString()}`);
+    console.log(`  ${timeFromStart}h from chart start, ${percentComplete}% through proposal`);
+  } else {
+    console.log(`\n${COLORS.dim}1.5x Guarantee: Not reached (outcome still contestable)${COLORS.reset}`);
+
+    // Show current state for debugging
+    const latestTwapEntry = twapData[twapData.length - 1];
+    if (latestTwapEntry) {
+      const currentTime = new Date(latestTwapEntry.timestamp).getTime();
+      const remainingTimeMs = Math.max(0, proposalEndTime - currentTime);
+      const remainingHours = (remainingTimeMs / (1000 * 60 * 60)).toFixed(1);
+
+      // Find leader and gap
+      const aggregations = latestTwapEntry.aggregations.map(a => parseFloat(a));
+      const twaps = latestTwapEntry.twaps.map(t => parseFloat(t));
+      const leaderIdx = twaps.indexOf(Math.max(...twaps));
+      const leaderAgg = aggregations[leaderIdx];
+      const leaderTwap = twaps[leaderIdx];
+
+      // Find max loser aggregation
+      let maxLoserAgg = -Infinity;
+      let maxLoserIdx = 0;
+      for (let m = 0; m < aggregations.length; m++) {
+        if (m !== leaderIdx && aggregations[m] > maxLoserAgg) {
+          maxLoserAgg = aggregations[m];
+          maxLoserIdx = m;
+        }
+      }
+
+      const aggregationGap = leaderAgg - maxLoserAgg;
+
+      // Use the leader's TWAP value as the observation price (same units as aggregations)
+      const maxLoserGain = 1.5 * leaderTwap * remainingTimeMs;
+      const gapNeeded = maxLoserGain - aggregationGap;
+      const hoursUntilGuarantee = leaderTwap > 0 ? (gapNeeded / (leaderTwap * 1000 * 60 * 60)) : Infinity;
+
+      console.log(`  ${COLORS.cyan}Current state:${COLORS.reset}`);
+      console.log(`    Leader: ${labels[leaderIdx]} (TWAP: ${(leaderTwap * 1e6).toFixed(2)}e-6)`);
+      console.log(`    Closest challenger: ${labels[maxLoserIdx]} (TWAP: ${(twaps[maxLoserIdx] * 1e6).toFixed(2)}e-6)`);
+      console.log(`    Remaining time: ${remainingHours}h`);
+      console.log(`    Aggregation gap: ${aggregationGap.toFixed(2)} (leader: ${leaderAgg.toFixed(2)}, challenger: ${maxLoserAgg.toFixed(2)})`);
+      console.log(`    Max loser gain (1.5x TWAP for ${remainingHours}h): ${maxLoserGain.toFixed(2)}`);
+      if (gapNeeded > 0) {
+        console.log(`    ${COLORS.yellow}Gap needed for guarantee: ${gapNeeded.toFixed(2)} (~${hoursUntilGuarantee.toFixed(1)}h at current TWAP)${COLORS.reset}`);
+      } else {
+        console.log(`    ${COLORS.green}Gap exceeds max loser gain - should be guaranteed!${COLORS.reset}`);
+      }
+    }
+  }
+
+  // Log current required multiplier
+  const validMultipliers = requiredMultiplierAtEachPoint.filter((m): m is number => m !== null);
+  if (validMultipliers.length > 0) {
+    const currentMultiplier = validMultipliers[validMultipliers.length - 1];
+    const minMultiplier = Math.min(...validMultipliers);
+    const maxMultiplier = Math.max(...validMultipliers);
+    console.log(`\n${COLORS.bright}Break-Even Multiplier (challenger price / leader price):${COLORS.reset}`);
+    console.log(`  Current: ${currentMultiplier.toFixed(4)}x (above = challenger wins, below = leader wins)`);
+    console.log(`  Range: ${minMultiplier.toFixed(4)}x - ${maxMultiplier.toFixed(4)}x`);
   }
 
   const html = `<!DOCTYPE html>
@@ -508,6 +658,12 @@ async function main() {
         </div>
       </div>
     </div>
+
+    <div class="chart-container" style="margin-top: 20px;">
+      <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #fff;">Guaranteed Winner Odds</h3>
+      <p style="margin: 0 0 12px 0; font-size: 12px; color: #888;">Challenger would need to maintain this multiplier over the leader in the remaining time to win. Goes to infinity as time runs out.</p>
+      <canvas id="multiplier-chart"></canvas>
+    </div>
   </div>
 
   <script>
@@ -565,14 +721,39 @@ async function main() {
     };
     const marketLabels = ${JSON.stringify(labels)};
 
+    // 1.5x Guarantee line data
+    const guaranteeLabelData = ${guaranteeLabel ? JSON.stringify(guaranteeLabel) : 'null'};
+    const guaranteeAnnotation = guaranteeLabelData ? {
+      type: 'line',
+      xMin: guaranteeLabelData,
+      xMax: guaranteeLabelData,
+      borderColor: '#ef4444',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      label: {
+        display: true,
+        content: '1.5x Guarantee',
+        position: 'start',
+        backgroundColor: '#ef4444',
+        color: '#fff',
+        font: { size: 11, weight: 'bold' },
+        padding: 4,
+      }
+    } : null;
+
     function segmentsToAnnotations(segments) {
-      return segments.map(seg => ({
+      const boxAnnotations = segments.map(seg => ({
         type: 'box',
         xMin: chartLabelsData[seg.startIdx],
         xMax: chartLabelsData[seg.endIdx],
         backgroundColor: seg.color + '25',
         borderWidth: 0,
       }));
+      // Always include the 1.5x guarantee line if it exists
+      if (guaranteeAnnotation) {
+        boxAnnotations.push(guaranteeAnnotation);
+      }
+      return boxAnnotations;
     }
 
     function renderLeaderBar(barId, segments) {
@@ -619,6 +800,136 @@ async function main() {
     // Handle dropdown change
     document.getElementById('overlay-select').addEventListener('change', (e) => {
       updateDisplay(e.target.value);
+    });
+
+    // Multiplier chart - last 24 hours of the proposal (before finalization)
+    const multiplierDataFull = ${JSON.stringify(requiredMultiplierAtEachPoint)};
+    const proposalEndTime = ${proposalEndTime};
+    const last24hCutoff = proposalEndTime - (24 * 60 * 60 * 1000);
+
+    // Find indices for last 24h of proposal
+    let startIdx = 0;
+    for (let i = 0; i < chartLabelsData.length; i++) {
+      if (new Date(chartLabelsData[i]).getTime() >= last24hCutoff) {
+        startIdx = i;
+        break;
+      }
+    }
+    const multiplierLabels = chartLabelsData.slice(startIdx);
+    const multiplierData = multiplierDataFull.slice(startIdx);
+
+    // Fixed x-axis bounds for full 24h window
+    const xAxisMin = new Date(last24hCutoff).toISOString();
+    const xAxisMax = new Date(proposalEndTime).toISOString();
+
+    const multiplierCtx = document.getElementById('multiplier-chart').getContext('2d');
+    const multiplierChart = new Chart(multiplierCtx, {
+      type: 'line',
+      data: {
+        labels: multiplierLabels,
+        datasets: [{
+          label: 'Required Multiplier',
+          data: multiplierData,
+          borderColor: '#f59e0b',
+          backgroundColor: '#f59e0b33',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.1,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 3,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          annotation: {
+            annotations: {
+              line1x: {
+                type: 'line',
+                yMin: 1,
+                yMax: 1,
+                borderColor: '#22c55e',
+                borderWidth: 1,
+                borderDash: [4, 4],
+                label: {
+                  display: true,
+                  content: '1x (parity)',
+                  position: 'start',
+                  backgroundColor: '#22c55e',
+                  color: '#fff',
+                  font: { size: 10 },
+                  padding: 2,
+                }
+              },
+              line1_5x: {
+                type: 'line',
+                yMin: 1.5,
+                yMax: 1.5,
+                borderColor: '#eab308',
+                borderWidth: 1,
+                borderDash: [4, 4],
+                label: {
+                  display: true,
+                  content: '1.5x',
+                  position: 'start',
+                  backgroundColor: '#eab308',
+                  color: '#000',
+                  font: { size: 10 },
+                  padding: 2,
+                }
+              },
+              line2x: {
+                type: 'line',
+                yMin: 2,
+                yMax: 2,
+                borderColor: '#ef4444',
+                borderWidth: 1,
+                borderDash: [4, 4],
+                label: {
+                  display: true,
+                  content: '2x',
+                  position: 'start',
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  font: { size: 10 },
+                  padding: 2,
+                }
+              }
+            }
+          },
+          tooltip: {
+            backgroundColor: '#222',
+            titleColor: '#fff',
+            bodyColor: '#fff',
+            callbacks: {
+              label: (ctx) => 'Required: ' + ctx.parsed.y.toFixed(4) + 'x'
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            min: xAxisMin,
+            max: xAxisMax,
+            time: { unit: 'hour', displayFormats: { hour: 'ha', day: 'MMM d' } },
+            grid: { color: '#333' },
+            ticks: { color: '#888', maxTicksLimit: 12 }
+          },
+          y: {
+            type: 'linear',
+            min: 0.5,
+            suggestedMax: 3,
+            grid: { color: '#333' },
+            ticks: {
+              color: '#888',
+              callback: (v) => v.toFixed(1) + 'x'
+            }
+          }
+        }
+      }
     });
   </script>
 </body>
