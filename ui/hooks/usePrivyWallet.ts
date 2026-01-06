@@ -28,15 +28,37 @@ export function usePrivyWallet() {
   // Both Privy SDK and Solana wallets must be ready for transactions
   const ready = privyReady && solanaWalletsReady;
 
+  // Detect wallet type: embedded takes priority (protects existing users)
+  const walletType = useMemo((): 'embedded' | 'external' | null => {
+    if (!user) return null;
+
+    // Check for embedded Solana wallet first (protects existing users)
+    if (user.wallet?.address) {
+      return 'embedded';
+    }
+
+    // Check for external Solana wallet
+    if (user.linkedAccounts) {
+      const externalWallet = user.linkedAccounts.find(
+        account => account.type === 'wallet' && account.chainType === 'solana'
+      );
+      if (externalWallet && 'address' in externalWallet) {
+        return 'external';
+      }
+    }
+
+    return null;
+  }, [user]);
+
   const walletAddress = useMemo(() => {
     if (!user) return null;
-    
-    // Check for embedded Solana wallet
+
+    // Embedded wallet takes priority (protects existing users)
     if (user.wallet?.address) {
       return user.wallet.address;
     }
-    
-    // Check linked accounts for Solana wallet
+
+    // Fall back to external Solana wallet (for wallet-connect users)
     if (user.linkedAccounts) {
       const solanaWallet = user.linkedAccounts.find(
         account => account.type === 'wallet' && account.chainType === 'solana'
@@ -45,7 +67,7 @@ export function usePrivyWallet() {
         return solanaWallet.address;
       }
     }
-    
+
     return null;
   }, [user]);
 
@@ -54,6 +76,7 @@ export function usePrivyWallet() {
     authenticated,
     user,
     walletAddress,
+    walletType,
     login,
     logout,
   };
