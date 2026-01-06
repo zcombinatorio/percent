@@ -30,9 +30,12 @@ import { Monitor } from './monitor';
 import { LifecycleService } from './services/lifecycle.service';
 import { TWAPService } from './services/twap.service';
 import { PriceService } from './services/price.service';
-import { logError, readErrors, clearErrors, LogFile } from './logger';
+import { logError, readErrors, clearErrors, LOG_FILES, LogFile } from './logger';
 
-// Parse CLI args: --port 4000 --dev
+// ============================================================================
+// CLI Arguments
+// ============================================================================
+
 const args = process.argv.slice(2).reduce((acc, arg, i, arr) => {
   if (arg.startsWith('--')) {
     const key = arg.slice(2);
@@ -44,21 +47,32 @@ const args = process.argv.slice(2).reduce((acc, arg, i, arr) => {
 
 const PORT = Number(args.port) || 4000;
 const NO_AUTH = !!args['no-auth'];
-const DEV = !!args.dev; // Uses dev db tables
+const DEV = !!args.dev;
+
+// ============================================================================
+// Express Setup
+// ============================================================================
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Apply auth middleware unless --no-auth
 if (!NO_AUTH) app.use(requireAdminKey);
+
+// ============================================================================
+// Services
+// ============================================================================
 
 let monitor: Monitor;
 let lifecycle: LifecycleService;
 let twap: TWAPService;
 let price: PriceService;
 
-// Status endpoint
+// ============================================================================
+// Endpoints
+// ============================================================================
+
+// GET /status - Monitor status and tracked proposals
 app.get('/status', (_req, res) => {
   const proposals = monitor.getMonitored();
   res.json({
@@ -71,6 +85,64 @@ app.get('/status', (_req, res) => {
     })),
   });
 });
+
+// GET /logs?file=lifecycle&limit=50 - Read error logs
+app.get('/logs', (req, res) => {
+  const file = req.query.file as string | undefined;
+  const limit = Math.min(Number(req.query.limit) || 50, 500);
+
+  if (!file || !LOG_FILES.includes(file as LogFile)) {
+    return res.status(400).json({ error: 'Invalid file', valid: LOG_FILES });
+  }
+
+  const entries = readErrors(file as LogFile);
+  const newest = entries.reverse().slice(0, limit);
+  res.json({ file, count: newest.length, entries: newest });
+});
+
+// POST /clean?file=lifecycle - Clear error logs (specific or all)
+app.post('/clean', (req, res) => {
+  const file = req.query.file as string | undefined;
+
+  if (file) {
+    if (!LOG_FILES.includes(file as LogFile)) {
+      return res.status(400).json({ error: 'Invalid file', valid: LOG_FILES });
+    }
+    clearErrors(file as LogFile);
+    return res.json({ cleared: [file] });
+  }
+
+  LOG_FILES.forEach((f) => clearErrors(f));
+  res.json({ cleared: LOG_FILES });
+});
+
+// ============================================================================
+// Startup
+// ============================================================================
+
+const printStartupBanner = () => {
+  console.log('\n========================================');
+  console.log('  Monitor');
+  console.log('========================================\n');
+
+  console.log('Options:');
+  console.log(`  --port <n>     Server port (default: 4000)`);
+  console.log(`  --dev          Dev mode`);
+  console.log(`  --no-auth      Disable API key auth\n`);
+
+  console.log('Config:');
+  console.log(`  Port:          ${PORT}`);
+  console.log(`  Auth:          ${NO_AUTH ? 'disabled' : 'enabled'}`);
+  console.log(`  Mode:          ${DEV ? 'development' : 'production'}\n`);
+
+  console.log('Endpoints:');
+  console.log(`  GET  /status`);
+  console.log(`  GET  /logs?file={${LOG_FILES.join('|')}}`);
+  console.log(`  POST /clean?file={${LOG_FILES.join('|')}}`);
+  console.log(`  GET  /events (SSE)\n`);
+
+  console.log('========================================\n');
+};
 
 const startServer = async () => {
   try {
@@ -93,13 +165,11 @@ const startServer = async () => {
 
     // Start price SSE service
     price = new PriceService();
-    price.mount(app); // GET /events
+    price.mount(app);
     price.start(monitor);
 
     app.listen(PORT, () => {
-      const flags = [DEV && 'dev', NO_AUTH && 'no-auth'].filter(Boolean);
-      const suffix = flags.length ? ` (${flags.join(', ')})` : '';
-      console.log(`Monitor running on port ${PORT}${suffix}`);
+      printStartupBanner();
     });
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -107,7 +177,10 @@ const startServer = async () => {
   }
 };
 
-// Graceful shutdown
+// ============================================================================
+// Shutdown & Error Handling
+// ============================================================================
+
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
   price?.stop();
@@ -117,7 +190,6 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Log uncaught errors
 process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
   logError('server', { type: 'uncaught_exception', error: String(err), stack: err.stack });
@@ -127,5 +199,9 @@ process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
   logError('server', { type: 'unhandled_rejection', error: String(err) });
 });
+
+// ============================================================================
+// Start
+// ============================================================================
 
 startServer();

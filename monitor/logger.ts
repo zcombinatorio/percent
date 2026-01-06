@@ -27,7 +27,8 @@ if (!fs.existsSync(LOGS_DIR)) {
   fs.mkdirSync(LOGS_DIR, { recursive: true });
 }
 
-export type LogFile = 'lifecycle' | 'server' | 'twap';
+export const LOG_FILES = ['lifecycle', 'server', 'twap'] as const;
+export type LogFile = (typeof LOG_FILES)[number];
 
 /**
  * Append a JSON error entry to the specified log file.
