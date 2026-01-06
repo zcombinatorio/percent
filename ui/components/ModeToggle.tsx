@@ -145,12 +145,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   const hasSolPrice = solPrice != null;
   const hasAllData = hasTwapData && hasLivePrices && hasSolPrice;
 
-  // Convert current TWAPs from SOL to USD (for display)
-  const marketCapsUsd = marketCaps.map(cap =>
-    cap != null && solPrice ? cap * solPrice : null
-  );
-
-  // Calculate expected final TWAP for each market (for sorting)
+  // Calculate expected final TWAP for each market
   // Formula: expectedFinal = currentTwap × elapsed% + spotPrice × remaining%
   const expectedFinalTwaps = marketCaps.map((twap, i) => {
     const spotPrice = livePrices[i];
@@ -166,7 +161,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   );
 
   // Calculate max significant digits across all values for consistent formatting (capped at 4)
-  const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
+  const maxSigDigits = Math.min(getMaxSigDigits(expectedFinalTwapsUsd), 4);
 
   // Sort indices by expected final TWAP (highest first) for ranking display
   // Only sort once we have all data to avoid reordering flicker
@@ -198,12 +193,12 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
           ) : sortedIndices.map((originalIndex, rank) => {
             const label = marketLabels[originalIndex];
             const isSelected = selectedIndex === originalIndex;
-            const marketCapUsd = marketCapsUsd[originalIndex];
+            const expectedTwapUsd = expectedFinalTwapsUsd[originalIndex];
             const { displayText, url } = parseLabel(label);
 
             const labelContent = (
               <>
-                {marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'}: {displayText}
+                {expectedTwapUsd != null ? formatWithSigDigits(expectedTwapUsd, maxSigDigits) : '...'}: {displayText}
               </>
             );
 
