@@ -53,9 +53,12 @@ const startServer = async () => {
     if (!process.env.DB_URL) {
       throw Error('Missing DB_URL');
     }
+    if (!DEV && !process.env.ADMIN_API_KEY) {
+      throw Error('Missing ADMIN_API_KEY');
+    }
 
     app.listen(PORT, () => {
-      console.log(`Monitor running on port ${PORT}${DEV ? ' (dev mode)' : ''}`);
+      console.log(`Monitor running on port ${PORT}${DEV ? ' (developer mode)' : ''}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
