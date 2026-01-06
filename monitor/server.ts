@@ -29,6 +29,7 @@ import { requireAdminKey } from './middleware';
 import { Monitor } from './monitor';
 import { LifecycleService } from './lifecycle.service';
 import { TWAPService } from './twap.service';
+import { logError } from './logger';
 
 // Parse CLI args: --port 4000 --dev
 const args = process.argv.slice(2).reduce((acc, arg, i, arr) => {
@@ -106,6 +107,17 @@ process.on('SIGINT', async () => {
   lifecycle?.stop();
   await monitor?.stop();
   process.exit(0);
+});
+
+// Log uncaught errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  logError('server', { type: 'uncaught_exception', error: String(err), stack: err.stack });
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
+  logError('server', { type: 'unhandled_rejection', error: String(err) });
 });
 
 startServer();

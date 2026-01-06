@@ -28,6 +28,7 @@ import {
 } from '@zcomb/programs-sdk';
 import { FutarchyIDL } from '@zcomb/programs-sdk/dist/generated/idls';
 import { getPool } from '@app/utils/database';
+import { logError } from './logger';
 
 export interface MonitoredProposal {
   proposalPda: string;
@@ -110,38 +111,46 @@ export class Monitor extends EventEmitter {
   }
 
   private async handleProposalLaunched(data: ProposalLaunchedEvent) {
-    const proposalPda = data.proposal;
-    const proposalPdaStr = proposalPda.toBase58();
+    const proposalPdaStr = data.proposal.toBase58();
 
-    const proposal = await this.client.fetchProposal(proposalPda);
-    const moderatorPda = proposal.moderator.toBase58();
+    try {
+      const proposal = await this.client.fetchProposal(data.proposal);
+      const moderatorPda = proposal.moderator.toBase58();
 
-    if (!(await this.isTrackedModerator(moderatorPda))) {
-      console.log(`Ignoring proposal ${proposalPdaStr} - moderator not tracked`);
-      return;
+      if (!(await this.isTrackedModerator(moderatorPda))) {
+        console.log(`Ignoring proposal ${proposalPdaStr} - moderator not tracked`);
+        return;
+      }
+
+      const createdAtMs = Number(data.createdAt) * 1000;
+      const timeRemaining = this.client.getTimeRemaining(proposal);
+      const endTime = Date.now() + timeRemaining * 1000;
+
+      const pools = proposal.pools
+        .map((p: PublicKey) => p.toBase58())
+        .filter((p: string) => p !== '11111111111111111111111111111111'); // remove uninitialized pools
+
+      const info: MonitoredProposal = {
+        proposalPda: proposalPdaStr,
+        moderatorPda,
+        proposalId: data.proposalId,
+        numOptions: data.numOptions,
+        pools,
+        endTime,
+        createdAt: createdAtMs,
+      };
+
+      this.monitored.set(proposalPdaStr, info);
+      this.emit('proposal:added', info);
+      console.log(`Monitoring proposal ${proposalPdaStr} (ends: ${new Date(endTime).toISOString()})`);
+    } catch (e) {
+      console.error(`Failed to handle ProposalLaunched: ${proposalPdaStr}`, e);
+      logError('server', {
+        type: 'proposal_launched_handler',
+        proposalPda: proposalPdaStr,
+        error: String(e),
+      });
     }
-
-    const createdAtMs = Number(data.createdAt) * 1000;
-    const timeRemaining = this.client.getTimeRemaining(proposal);
-    const endTime = Date.now() + timeRemaining * 1000;
-
-    const pools = proposal.pools
-      .map((p: PublicKey) => p.toBase58())
-      .filter((p: string) => p !== '11111111111111111111111111111111'); // remove uninitialized pools
-
-    const info: MonitoredProposal = {
-      proposalPda: proposalPdaStr,
-      moderatorPda,
-      proposalId: data.proposalId,
-      numOptions: data.numOptions,
-      pools,
-      endTime,
-      createdAt: createdAtMs,
-    };
-
-    this.monitored.set(proposalPdaStr, info);
-    this.emit('proposal:added', info);
-    console.log(`Monitoring proposal ${proposalPdaStr} (ends: ${new Date(endTime).toISOString()})`);
   }
 
   private handleProposalFinalized(data: ProposalFinalizedEvent) {
