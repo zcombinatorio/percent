@@ -36,7 +36,6 @@ interface FlowResult {
 /**
  * Schedules and executes proposal finalization when proposals expire.
  * Calls the DAO API to finalize, redeem liquidity, and deposit back.
- * Logs errors to errors.jsonl for debugging.
  */
 export class LifecycleService {
   private timers = new Map<string, NodeJS.Timeout>();

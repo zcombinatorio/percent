@@ -173,7 +173,7 @@ const startServer = async () => {
     twap.start(monitor);
 
     // Start price SSE service
-    price = new PriceService(sse);
+    price = new PriceService(sse, process.env.SOLANA_RPC_URL);
     price.start(monitor);
 
     app.listen(PORT, () => {
@@ -191,6 +191,7 @@ const startServer = async () => {
 
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
+  price?.stop();
   twap?.stop();
   lifecycle?.stop();
   await monitor?.stop();
