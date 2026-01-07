@@ -15,6 +15,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
     "@meteora-ag/cp-amm-sdk": "^1.1.1",
+    "@meteora-ag/dlmm": "^1.9.3",
     "@slateos/jito": "^0.2.4",
     "@solana/spl-memo": "^0.2.5",
     "@solana/spl-token": "^0.4.14",
