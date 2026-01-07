@@ -993,12 +993,12 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                         <table className="w-full text-sm">
                           <thead className="text-[#6B6E71] font-medium uppercase">
                             <tr>
-                              <th className="py-3 pl-3 text-left font-medium w-[120px] md:w-auto">Staker</th>
+                              <th className="py-3 pl-3 text-left font-medium w-[120px]">Staker</th>
                               <th className="py-3 text-left font-medium w-[100px]">QM</th>
-                              <th className="py-3 text-left font-medium w-[100px]">Coin</th>
+                              <th className="py-3 text-left font-medium w-[240px]">Coin</th>
                               <th className="py-3 text-left font-medium w-[100px] hidden md:table-cell">Trade</th>
-                              <th className="py-3 text-left font-medium w-[100px] hidden md:table-cell">Amount</th>
-                              <th className="py-3 text-left font-medium">Tx</th>
+                              <th className="py-3 text-left font-medium w-[140px] hidden md:table-cell">Amount</th>
+                              <th className="py-3 text-left font-medium w-[40px]">Tx</th>
                               <th className="py-3 pr-3 text-right font-medium">Age</th>
                             </tr>
                           </thead>
@@ -1048,10 +1048,10 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                 >
                                   <td className="py-3 pl-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
                                     <span className="md:hidden">{trade.userAddress.slice(0, 6)}</span>
-                                    <span className="hidden md:inline">{formatTradeAddress(trade.userAddress)}</span>
+                                    <span className="hidden md:inline">{trade.userAddress.slice(0, 6)}...</span>
                                     <button
                                       onClick={() => navigator.clipboard.writeText(trade.userAddress)}
-                                      className="text-[#6B6E71] hover:text-theme-text transition-colors ml-1 inline"
+                                      className="text-[#6B6E71] hover:text-[#DDDDD7] transition-colors ml-1 inline cursor-pointer"
                                       title="Copy address"
                                     >
                                       <svg
@@ -1096,7 +1096,7 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                   <td className="py-3 w-[100px]" style={{ color: '#DDDDD7' }}>
                                     {trade.ticker}-{trade.proposalId}
                                   </td>
-                                  <td className="py-3 w-[100px]" style={{ color: '#DDDDD7' }}>
+                                  <td className="py-3 w-[240px] max-w-[240px] truncate" style={{ color: '#DDDDD7' }}>
                                     {trade.marketLabel}
                                   </td>
                                   <td className="py-3 w-[100px] hidden md:table-cell" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
@@ -1109,7 +1109,7 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                     {trade.txSignature ? (
                                       <>
                                         <span className="md:hidden">{trade.txSignature.slice(0, 6)}</span>
-                                        <span className="hidden md:inline">{trade.txSignature.slice(0, 12)}...</span>
+                                        <span className="hidden md:inline">{trade.txSignature.slice(0, 6)}...</span>
                                       </>
                                     ) : '—'}
                                     {trade.txSignature && (
