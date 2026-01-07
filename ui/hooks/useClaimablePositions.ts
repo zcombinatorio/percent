@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { fetchUserBalanceForWinningMint, type WinningMintBalanceResponse } from '@/lib/programs/vault';
-import { useProposals } from './useProposals';
+import { useProposalsWithFutarchy } from './useProposals';
 import { useTokenPrices } from './useTokenPrices';
 import type { ProposalListItem } from '@/types/api';
 
@@ -24,8 +24,19 @@ interface ClaimablePositions {
   refetch: () => void;
 }
 
-export function useClaimablePositions(walletAddress: string | null, moderatorId?: number | string): ClaimablePositions {
-  const { proposals } = useProposals(undefined, moderatorId);
+interface UseClaimablePositionsOptions {
+  walletAddress: string | null;
+  moderatorId?: number | string;
+  // Futarchy DAOs use different claiming mechanism - skip old system
+  isFutarchy?: boolean;
+}
+
+export function useClaimablePositions(walletAddress: string | null, moderatorId?: number | string, isFutarchy?: boolean): ClaimablePositions {
+  // For futarchy DAOs, don't fetch from old system - claiming works differently
+  const { proposals } = useProposalsWithFutarchy({
+    moderatorId: isFutarchy ? undefined : moderatorId,
+    isFutarchy: false, // Always use old system for claimable positions (futarchy has different mechanism)
+  });
   const { sol: solPrice, baseToken: baseTokenPrice } = useTokenPrices();
   const [balancesMap, setBalancesMap] = useState<Map<number, WinningMintBalanceResponse>>(new Map());
   const [loading, setLoading] = useState(false);

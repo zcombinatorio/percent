@@ -19,23 +19,27 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import ExploreHeader from '@/components/ExploreHeader';
 import { useAllProposals } from '@/hooks/useAllProposals';
+import { api, ZcombinatorDAO } from '@/lib/api';
 
 interface Project {
   moderatorId: number;
   tokenSlug: string;
   tokenTicker: string;
   tokenIcon: string | null;
-  proposalCount: number;
+  proposalCount?: number; // undefined for futarchy DAOs until cache is populated
   liveProposalCount: number;
+  // New system indicator
+  isFutarchy?: boolean;
+  daoPda?: string;
 }
 
 /**
- * Map moderatorId to token slug for navigation
+ * Map moderatorId to token slug for navigation (old system)
  */
 function getTokenSlug(moderatorId: number): string {
   const mapping: Record<number, string> = {
@@ -48,34 +52,83 @@ function getTokenSlug(moderatorId: number): string {
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { proposals, loading, error } = useAllProposals();
+  const { proposals, loading: oldSystemLoading, error: oldSystemError } = useAllProposals();
 
-  // Extract unique projects from proposals
+  // Fetch futarchy DAOs from zcombinator (new system)
+  const [futarchyDaos, setFutarchyDaos] = useState<ZcombinatorDAO[]>([]);
+  const [futarchyLoading, setFutarchyLoading] = useState(true);
+  const [futarchyError, setFutarchyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFutarchyDaos = async () => {
+      try {
+        setFutarchyLoading(true);
+        const daos = await api.getZcombinatorDaos();
+        // Filter for verified DAOs only (when field exists)
+        const verifiedDaos = daos.filter(dao => dao.verified === true);
+        setFutarchyDaos(verifiedDaos);
+        setFutarchyError(null);
+      } catch (err) {
+        console.error('Error fetching futarchy DAOs:', err);
+        setFutarchyError(err instanceof Error ? err.message : 'Failed to fetch futarchy DAOs');
+      } finally {
+        setFutarchyLoading(false);
+      }
+    };
+
+    fetchFutarchyDaos();
+  }, []);
+
+  const loading = oldSystemLoading || futarchyLoading;
+  const error = oldSystemError || futarchyError;
+
+  // Combine old system projects with futarchy DAOs
   const projects = useMemo(() => {
-    const projectMap = new Map<number, Project>();
+    const projectMap = new Map<string, Project>();
 
+    // Add old system projects (from proposals)
     for (const proposal of proposals) {
-      const existing = projectMap.get(proposal.moderatorId);
+      const key = `old-${proposal.moderatorId}`;
+      const existing = projectMap.get(key);
       const isLive = proposal.status === 'Pending';
 
       if (existing) {
-        existing.proposalCount++;
+        existing.proposalCount = (existing.proposalCount ?? 0) + 1;
         if (isLive) existing.liveProposalCount++;
       } else {
-        projectMap.set(proposal.moderatorId, {
+        projectMap.set(key, {
           moderatorId: proposal.moderatorId,
           tokenSlug: getTokenSlug(proposal.moderatorId),
           tokenTicker: proposal.tokenTicker,
           tokenIcon: proposal.tokenIcon,
           proposalCount: 1,
           liveProposalCount: isLive ? 1 : 0,
+          isFutarchy: false,
         });
       }
     }
 
-    // Sort by proposal count descending (most quantum markets first)
-    return Array.from(projectMap.values()).sort((a, b) => b.proposalCount - a.proposalCount);
-  }, [proposals]);
+    // Add futarchy DAOs (new system)
+    for (const dao of futarchyDaos) {
+      const key = `futarchy-${dao.dao_pda}`;
+      // Only add if not already present (avoid duplicates)
+      if (!projectMap.has(key)) {
+        projectMap.set(key, {
+          moderatorId: dao.id,
+          tokenSlug: dao.dao_name.toLowerCase(),
+          tokenTicker: dao.dao_name,
+          tokenIcon: dao.icon || null,
+          proposalCount: dao.stats.proposalCount,
+          liveProposalCount: 0,
+          isFutarchy: true,
+          daoPda: dao.dao_pda,
+        });
+      }
+    }
+
+    // Sort by proposal count descending (undefined counts sort to end)
+    return Array.from(projectMap.values()).sort((a, b) => (b.proposalCount ?? -1) - (a.proposalCount ?? -1));
+  }, [proposals, futarchyDaos]);
 
   if (loading) {
     return (
@@ -138,7 +191,7 @@ export default function ProjectsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-semibold font-ibm-plex-mono" style={{ color: '#E9E9E3' }}>
-                        ${project.tokenTicker}
+                        {project.tokenTicker}
                       </span>
                       {project.liveProposalCount > 0 && (
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full animate-pulse" style={{ backgroundColor: '#BEE8FC33', color: '#BEE8FC' }}>
@@ -146,9 +199,11 @@ export default function ProjectsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-sm mt-1" style={{ color: '#6B6E71' }}>
-                      {project.proposalCount} Quantum Market{project.proposalCount !== 1 ? 's' : ''}
-                    </div>
+                    {project.proposalCount !== undefined && (
+                      <div className="text-sm mt-1" style={{ color: '#6B6E71' }}>
+                        {project.proposalCount} Quantum Market{project.proposalCount !== 1 ? 's' : ''}
+                      </div>
+                    )}
                   </div>
 
                   {/* Arrow indicator */}

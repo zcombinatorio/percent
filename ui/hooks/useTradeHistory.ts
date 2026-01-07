@@ -29,7 +29,7 @@ interface TradeHistoryResponse {
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string) {
+export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string, isFutarchy?: boolean) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,8 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   const moderatorIdRef = useRef(moderatorId);
 
   const fetchTrades = useCallback(async () => {
-    if (proposalId === null) return;
+    // Skip for futarchy DAOs - trade history not yet supported
+    if (proposalId === null || isFutarchy) return;
 
     setLoading(true);
     setError(null);
@@ -66,7 +67,7 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     } finally {
       setLoading(false);
     }
-  }, [proposalId, moderatorId]);
+  }, [proposalId, moderatorId, isFutarchy]);
 
   // Update refs
   useEffect(() => {
@@ -223,7 +224,8 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   }, []);
 
   useEffect(() => {
-    if (!proposalId) {
+    // Skip for futarchy DAOs
+    if (!proposalId || isFutarchy) {
       setTrades([]);
       disconnectWebSocket();
       return;
@@ -238,7 +240,7 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     return () => {
       disconnectWebSocket();
     };
-  }, [proposalId, moderatorId, fetchTrades, connectWebSocket, disconnectWebSocket]);
+  }, [proposalId, moderatorId, isFutarchy, fetchTrades, connectWebSocket, disconnectWebSocket]);
 
   // Memoized helper function to format time ago
   const getTimeAgo = useCallback((timestamp: string) => {

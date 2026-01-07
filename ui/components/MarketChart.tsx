@@ -20,9 +20,10 @@ interface MarketChartProps {
   height?: number | string;
   moderatorId?: number;
   tokenSymbol?: string;  // Token symbol for spot market overlay (e.g., "ZC", "SURF")
+  isFutarchy?: boolean;  // Skip chart for futarchy DAOs
 }
 
-export default function MarketChart({ proposalId, market, marketLabel, height = 256, moderatorId, tokenSymbol }: MarketChartProps) {
+export default function MarketChart({ proposalId, market, marketLabel, height = 256, moderatorId, tokenSymbol, isFutarchy }: MarketChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,6 +31,12 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
   const [chartRetryCount, setChartRetryCount] = useState(0);
 
   useEffect(() => {
+    // Skip for futarchy DAOs - chart data not yet supported
+    if (isFutarchy) {
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
     let retryCount = 0;
     let containerRetryCount = 0;
@@ -284,7 +291,7 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         }
       }
     };
-  }, [proposalId, market, chartRetryCount]);
+  }, [proposalId, market, chartRetryCount, isFutarchy]);
 
   return (
     <div style={{ position: 'relative', height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}>

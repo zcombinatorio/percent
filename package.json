@@ -8,7 +8,9 @@
     "start": "node dist/src/server.js",
     "create-moderator": "tsx scripts/create-moderator.ts",
     "create-proposal": "tsx scripts/create-proposal.ts",
-    "state": "tsx scripts/fetch-state.ts"
+    "state": "tsx scripts/fetch-state.ts",
+    "monitor": "node dist/monitor/server.js",
+    "monitor:dev": "tsx monitor/server.ts --dev --no-auth"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

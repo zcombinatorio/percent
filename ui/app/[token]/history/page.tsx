@@ -6,7 +6,7 @@ import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { useTokenPrices } from '@/hooks/useTokenPrices';
 import { useTransactionSigner } from '@/hooks/useTransactionSigner';
 import Header from '@/components/Header';
-import { useProposals } from '@/hooks/useProposals';
+import { useProposalsWithFutarchy } from '@/hooks/useProposals';
 import { useClaimablePositions } from '@/hooks/useClaimablePositions';
 import { formatNumber } from '@/lib/formatters';
 import toast from 'react-hot-toast';
@@ -21,9 +21,14 @@ import { ProposalVolume } from '@/components/ProposalVolume';
 import { useTokenContext } from '@/providers/TokenContext';
 
 export default function HistoryPage() {
-  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon } = useTokenContext();
+  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isFutarchy, daoPda } = useTokenContext();
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
-  const { proposals, loading, refetch } = useProposals(poolAddress || undefined, moderatorId || undefined);
+  const { proposals, loading, refetch } = useProposalsWithFutarchy({
+    poolAddress: poolAddress || undefined,
+    moderatorId: moderatorId ?? undefined,
+    isFutarchy,
+    daoPda: daoPda || undefined,
+  });
   const [hoveredProposalId, setHoveredProposalId] = useState<number | null>(null);
   const [claimingProposalId, setClaimingProposalId] = useState<number | null>(null);
 
@@ -40,8 +45,8 @@ export default function HistoryPage() {
   // Get transaction signer
   const { signTransaction } = useTransactionSigner();
 
-  // Fetch claimable positions for history view
-  const { positions: claimablePositions, refetch: refetchClaimable } = useClaimablePositions(walletAddress, moderatorId || undefined);
+  // Fetch claimable positions for history view (skip for futarchy DAOs - different claiming mechanism)
+  const { positions: claimablePositions, refetch: refetchClaimable } = useClaimablePositions(walletAddress, moderatorId || undefined, isFutarchy);
 
   // Handle claim from history card
   const handleClaimFromHistory = useCallback(async (
@@ -88,9 +93,9 @@ export default function HistoryPage() {
     }
   }, [authenticated, ready, login, walletAddress, signTransaction, refetchClaimable, refetchWalletBalances]);
 
-  // Memoize sorted proposals
+  // Memoize sorted proposals - use endsAt for futarchy, finalizedAt for old system
   const sortedProposals = useMemo(() =>
-    [...proposals].sort((a, b) => b.finalizedAt - a.finalizedAt),
+    [...proposals].sort((a, b) => (b.endsAt || b.finalizedAt) - (a.endsAt || a.finalizedAt)),
     [proposals]
   );
 
@@ -191,7 +196,7 @@ export default function HistoryPage() {
                               <CheckCircle2 className="w-3 h-3" />
                             </span>
                           )}
-                          <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} />
+                          <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} />
                         </div>
                         <div className="text-sm text-[#B0AFAB]">
                           {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {
@@ -326,7 +331,7 @@ export default function HistoryPage() {
                                 <CheckCircle2 className="w-3 h-3" />
                               </span>
                             )}
-                            <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} />
+                            <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} />
                           </div>
                           <div className="text-sm text-[#B0AFAB]">
                             {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {

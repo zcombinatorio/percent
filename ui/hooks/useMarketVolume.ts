@@ -31,7 +31,8 @@ interface UseMarketVolumeResult {
 
 export function useMarketVolume(
   proposalId: number | null,
-  moderatorId?: number | string
+  moderatorId?: number | string,
+  isFutarchy?: boolean
 ): UseMarketVolumeResult {
   const [volumeByMarket, setVolumeByMarket] = useState<Map<number, number>>(new Map());
   const [totalVolumeUsd, setTotalVolumeUsd] = useState(0);
@@ -40,7 +41,8 @@ export function useMarketVolume(
   const [error, setError] = useState<string | null>(null);
 
   const fetchVolume = useCallback(async () => {
-    if (proposalId === null) return;
+    // Skip for futarchy DAOs - volume data not yet supported
+    if (proposalId === null || isFutarchy) return;
 
     setLoading(true);
     setError(null);
@@ -70,10 +72,11 @@ export function useMarketVolume(
     } finally {
       setLoading(false);
     }
-  }, [proposalId, moderatorId]);
+  }, [proposalId, moderatorId, isFutarchy]);
 
   useEffect(() => {
-    if (!proposalId) {
+    // Skip for futarchy DAOs
+    if (!proposalId || isFutarchy) {
       setVolumeByMarket(new Map());
       setTotalVolumeUsd(0);
       setTotalTradeCount(0);
@@ -81,7 +84,7 @@ export function useMarketVolume(
     }
 
     fetchVolume();
-  }, [proposalId, moderatorId, fetchVolume]);
+  }, [proposalId, moderatorId, isFutarchy, fetchVolume]);
 
   return {
     volumeByMarket,

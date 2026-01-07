@@ -13,6 +13,13 @@ interface PoolMetadata {
   quoteDecimals: number;
   moderatorId: number;
   icon?: string;
+  // Futarchy-specific fields (new system)
+  isFutarchy?: boolean;
+  moderatorPda?: string;
+  daoPda?: string;
+  poolType?: 'damm' | 'dlmm';
+  daoType?: 'parent' | 'child';
+  parentDaoId?: number | null;
 }
 
 interface TokenContextValue {
@@ -27,6 +34,13 @@ interface TokenContextValue {
   icon: string | null;
   isLoading: boolean;
   error: string | null;
+  // Futarchy-specific fields (new system)
+  isFutarchy: boolean;
+  moderatorPda: string | null;
+  daoPda: string | null;
+  poolType: 'damm' | 'dlmm' | null;
+  daoType: 'parent' | 'child' | null;
+  parentDaoId: number | null;
 }
 
 const TokenContext = createContext<TokenContextValue | null>(null);
@@ -87,6 +101,13 @@ export function TokenProvider({ tokenSlug, children }: TokenProviderProps) {
     icon: poolMetadata?.icon || null,
     isLoading,
     error,
+    // Futarchy-specific fields (new system)
+    isFutarchy: poolMetadata?.isFutarchy ?? false,
+    moderatorPda: poolMetadata?.moderatorPda || null,
+    daoPda: poolMetadata?.daoPda || null,
+    poolType: poolMetadata?.poolType || null,
+    daoType: poolMetadata?.daoType || null,
+    parentDaoId: poolMetadata?.parentDaoId ?? null,
   };
 
   return (

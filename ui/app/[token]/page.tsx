@@ -13,7 +13,7 @@ import { CountdownTimer } from '@/components/CountdownTimer';
 import { ChartBox } from '@/components/ChartBox';
 import { ModeToggle } from '@/components/ModeToggle';
 import { DepositCard } from '@/components/DepositCard';
-import { useProposals } from '@/hooks/useProposals';
+import { useProposalsWithFutarchy } from '@/hooks/useProposals';
 import { useTradeHistory } from '@/hooks/useTradeHistory';
 import { useUserBalances } from '@/hooks/useUserBalances';
 import { formatNumber, formatCurrency } from '@/lib/formatters';
@@ -40,7 +40,7 @@ const LivePriceDisplay = dynamic(() => import('@/components/LivePriceDisplay').t
 export default function HomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: tokenContextLoading } = useTokenContext();
+  const { tokenSlug, poolAddress, baseMint, baseDecimals, tokenSymbol, moderatorId, icon, isLoading: tokenContextLoading, isFutarchy, daoPda } = useTokenContext();
 
   // Show toast for historical QM navigation (only once)
   const hasShownHistoricalToast = useRef(false);
@@ -54,12 +54,16 @@ export default function HomePage() {
   }, [searchParams, router, tokenSlug]);
   const { ready, authenticated, user, walletAddress, login } = usePrivyWallet();
 
-  // Only fetch proposals after TokenContext has loaded to ensure correct moderatorId
-  const shouldFetchProposals = !tokenContextLoading && moderatorId !== null;
-  const { proposals, loading, refetch } = useProposals(
-    shouldFetchProposals ? (poolAddress || undefined) : undefined,
-    shouldFetchProposals ? moderatorId : undefined
-  );
+  // Only fetch proposals after TokenContext has loaded
+  const shouldFetchProposals = !tokenContextLoading && (isFutarchy ? daoPda !== null : moderatorId !== null);
+
+  // Fetch proposals - for futarchy, reads on-chain; for old system, uses API
+  const { proposals, loading, refetch } = useProposalsWithFutarchy({
+    poolAddress: shouldFetchProposals ? (poolAddress || undefined) : undefined,
+    moderatorId: shouldFetchProposals ? moderatorId ?? undefined : undefined,
+    isFutarchy: shouldFetchProposals ? isFutarchy : false,
+    daoPda: shouldFetchProposals ? (daoPda || undefined) : undefined,
+  });
   const [livePrices, setLivePrices] = useState<(number | null)[]>([]);
   const [twapData, setTwapData] = useState<(number | null)[]>([]);
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -138,7 +142,7 @@ export default function HomePage() {
     refetch: refetchTrades,
     getTimeAgo,
     getTokenUsed,
-  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol);
+  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol, isFutarchy);
 
 
   const handleSelectProposal = useCallback((id: number) => {
@@ -223,7 +227,7 @@ export default function HomePage() {
       if (!proposal) return 0;
       const now = Date.now();
       const start = proposal.createdAt;
-      const end = proposal.finalizedAt;
+      const end = proposal.endsAt || proposal.finalizedAt;
       const elapsed = now - start;
       const total = end - start;
       if (total <= 0) return 1;
@@ -422,7 +426,7 @@ export default function HomePage() {
                         <div className="text-white flex flex-col items-center">
                           <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-6 block w-full text-left" style={{ color: '#DDDDD7' }}>TIME REMAINING</span>
                           <CountdownTimer
-                            endsAt={proposal.finalizedAt}
+                            endsAt={proposal.endsAt || proposal.finalizedAt}
                             onTimerEnd={handleTimerEnd}
                             isPending={proposal.status === 'Pending'}
                           />
@@ -444,6 +448,7 @@ export default function HomePage() {
                         moderatorId={moderatorId ?? undefined}
                         userWalletAddress={walletAddress}
                         tokenSymbol={tokenSymbol}
+                        isFutarchy={isFutarchy}
                       />
                     </div>
                   </div>

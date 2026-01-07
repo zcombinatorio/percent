@@ -25,6 +25,10 @@ export interface ExploreProposal extends ProposalListItem {
   moderatorId: number;
   tokenTicker: string;
   tokenIcon: string | null;
+  // Futarchy-specific fields
+  isFutarchy?: boolean;
+  daoPda?: string;
+  daoName?: string;
 }
 
 /**

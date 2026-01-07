@@ -51,6 +51,7 @@ interface TrackedProposal {
   proposalPda: PublicKey;
   moderatorPda: PublicKey;
   proposalId: number;
+  daoId: number;
   createdAt: number;
   endTime: number;
   status: 'pending' | 'resolved';
@@ -78,8 +79,8 @@ export class ProposalListenerService {
   private client: futarchy.FutarchyClient;
   private logger: LoggerService;
 
-  /** Set of moderator PDAs we're tracking (fetched from zcombinator) */
-  private trackedModerators: Set<string> = new Set();
+  /** DAO info for each moderator PDA (fetched from zcombinator) */
+  private moderatorDaoMap: Map<string, { daoId: number; daoPda: string; daoName: string }> = new Map();
 
   /** Map of proposal PDA -> tracked proposal state */
   private trackedProposals: Map<string, TrackedProposal> = new Map();
@@ -152,7 +153,7 @@ export class ProposalListenerService {
     await this.pollForProposals();
 
     this.logger.info('ProposalListenerService started', {
-      moderatorCount: this.trackedModerators.size,
+      moderatorCount: this.moderatorDaoMap.size,
       pollingIntervalMs: this.config.pollingIntervalMs,
       moderatorRefreshIntervalMs: this.config.moderatorRefreshIntervalMs,
     });
@@ -202,17 +203,28 @@ export class ProposalListenerService {
         throw new Error(`Failed to fetch DAOs: ${response.statusText}`);
       }
 
-      const data = await response.json() as { daos: Array<{ moderator_pda: string }> };
+      interface DaoResponse {
+        id: number;
+        dao_pda: string;
+        dao_name: string;
+        moderator_pda: string;
+      }
 
-      this.trackedModerators.clear();
+      const data = await response.json() as { daos: DaoResponse[] };
+
+      this.moderatorDaoMap.clear();
       for (const dao of data.daos) {
         if (dao.moderator_pda) {
-          this.trackedModerators.add(dao.moderator_pda);
+          this.moderatorDaoMap.set(dao.moderator_pda, {
+            daoId: dao.id,
+            daoPda: dao.dao_pda,
+            daoName: dao.dao_name,
+          });
         }
       }
 
       this.logger.info('Refreshed tracked moderators', {
-        count: this.trackedModerators.size,
+        count: this.moderatorDaoMap.size,
       });
     } catch (error) {
       this.logger.error('Failed to refresh tracked moderators', {
@@ -226,7 +238,7 @@ export class ProposalListenerService {
    */
   private async pollForProposals(): Promise<void> {
     try {
-      for (const moderatorPdaStr of Array.from(this.trackedModerators)) {
+      for (const moderatorPdaStr of Array.from(this.moderatorDaoMap.keys())) {
         await this.checkModeratorForProposals(new PublicKey(moderatorPdaStr));
       }
     } catch (error) {
@@ -292,6 +304,17 @@ export class ProposalListenerService {
     proposalAccount: any
   ): Promise<void> {
     const proposalPdaStr = proposalPda.toBase58();
+    const moderatorPdaStr = moderatorPda.toBase58();
+
+    // Get DAO info for this moderator
+    const daoInfo = this.moderatorDaoMap.get(moderatorPdaStr);
+    if (!daoInfo) {
+      this.logger.warn('Cannot track proposal - moderator not in DAO map', {
+        proposalPda: proposalPdaStr,
+        moderatorPda: moderatorPdaStr,
+      });
+      return;
+    }
 
     // Calculate end time from proposal params
     const createdAt = proposalAccount.createdAt.toNumber() * 1000; // Convert to ms
@@ -302,6 +325,7 @@ export class ProposalListenerService {
       proposalPda,
       moderatorPda,
       proposalId: proposalAccount.id,
+      daoId: daoInfo.daoId,
       createdAt,
       endTime,
       status: 'pending',
@@ -312,8 +336,10 @@ export class ProposalListenerService {
 
     this.logger.info('Started tracking proposal', {
       proposalPda: proposalPdaStr,
-      moderatorPda: moderatorPda.toBase58(),
+      moderatorPda: moderatorPdaStr,
       proposalId: proposalAccount.id,
+      daoId: daoInfo.daoId,
+      daoName: daoInfo.daoName,
       endTime: new Date(endTime).toISOString(),
     });
 
@@ -408,12 +434,16 @@ export class ProposalListenerService {
   }
 
   /**
-   * Record prices for all pools in a proposal
+   * Record prices and TWAP for all pools in a proposal
    */
   private async recordPrices(proposal: TrackedProposal): Promise<void> {
     const proposalPdaStr = proposal.proposalPda.toBase58();
 
     try {
+      const spotPrices: Decimal[] = [];
+      const twapValues: Decimal[] = [];
+      const aggregations: Decimal[] = [];
+
       for (let i = 0; i < proposal.poolPdas.length; i++) {
         const poolPda = proposal.poolPdas[i];
 
@@ -422,24 +452,57 @@ export class ProposalListenerService {
 
         if (spotPrice) {
           // Convert BN to decimal price
-          // Note: The price is scaled, adjust decimals as needed
           const price = spotPrice.toNumber();
+          spotPrices.push(new Decimal(price));
 
-          // Record to history (using proposal PDA as identifier)
-          // Note: We're using a simplified moderatorId/proposalId here
-          // In production, you'd want to map these properly
-          await HistoryService.recordPrice({
-            moderatorId: 0, // Placeholder - should map from moderator PDA
+          // Record spot price to history (cmb_ tables for futarchy)
+          await HistoryService.recordCmbPrice({
+            daoId: proposal.daoId,
             proposalId: proposal.proposalId,
             market: i,
             price: new Decimal(price),
           });
         }
+
+        // Fetch TWAP value from AMM
+        const twap = await this.client.amm.fetchTwap(poolPda);
+        if (twap !== null) {
+          twapValues.push(new Decimal(twap.toNumber()));
+        } else {
+          // If TWAP is null (warmup period), use 0
+          twapValues.push(new Decimal(0));
+        }
+
+        // Fetch pool to get cumulative observations (aggregation data)
+        try {
+          const poolAccount = await this.client.amm.fetchPool(poolPda);
+          if (poolAccount && poolAccount.oracle) {
+            // cumulativeObservations is a BN representing the sum of (observation * time_elapsed)
+            const aggValue = poolAccount.oracle.cumulativeObservations?.toString() || '0';
+            aggregations.push(new Decimal(aggValue));
+          } else {
+            aggregations.push(new Decimal(0));
+          }
+        } catch {
+          aggregations.push(new Decimal(0));
+        }
       }
 
-      this.logger.debug('Recorded prices', {
+      // Record TWAP history if we have values (cmb_ tables for futarchy)
+      if (twapValues.length > 0) {
+        await HistoryService.recordCmbTWAP({
+          daoId: proposal.daoId,
+          proposalId: proposal.proposalId,
+          twaps: twapValues,
+          aggregations,
+        });
+      }
+
+      this.logger.debug('Recorded prices and TWAP', {
         proposalPda: proposalPdaStr,
         poolCount: proposal.poolPdas.length,
+        daoId: proposal.daoId,
+        twapValues: twapValues.map(t => t.toString()),
       });
     } catch (error) {
       this.logger.error('Failed to record prices', {
@@ -474,10 +537,11 @@ export class ProposalListenerService {
   }
 
   /**
-   * Finalize a proposal
-   * 1. Call SDK finalizeProposal (permissionless)
-   * 2. Call zcombinator /dao/redeem-liquidity endpoint
-   * 3. Call zcombinator /dao/deposit-back endpoint
+   * Finalize a proposal via zcombinator API endpoints
+   * Flow (from CLIENT_README.md):
+   * 1. Call zcombinator /dao/finalize-proposal (reads TWAP, determines winner)
+   * 2. Call zcombinator /dao/redeem-liquidity (redeems liquidity from resolved proposal)
+   * 3. Call zcombinator /dao/deposit-back (returns liquidity to Meteora pool)
    */
   private async finalizeProposal(proposal: TrackedProposal): Promise<void> {
     const proposalPdaStr = proposal.proposalPda.toBase58();
@@ -487,16 +551,32 @@ export class ProposalListenerService {
     });
 
     try {
-      // Step 1: Call SDK finalizeProposal (permissionless - uses service wallet)
-      this.logger.info('Calling SDK finalizeProposal', { proposalPda: proposalPdaStr });
+      // Step 1: Call zcombinator /dao/finalize-proposal endpoint
+      // This reads final TWAP values and determines the winning outcome
+      this.logger.info('Calling zcombinator finalize-proposal', { proposalPda: proposalPdaStr });
 
-      const { builder } = await this.client.finalizeProposal(
-        this.config.serviceWallet.publicKey,
-        proposal.proposalPda
+      const finalizeResponse = await fetch(
+        `${this.config.zcombinatorApiUrl}/dao/finalize-proposal`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposal_pda: proposalPdaStr }),
+        }
       );
-      await builder.rpc();
 
-      this.logger.info('SDK finalizeProposal succeeded', { proposalPda: proposalPdaStr });
+      if (!finalizeResponse.ok) {
+        const error = await finalizeResponse.json().catch(() => ({}));
+        throw new Error(
+          `finalize-proposal failed: ${(error as any).error || finalizeResponse.statusText}`
+        );
+      }
+
+      const finalizeResult = await finalizeResponse.json();
+
+      this.logger.info('Finalize proposal succeeded', {
+        proposalPda: proposalPdaStr,
+        finalizeResult,
+      });
 
       // Step 2: Call zcombinator /dao/redeem-liquidity endpoint
       this.logger.info('Calling zcombinator redeem-liquidity', { proposalPda: proposalPdaStr });
@@ -594,6 +674,7 @@ export class ProposalListenerService {
     proposalPda: string;
     moderatorPda: string;
     proposalId: number;
+    daoId: number;
     status: string;
     endTime: number;
   }> {
@@ -601,16 +682,27 @@ export class ProposalListenerService {
       proposalPda: p.proposalPda.toBase58(),
       moderatorPda: p.moderatorPda.toBase58(),
       proposalId: p.proposalId,
+      daoId: p.daoId,
       status: p.status,
       endTime: p.endTime,
     }));
   }
 
   /**
-   * Get list of tracked moderators
+   * Get list of tracked moderators with their DAO info
    */
-  public getTrackedModerators(): string[] {
-    return Array.from(this.trackedModerators);
+  public getTrackedModerators(): Array<{
+    moderatorPda: string;
+    daoId: number;
+    daoPda: string;
+    daoName: string;
+  }> {
+    return Array.from(this.moderatorDaoMap.entries()).map(([moderatorPda, daoInfo]) => ({
+      moderatorPda,
+      daoId: daoInfo.daoId,
+      daoPda: daoInfo.daoPda,
+      daoName: daoInfo.daoName,
+    }));
   }
 }
 

@@ -17,6 +17,7 @@ interface ChartBoxProps {
   className?: string;
   userWalletAddress?: string | null;
   tokenSymbol?: string;  // Token symbol for spot market overlay (e.g., "ZC", "SURF")
+  isFutarchy?: boolean;  // Skip old system API calls for futarchy DAOs
 }
 
 export function ChartBox({
@@ -30,7 +31,8 @@ export function ChartBox({
   moderatorId,
   className,
   userWalletAddress,
-  tokenSymbol
+  tokenSymbol,
+  isFutarchy
 }: ChartBoxProps) {
   // Get display label for the selected market (strip URLs and trim)
   const selectedLabel = marketLabels?.[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`;
@@ -39,7 +41,7 @@ export function ChartBox({
   const [showOnlyMyTrades, setShowOnlyMyTrades] = useState(false);
 
   // Fetch volume from API (aggregated server-side, all historical trades)
-  const { volumeByMarket } = useMarketVolume(proposalId, moderatorId);
+  const { volumeByMarket } = useMarketVolume(proposalId, moderatorId, isFutarchy);
 
   // Get volume for the selected market (matches old behavior, but with all historical data)
   const marketVolume = volumeByMarket.get(selectedMarketIndex) || 0;
@@ -116,11 +118,11 @@ export function ChartBox({
         <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px] flex-1 flex flex-col">
           {/* Mobile: 400px */}
           <div className="md:hidden">
-            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height={480} moderatorId={moderatorId} tokenSymbol={tokenSymbol} />
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height={480} moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} />
           </div>
           {/* Desktop: fills available height */}
           <div className="hidden md:flex md:flex-1">
-            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height="100%" moderatorId={moderatorId} tokenSymbol={tokenSymbol} />
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height="100%" moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} />
           </div>
         </div>
       ) : (

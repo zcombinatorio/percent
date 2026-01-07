@@ -44,6 +44,11 @@ export interface ProposalListItem {
   poolAddress?: string | null;
   poolName?: string;
   vaultPDA: string;
+  // Futarchy-specific fields (new system)
+  isFutarchy?: boolean;
+  proposalPda?: string;
+  metadataCid?: string | null;
+  endsAt?: number | null;  // Timestamp when proposal voting ends (futarchy only)
 }
 
 export interface ProposalListResponse {

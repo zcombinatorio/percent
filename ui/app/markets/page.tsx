@@ -41,7 +41,7 @@ interface ProposalCardData {
 }
 
 /**
- * Map moderatorId to token slug for navigation
+ * Map moderatorId to token slug for navigation (old system only)
  */
 function getTokenSlug(moderatorId: number): string {
   const mapping: Record<number, string> = {
@@ -50,6 +50,29 @@ function getTokenSlug(moderatorId: number): string {
     6: 'surf',
   };
   return mapping[moderatorId] || 'zc';
+}
+
+/**
+ * Get the navigation slug for a proposal
+ * For futarchy: uses daoName (lowercase)
+ * For old system: uses moderatorId mapping
+ */
+function getProposalSlug(proposal: ExploreProposal): string {
+  if (proposal.isFutarchy && proposal.daoName) {
+    return proposal.daoName.toLowerCase();
+  }
+  return getTokenSlug(proposal.moderatorId);
+}
+
+/**
+ * Get unique key for a proposal's project (DAO or moderator)
+ * Used for grouping proposals by project
+ */
+function getProjectKey(proposal: ExploreProposal): string {
+  if (proposal.isFutarchy && proposal.daoPda) {
+    return `futarchy-${proposal.daoPda}`;
+  }
+  return `old-${proposal.moderatorId}`;
 }
 
 /**
@@ -190,7 +213,7 @@ const ProposalCard = memo(function ProposalCard({
 
           {/* Date or Countdown */}
           {isLive ? (
-            <MiniCountdownTimer endsAt={proposal.finalizedAt} />
+            <MiniCountdownTimer endsAt={proposal.endsAt || proposal.finalizedAt} />
           ) : (
             <div className="text-sm text-[#B0AFAB]">
               {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {
@@ -228,12 +251,12 @@ export default function ExplorePage() {
   // Pre-compute all derived data once when proposals change
   // This prevents expensive re-computations on hover
   const proposalCardData = useMemo(() => {
-    const live = proposals.filter(p => p.status === 'Pending').sort((a, b) => a.finalizedAt - b.finalizedAt);
+    const live = proposals.filter(p => p.status === 'Pending').sort((a, b) => (a.endsAt || a.finalizedAt) - (b.endsAt || b.finalizedAt));
     const historical = proposals.filter(p => p.status !== 'Pending').sort((a, b) => b.finalizedAt - a.finalizedAt);
     const sorted = [...live, ...historical];
 
     return sorted.map((proposal): ProposalCardData => {
-      const tokenSlug = getTokenSlug(proposal.moderatorId);
+      const tokenSlug = getProposalSlug(proposal);
       const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, proposal.moderatorId.toString());
       const summaryPreview = getSummaryPreview(proposal, proposal.moderatorId);
       const isLive = proposal.status === 'Pending';
@@ -242,26 +265,28 @@ export default function ExplorePage() {
     });
   }, [proposals]);
 
-  // Compute the most recent proposal ID for each moderator (project)
+  // Compute the most recent proposal ID for each project (DAO or moderator)
   // Most recent = live proposal, or highest ID if none are live
-  const latestProposalByModerator = useMemo(() => {
-    const latest = new Map<number, number>();
+  // Uses project key to handle both old system (moderatorId) and futarchy (daoPda)
+  const latestProposalByProject = useMemo(() => {
+    const latest = new Map<string, number>();
     for (const proposal of proposals) {
-      const current = latest.get(proposal.moderatorId);
+      const projectKey = getProjectKey(proposal);
+      const current = latest.get(projectKey);
       if (current === undefined) {
-        latest.set(proposal.moderatorId, proposal.id);
+        latest.set(projectKey, proposal.id);
       } else {
         // Prefer live proposals, otherwise take higher ID
-        const currentProposal = proposals.find(p => p.moderatorId === proposal.moderatorId && p.id === current);
+        const currentProposal = proposals.find(p => getProjectKey(p) === projectKey && p.id === current);
         const isCurrentLive = currentProposal?.status === 'Pending';
         const isNewLive = proposal.status === 'Pending';
 
         if (isNewLive && !isCurrentLive) {
-          latest.set(proposal.moderatorId, proposal.id);
+          latest.set(projectKey, proposal.id);
         } else if (!isNewLive && isCurrentLive) {
           // Keep current (it's live)
         } else if (proposal.id > current) {
-          latest.set(proposal.moderatorId, proposal.id);
+          latest.set(projectKey, proposal.id);
         }
       }
     }
@@ -280,11 +305,12 @@ export default function ExplorePage() {
   }, []);
 
   const handleCardClick = useCallback((proposal: ExploreProposal) => {
-    const tokenSlug = getTokenSlug(proposal.moderatorId);
-    const latestId = latestProposalByModerator.get(proposal.moderatorId);
+    const slug = getProposalSlug(proposal);
+    const projectKey = getProjectKey(proposal);
+    const latestId = latestProposalByProject.get(projectKey);
     const isHistorical = latestId !== proposal.id;
-    router.push(`/${tokenSlug}${isHistorical ? '?historical=true' : ''}`);
-  }, [router, latestProposalByModerator]);
+    router.push(`/${slug}${isHistorical ? '?historical=true' : ''}`);
+  }, [router, latestProposalByProject]);
 
   if (loading) {
     return (

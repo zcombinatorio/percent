@@ -37,7 +37,7 @@ interface LivePriceDisplayProps {
 }
 
 export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, marketLabels, marketCount, onPricesUpdate, onTwapUpdate }) => {
-  const { moderatorId } = useTokenContext();
+  const { moderatorId, isFutarchy } = useTokenContext();
 
   // Array-based state indexed by market
   const [prices, setPrices] = useState<(number | null)[]>(() => Array(marketCount).fill(null));
@@ -56,6 +56,12 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
   // Fetch proposal details, initial prices, and TWAP data
   useEffect(() => {
+    // Skip for futarchy DAOs - price/TWAP data not yet supported
+    if (isFutarchy) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchProposalDetails = async () => {
       try {
         const proposal = await api.getProposal(proposalId, moderatorId || undefined);
@@ -122,7 +128,7 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
     const interval = setInterval(fetchTwap, 10000);
 
     return () => clearInterval(interval);
-  }, [proposalId, moderatorId, marketCount]);
+  }, [proposalId, moderatorId, marketCount, isFutarchy]);
 
   // Handle chart price updates for N-ary markets (from WebSocket)
   const handleChartPriceUpdate = useCallback((update: ChartPriceUpdate) => {

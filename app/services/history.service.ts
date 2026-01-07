@@ -492,4 +492,269 @@ export class HistoryService {
 
     return intervals[interval] || 60;
   }
+
+  // ============================================================================
+  // Zcombinator/Futarchy History Methods (cmb_ tables)
+  // Uses zcombinator dao.id directly, no FK constraints
+  // ============================================================================
+
+  /**
+   * Records a price snapshot for a futarchy proposal
+   * @param data.daoId - Zcombinator DAO ID
+   * @param data.proposalId - On-chain proposal ID
+   * @param data.market - Pool index (0, 1, 2, ...)
+   * @param data.price - Current spot price
+   */
+  static async recordCmbPrice(data: {
+    daoId: number;
+    proposalId: number;
+    market: number;
+    price: Decimal;
+  }): Promise<void> {
+    const pool = getPool();
+
+    const query = `
+      INSERT INTO cmb_price_history (dao_id, proposal_id, market, price)
+      VALUES ($1, $2, $3, $4)
+    `;
+
+    await pool.query(query, [
+      data.daoId,
+      data.proposalId,
+      data.market,
+      data.price.toString()
+    ]);
+  }
+
+  /**
+   * Records a TWAP snapshot for a futarchy proposal
+   * @param data.daoId - Zcombinator DAO ID
+   * @param data.proposalId - On-chain proposal ID
+   * @param data.twaps - Array of TWAPs for each market
+   * @param data.aggregations - Array of cumulative observations for each market
+   */
+  static async recordCmbTWAP(data: {
+    daoId: number;
+    proposalId: number;
+    twaps: Decimal[];
+    aggregations: Decimal[];
+  }): Promise<void> {
+    const pool = getPool();
+
+    const query = `
+      INSERT INTO cmb_twap_history (dao_id, proposal_id, twaps, aggregations)
+      VALUES ($1, $2, $3, $4)
+    `;
+
+    await pool.query(query, [
+      data.daoId,
+      data.proposalId,
+      data.twaps.map(t => t.toString()),
+      data.aggregations.map(a => a.toString())
+    ]);
+  }
+
+  /**
+   * Records a trade for a futarchy proposal
+   * @param data.daoId - Zcombinator DAO ID
+   * @param data.proposalId - On-chain proposal ID
+   * @param data.market - Pool index
+   * @param data.userAddress - Trader wallet address
+   * @param data.isBaseToQuote - Trade direction
+   * @param data.amountIn - Input amount
+   * @param data.amountOut - Output amount
+   * @param data.price - Execution price
+   * @param data.txSignature - Optional transaction signature
+   */
+  static async recordCmbTrade(data: {
+    daoId: number;
+    proposalId: number;
+    market: number;
+    userAddress: string;
+    isBaseToQuote: boolean;
+    amountIn: Decimal;
+    amountOut: Decimal;
+    price: Decimal;
+    txSignature?: string;
+  }): Promise<void> {
+    const pool = getPool();
+
+    const query = `
+      INSERT INTO cmb_trade_history (
+        dao_id, proposal_id, market, user_address, is_base_to_quote,
+        amount_in, amount_out, price, tx_signature
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `;
+
+    await pool.query(query, [
+      data.daoId,
+      data.proposalId,
+      data.market,
+      data.userAddress,
+      data.isBaseToQuote,
+      data.amountIn.toString(),
+      data.amountOut.toString(),
+      data.price.toString(),
+      data.txSignature || null
+    ]);
+  }
+
+  /**
+   * Retrieves TWAP history for a futarchy proposal
+   */
+  static async getCmbTWAPHistory(
+    daoId: number,
+    proposalId: number,
+    from?: Date,
+    to?: Date
+  ): Promise<{
+    id: number;
+    timestamp: Date;
+    daoId: number;
+    proposalId: number;
+    twaps: Decimal[];
+    aggregations: Decimal[];
+  }[]> {
+    const pool = getPool();
+
+    let query = `
+      SELECT * FROM cmb_twap_history
+      WHERE dao_id = $1 AND proposal_id = $2
+    `;
+    const params: (number | Date)[] = [daoId, proposalId];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += ' ORDER BY timestamp DESC';
+
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      daoId: row.dao_id,
+      proposalId: row.proposal_id,
+      twaps: row.twaps.map((t: string) => new Decimal(t)),
+      aggregations: row.aggregations.map((a: string) => new Decimal(a)),
+    }));
+  }
+
+  /**
+   * Retrieves price history for a futarchy proposal
+   */
+  static async getCmbPriceHistory(
+    daoId: number,
+    proposalId: number,
+    from?: Date,
+    to?: Date
+  ): Promise<{
+    id: number;
+    timestamp: Date;
+    daoId: number;
+    proposalId: number;
+    market: number;
+    price: Decimal;
+  }[]> {
+    const pool = getPool();
+
+    let query = `
+      SELECT * FROM cmb_price_history
+      WHERE dao_id = $1 AND proposal_id = $2
+    `;
+    const params: (number | Date)[] = [daoId, proposalId];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += ' ORDER BY timestamp DESC';
+
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      daoId: row.dao_id,
+      proposalId: row.proposal_id,
+      market: row.market,
+      price: new Decimal(row.price),
+    }));
+  }
+
+  /**
+   * Retrieves trade history for a futarchy proposal
+   */
+  static async getCmbTradeHistory(
+    daoId: number,
+    proposalId: number,
+    from?: Date,
+    to?: Date,
+    limit?: number
+  ): Promise<{
+    id: number;
+    timestamp: Date;
+    daoId: number;
+    proposalId: number;
+    market: number;
+    userAddress: string;
+    isBaseToQuote: boolean;
+    amountIn: Decimal;
+    amountOut: Decimal;
+    price: Decimal;
+    txSignature: string | null;
+  }[]> {
+    const pool = getPool();
+
+    let query = `
+      SELECT * FROM cmb_trade_history
+      WHERE dao_id = $1 AND proposal_id = $2
+    `;
+    const params: (number | Date)[] = [daoId, proposalId];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += ' ORDER BY timestamp DESC';
+
+    if (limit) {
+      query += ` LIMIT ${limit}`;
+    }
+
+    const result = await pool.query(query, params);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      daoId: row.dao_id,
+      proposalId: row.proposal_id,
+      market: row.market,
+      userAddress: row.user_address,
+      isBaseToQuote: row.is_base_to_quote,
+      amountIn: new Decimal(row.amount_in),
+      amountOut: new Decimal(row.amount_out),
+      price: new Decimal(row.price),
+      txSignature: row.tx_signature,
+    }));
+  }
 }

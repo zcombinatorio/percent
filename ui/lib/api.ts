@@ -25,6 +25,41 @@ import { transformProposalListItem, transformProposalDetail, transformTWAPHistor
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com';
 
+// Zcombinator API for futarchy DAOs (new system)
+const ZCOMBINATOR_API_URL = process.env.NEXT_PUBLIC_ZCOMBINATOR_API_URL || 'https://api.zcombinator.io';
+
+/**
+ * DAO data returned from zcombinator API
+ */
+export interface ZcombinatorDAO {
+  id: number;
+  dao_pda: string;
+  dao_name: string;
+  moderator_pda: string;
+  owner_wallet: string;
+  admin_wallet: string;
+  token_mint: string;
+  pool_address: string;
+  pool_type: 'damm' | 'dlmm';
+  quote_mint: string;
+  treasury_cosigner: string;
+  parent_dao_id: number | null;
+  dao_type: 'parent' | 'child';
+  created_at: string;
+  proposer_token_threshold: number | null;
+  withdrawal_percentage: number;
+  treasury_vault: string;
+  mint_vault: string;
+  stats: {
+    proposerCount: number;
+    childDaoCount: number;
+    proposalCount?: number; // undefined until cache is populated
+  };
+  // Verification status for display on projects page
+  verified?: boolean;
+  icon?: string;
+}
+
 class GovernanceAPI {
   private connection: Connection;
 
@@ -48,19 +83,42 @@ class GovernanceAPI {
   }
 
   /**
-   * Fetch all proposals from production pools (ZC, OOGWAY, SURF)
-   * Used by the /explore page to show all proposals across all tokens
+   * Fetch all proposals from both old system (ZC, OOGWAY, SURF) and new futarchy DAOs
+   * Used by the /markets page to show all proposals across all tokens
    */
   async getAllProposals(): Promise<Array<ProposalListItem & {
     moderatorId: number;
     tokenTicker: string;
     tokenIcon: string | null;
+    // Futarchy-specific fields
+    isFutarchy?: boolean;
+    daoPda?: string;
+    daoName?: string;
+  }>> {
+    // Fetch from both systems in parallel
+    const [oldSystemProposals, futarchyProposals] = await Promise.all([
+      this.getOldSystemProposals(),
+      this.getFutarchyProposals(),
+    ]);
+
+    // Merge and return combined results
+    return [...oldSystemProposals, ...futarchyProposals];
+  }
+
+  /**
+   * Fetch proposals from old system (ZC, OOGWAY, SURF)
+   */
+  private async getOldSystemProposals(): Promise<Array<ProposalListItem & {
+    moderatorId: number;
+    tokenTicker: string;
+    tokenIcon: string | null;
+    isFutarchy: false;
   }>> {
     try {
       const url = buildApiUrl(API_BASE_URL, '/api/proposals/all');
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error('Failed to fetch all proposals');
+        throw new Error('Failed to fetch all proposals from old system');
       }
       const data = await response.json();
       // Transform each proposal to UI format (Finalized -> Passed/Failed)
@@ -69,9 +127,76 @@ class GovernanceAPI {
         moderatorId: p.moderatorId,
         tokenTicker: p.tokenTicker,
         tokenIcon: p.tokenIcon,
+        isFutarchy: false as const,
       }));
     } catch (error) {
-      console.error('[api.getAllProposals] Error:', error);
+      console.error('[api.getOldSystemProposals] Error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch proposals from all verified futarchy DAOs
+   */
+  private async getFutarchyProposals(): Promise<Array<ProposalListItem & {
+    moderatorId: number;
+    tokenTicker: string;
+    tokenIcon: string | null;
+    isFutarchy: true;
+    daoPda: string;
+    daoName: string;
+  }>> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao/proposals/all`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch proposals from zcombinator');
+      }
+      const data = await response.json() as { proposals: Array<{
+        id: number;
+        proposalPda: string;
+        title: string;
+        description: string;
+        options: string[];
+        status: 'Pending' | 'Passed' | 'Failed';
+        createdAt: number;
+        endsAt: number | null;
+        finalizedAt: number | null;
+        metadataCid: string | null;
+        daoPda: string;
+        daoName: string;
+        tokenMint: string;
+        tokenIcon: string | null;
+      }> };
+
+      // Transform to match old system format
+      return data.proposals.map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        createdAt: p.createdAt,
+        endsAt: p.endsAt,
+        finalizedAt: p.finalizedAt || 0,
+        winningMarketIndex: p.status === 'Passed' ? 0 : p.status === 'Failed' ? 1 : null,
+        winningMarketLabel: p.status === 'Passed' ? 'Pass' : p.status === 'Failed' ? 'Fail' : null,
+        passThresholdBps: 5000,
+        markets: 2,
+        marketLabels: p.options.length > 0 ? p.options : ['Pass', 'Fail'],
+        baseDecimals: 6,
+        quoteDecimals: 9,
+        vaultPDA: '',
+        proposalPda: p.proposalPda,
+        metadataCid: p.metadataCid,
+        // Fields for markets page
+        moderatorId: 0, // Not applicable for futarchy
+        tokenTicker: p.daoName,
+        tokenIcon: p.tokenIcon,
+        isFutarchy: true as const,
+        daoPda: p.daoPda,
+        daoName: p.daoName,
+      }));
+    } catch (error) {
+      console.error('[api.getFutarchyProposals] Error:', error);
       return [];
     }
   }
@@ -87,20 +212,204 @@ class GovernanceAPI {
       moderatorId: number;
       icon?: string;
       minTokenBalance?: number;
+      // Futarchy-specific fields (new system)
+      isFutarchy?: boolean;
+      moderatorPda?: string;
+      daoPda?: string;
+      poolType?: 'damm' | 'dlmm';
+      daoType?: 'parent' | 'child';
+      parentDaoId?: number | null;
     };
     isAuthorized?: boolean;
     authMethod?: 'whitelist' | 'token_balance';
   } | null> {
+    // First, try zcombinator for futarchy DAOs (new system)
+    // This avoids CORS errors when running locally against production old system
+    try {
+      const dao = await this.getZcombinatorDaoByName(name);
+      if (dao) {
+        return {
+          pool: {
+            poolAddress: dao.pool_address,
+            ticker: dao.dao_name,
+            baseMint: dao.token_mint,
+            quoteMint: dao.quote_mint || 'So11111111111111111111111111111111111111112',
+            baseDecimals: 6, // Default for most tokens
+            quoteDecimals: 9, // SOL decimals
+            moderatorId: dao.id,
+            icon: dao.icon,
+            // Futarchy-specific fields
+            isFutarchy: true,
+            moderatorPda: dao.moderator_pda,
+            daoPda: dao.dao_pda,
+            poolType: dao.pool_type,
+            daoType: dao.dao_type,
+            parentDaoId: dao.parent_dao_id,
+          },
+          isAuthorized: true, // Futarchy DAOs are permissionless for trading
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching DAO from zcombinator:', error);
+      // Continue to try old system
+    }
+
+    // Fallback: try the old system (production os-percent)
     try {
       const url = buildApiUrl(API_BASE_URL, `/api/whitelist/pool/${name}`);
       const response = await fetch(url);
-      if (!response.ok) {
-        if (response.status === 404) return null;
+      if (response.ok) {
+        return await response.json();
+      }
+      // If not 404, it's a real error
+      if (response.status !== 404) {
         throw new Error('Failed to fetch pool');
+      }
+    } catch (error) {
+      console.error('Error fetching pool from old system:', error);
+    }
+
+    return null;
+  }
+
+  /**
+   * Fetch a DAO from zcombinator API by name
+   */
+  private async getZcombinatorDaoByName(name: string): Promise<ZcombinatorDAO | null> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao`);
+      if (!response.ok) {
+        console.warn('[getZcombinatorDaoByName] Failed to fetch DAOs from zcombinator');
+        return null;
+      }
+
+      const data = await response.json() as { daos: ZcombinatorDAO[] };
+
+      // Find DAO by name (case-insensitive)
+      const dao = data.daos.find(d =>
+        d.dao_name.toLowerCase() === name.toLowerCase()
+      );
+
+      return dao || null;
+    } catch (error) {
+      console.error('[getZcombinatorDaoByName] Error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch all DAOs from zcombinator API
+   */
+  async getZcombinatorDaos(): Promise<ZcombinatorDAO[]> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch DAOs from zcombinator');
+      }
+      const data = await response.json() as { daos: ZcombinatorDAO[] };
+      return data.daos;
+    } catch (error) {
+      console.error('[getZcombinatorDaos] Error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch proposals for a futarchy DAO from zcombinator API
+   * Returns proposals in the same format as the old system for UI compatibility
+   */
+  async getZcombinatorProposals(daoPda: string): Promise<ProposalListItem[]> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao/${daoPda}/proposals`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch proposals from zcombinator');
+      }
+      const data = await response.json() as { proposals: Array<{
+        id: number;
+        proposalPda: string;
+        title: string;
+        description: string;
+        options: string[];
+        status: 'Setup' | 'Pending' | 'Passed' | 'Failed';
+        createdAt: number;
+        endsAt: number | null;
+        finalizedAt: number | null;
+        metadataCid: string | null;
+      }> };
+
+      // Filter out Setup proposals (not yet launched) and transform to match old system format
+      return data.proposals
+        .filter((p): p is typeof p & { status: 'Pending' | 'Passed' | 'Failed' } => p.status !== 'Setup')
+        .map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        createdAt: p.createdAt,
+        endsAt: p.endsAt,
+        finalizedAt: p.finalizedAt || 0,
+        // Default values for fields not applicable to futarchy
+        winningMarketIndex: p.status === 'Passed' ? 0 : p.status === 'Failed' ? 1 : null,
+        winningMarketLabel: p.status === 'Passed' ? 'Pass' : p.status === 'Failed' ? 'Fail' : null,
+        passThresholdBps: 5000, // 50% default
+        markets: 2, // Pass/Fail
+        marketLabels: p.options.length > 0 ? p.options : ['Pass', 'Fail'],
+        baseDecimals: 6, // Default
+        quoteDecimals: 9, // SOL decimals
+        vaultPDA: '', // Not applicable to futarchy
+        // Futarchy-specific fields
+        isFutarchy: true,
+        proposalPda: p.proposalPda,
+        metadataCid: p.metadataCid,
+      }));
+    } catch (error) {
+      console.error('[getZcombinatorProposals] Error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get a single proposal from zcombinator API by PDA.
+   * Uses read-through cache: reads from chain, caches if not already cached.
+   */
+  async getZcombinatorProposal(proposalPda: string): Promise<{
+    id: number;
+    proposalPda: string;
+    title: string;
+    description: string;
+    options: string[];
+    status: 'Setup' | 'Pending' | 'Passed' | 'Failed';
+    numOptions: number;
+    createdAt: number;
+    endsAt: number;
+    warmupEndsAt: number;
+    moderator: string;
+    creator: string;
+    vault: string;
+    baseMint: string;
+    quoteMint: string;
+    pools: string[];
+    metadataCid: string | null;
+    daoPda: string | null;
+    daoId: number | null;
+    config: {
+      length: number;
+      warmupDuration: number;
+      marketBias: number;
+      fee: number;
+    };
+  } | null> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao/proposal/${proposalPda}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error('Failed to fetch proposal from zcombinator');
       }
       return await response.json();
     } catch (error) {
-      console.error('Error fetching pool:', error);
+      console.error('[getZcombinatorProposal] Error:', error);
       return null;
     }
   }
