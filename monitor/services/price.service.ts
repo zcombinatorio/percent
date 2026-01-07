@@ -28,7 +28,7 @@ import { PoolType } from '@zcomb/programs-sdk';
 /**
  * SSE Events:
  * - PRICE_UPDATE: { proposalPda, market, price, marketCapUsd, timestamp }
- * - SWAP: { proposalPda, pool, market, trader, isBaseToQuote, amountIn, amountOut, feeAmount, timestamp }
+ * - COND_SWAP: { proposalPda, pool, market, trader, isBaseToQuote, amountIn, amountOut, feeAmount, timestamp }
  */
 
 export class PriceService {
@@ -46,7 +46,7 @@ export class PriceService {
 
   // Spot price polling timers
   private spotPollingTimers = new Map<string, NodeJS.Timeout>();
-  private readonly SPOT_POLL_INTERVAL_MS = 60_000;
+  private readonly SPOT_POLL_INTERVAL_MS = 30_000;
 
   // SOL price for market cap calculations (updated periodically)
   private solPrice = 0;
