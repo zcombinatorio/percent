@@ -22,7 +22,10 @@ import {
   IPriceHistory,
   ITWAPHistory,
   ITradeHistory,
-  IChartDataPoint
+  IChartDataPoint,
+  ICmbPriceHistory,
+  ICmbTWAPHistory,
+  ICmbTradeHistory,
 } from '../types/history.interface';
 import { Decimal } from 'decimal.js';
 
@@ -494,108 +497,68 @@ export class HistoryService {
   }
 
   // ============================================================================
-  // Zcombinator/Futarchy History Methods (cmb_ tables)
-  // Uses zcombinator dao.id directly, no FK constraints
+  // Combinator/Futarchy History Methods (cmb_ tables)
+  // Uses proposal_pda as primary identifier
   // ============================================================================
 
   /**
    * Records a price snapshot for a futarchy proposal
-   * @param data.daoId - Zcombinator DAO ID
-   * @param data.proposalId - On-chain proposal ID
-   * @param data.market - Pool index (0, 1, 2, ...)
-   * @param data.price - Current spot price
    */
-  static async recordCmbPrice(data: {
-    daoId: number;
-    proposalId: number;
-    market: number;
-    price: Decimal;
-  }): Promise<void> {
+  static async recordCmbPrice(data: Omit<ICmbPriceHistory, 'id' | 'timestamp'>): Promise<void> {
     const pool = getPool();
 
     const query = `
-      INSERT INTO cmb_price_history (dao_id, proposal_id, market, price)
+      INSERT INTO cmb_price_history (proposal_pda, market, price, market_cap_usd)
       VALUES ($1, $2, $3, $4)
     `;
 
     await pool.query(query, [
-      data.daoId,
-      data.proposalId,
+      data.proposalPda,
       data.market,
-      data.price.toString()
+      data.price.toString(),
+      data.marketCapUsd?.toString() || null,
     ]);
   }
 
   /**
    * Records a TWAP snapshot for a futarchy proposal
-   * @param data.daoId - Zcombinator DAO ID
-   * @param data.proposalId - On-chain proposal ID
-   * @param data.twaps - Array of TWAPs for each market
-   * @param data.aggregations - Array of cumulative observations for each market
    */
-  static async recordCmbTWAP(data: {
-    daoId: number;
-    proposalId: number;
-    twaps: Decimal[];
-    aggregations: Decimal[];
-  }): Promise<void> {
+  static async recordCmbTWAP(data: Omit<ICmbTWAPHistory, 'id' | 'timestamp'>): Promise<void> {
     const pool = getPool();
 
     const query = `
-      INSERT INTO cmb_twap_history (dao_id, proposal_id, twaps, aggregations)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO cmb_twap_history (proposal_pda, twaps)
+      VALUES ($1, $2)
     `;
 
     await pool.query(query, [
-      data.daoId,
-      data.proposalId,
-      data.twaps.map(t => t.toString()),
-      data.aggregations.map(a => a.toString())
+      data.proposalPda,
+      data.twaps.map((t) => t.toString()),
     ]);
   }
 
   /**
    * Records a trade for a futarchy proposal
-   * @param data.daoId - Zcombinator DAO ID
-   * @param data.proposalId - On-chain proposal ID
-   * @param data.market - Pool index
-   * @param data.userAddress - Trader wallet address
-   * @param data.isBaseToQuote - Trade direction
-   * @param data.amountIn - Input amount
-   * @param data.amountOut - Output amount
-   * @param data.price - Execution price
-   * @param data.txSignature - Optional transaction signature
    */
-  static async recordCmbTrade(data: {
-    daoId: number;
-    proposalId: number;
-    market: number;
-    userAddress: string;
-    isBaseToQuote: boolean;
-    amountIn: Decimal;
-    amountOut: Decimal;
-    price: Decimal;
-    txSignature?: string;
-  }): Promise<void> {
+  static async recordCmbTrade(data: Omit<ICmbTradeHistory, 'id' | 'timestamp'>): Promise<void> {
     const pool = getPool();
 
     const query = `
       INSERT INTO cmb_trade_history (
-        dao_id, proposal_id, market, user_address, is_base_to_quote,
-        amount_in, amount_out, price, tx_signature
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        proposal_pda, market, trader, is_base_to_quote,
+        amount_in, amount_out, fee_amount, tx_signature
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `;
 
     await pool.query(query, [
-      data.daoId,
-      data.proposalId,
+      data.proposalPda,
       data.market,
-      data.userAddress,
+      data.trader,
       data.isBaseToQuote,
       data.amountIn.toString(),
       data.amountOut.toString(),
-      data.price.toString(),
-      data.txSignature || null
+      data.feeAmount?.toString() || null,
+      data.txSignature || null,
     ]);
   }
 
@@ -603,25 +566,17 @@ export class HistoryService {
    * Retrieves TWAP history for a futarchy proposal
    */
   static async getCmbTWAPHistory(
-    daoId: number,
-    proposalId: number,
+    proposalPda: string,
     from?: Date,
     to?: Date
-  ): Promise<{
-    id: number;
-    timestamp: Date;
-    daoId: number;
-    proposalId: number;
-    twaps: Decimal[];
-    aggregations: Decimal[];
-  }[]> {
+  ): Promise<ICmbTWAPHistory[]> {
     const pool = getPool();
 
     let query = `
       SELECT * FROM cmb_twap_history
-      WHERE dao_id = $1 AND proposal_id = $2
+      WHERE proposal_pda = $1
     `;
-    const params: (number | Date)[] = [daoId, proposalId];
+    const params: (string | Date)[] = [proposalPda];
 
     if (from) {
       params.push(from);
@@ -637,13 +592,11 @@ export class HistoryService {
 
     const result = await pool.query(query, params);
 
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
-      daoId: row.dao_id,
-      proposalId: row.proposal_id,
+      proposalPda: row.proposal_pda,
       twaps: row.twaps.map((t: string) => new Decimal(t)),
-      aggregations: row.aggregations.map((a: string) => new Decimal(a)),
     }));
   }
 
@@ -651,25 +604,17 @@ export class HistoryService {
    * Retrieves price history for a futarchy proposal
    */
   static async getCmbPriceHistory(
-    daoId: number,
-    proposalId: number,
+    proposalPda: string,
     from?: Date,
     to?: Date
-  ): Promise<{
-    id: number;
-    timestamp: Date;
-    daoId: number;
-    proposalId: number;
-    market: number;
-    price: Decimal;
-  }[]> {
+  ): Promise<ICmbPriceHistory[]> {
     const pool = getPool();
 
     let query = `
       SELECT * FROM cmb_price_history
-      WHERE dao_id = $1 AND proposal_id = $2
+      WHERE proposal_pda = $1
     `;
-    const params: (number | Date)[] = [daoId, proposalId];
+    const params: (string | Date)[] = [proposalPda];
 
     if (from) {
       params.push(from);
@@ -685,13 +630,13 @@ export class HistoryService {
 
     const result = await pool.query(query, params);
 
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
-      daoId: row.dao_id,
-      proposalId: row.proposal_id,
+      proposalPda: row.proposal_pda,
       market: row.market,
       price: new Decimal(row.price),
+      marketCapUsd: row.market_cap_usd ? new Decimal(row.market_cap_usd) : undefined,
     }));
   }
 
@@ -699,31 +644,18 @@ export class HistoryService {
    * Retrieves trade history for a futarchy proposal
    */
   static async getCmbTradeHistory(
-    daoId: number,
-    proposalId: number,
+    proposalPda: string,
     from?: Date,
     to?: Date,
     limit?: number
-  ): Promise<{
-    id: number;
-    timestamp: Date;
-    daoId: number;
-    proposalId: number;
-    market: number;
-    userAddress: string;
-    isBaseToQuote: boolean;
-    amountIn: Decimal;
-    amountOut: Decimal;
-    price: Decimal;
-    txSignature: string | null;
-  }[]> {
+  ): Promise<ICmbTradeHistory[]> {
     const pool = getPool();
 
     let query = `
       SELECT * FROM cmb_trade_history
-      WHERE dao_id = $1 AND proposal_id = $2
+      WHERE proposal_pda = $1
     `;
-    const params: (number | Date)[] = [daoId, proposalId];
+    const params: (string | Date)[] = [proposalPda];
 
     if (from) {
       params.push(from);
@@ -743,17 +675,16 @@ export class HistoryService {
 
     const result = await pool.query(query, params);
 
-    return result.rows.map(row => ({
+    return result.rows.map((row) => ({
       id: row.id,
       timestamp: row.timestamp,
-      daoId: row.dao_id,
-      proposalId: row.proposal_id,
+      proposalPda: row.proposal_pda,
       market: row.market,
-      userAddress: row.user_address,
+      trader: row.trader,
       isBaseToQuote: row.is_base_to_quote,
       amountIn: new Decimal(row.amount_in),
       amountOut: new Decimal(row.amount_out),
-      price: new Decimal(row.price),
+      feeAmount: row.fee_amount ? new Decimal(row.fee_amount) : undefined,
       txSignature: row.tx_signature,
     }));
   }

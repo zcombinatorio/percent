@@ -80,3 +80,45 @@ export interface IChartDataPoint {
   close: number;                  // Closing price in the time bucket
   volume?: number;                // Trading volume in this time period (optional)
 }
+
+// ============================================================================
+// Combinator/Futarchy History Types (cmb_ tables, using proposal_pda)
+// ============================================================================
+
+/**
+ * Cmb Price history record using proposal PDA
+ */
+export interface ICmbPriceHistory {
+  id?: number;
+  timestamp: Date;
+  proposalPda: string;
+  market: number;                 // -1 for spot, 0/1/... for conditional pools
+  price: Decimal;
+  marketCapUsd?: Decimal;
+}
+
+/**
+ * Cmb TWAP history record using proposal PDA
+ */
+export interface ICmbTWAPHistory {
+  id?: number;
+  timestamp: Date;
+  proposalPda: string;
+  twaps: Decimal[];               // Array of TWAPs for each pool
+}
+
+/**
+ * Cmb Trade history record using proposal PDA
+ */
+export interface ICmbTradeHistory {
+  id?: number;
+  timestamp: Date;
+  proposalPda: string;
+  market: number;
+  trader: string;
+  isBaseToQuote: boolean;
+  amountIn: Decimal;
+  amountOut: Decimal;
+  feeAmount?: Decimal;
+  txSignature?: string;
+}

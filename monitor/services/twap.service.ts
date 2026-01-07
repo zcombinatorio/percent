@@ -22,6 +22,8 @@ import { Monitor, MonitoredProposal } from '../monitor';
 import { SSEManager } from '../lib/sse';
 import { logError } from '../lib/logger';
 import { callApi } from '../lib/api';
+import { HistoryService } from '@app/services/history.service';
+import { Decimal } from 'decimal.js';
 
 const CRANK_INTERVAL_MS = 65_000; // 5 second buffer
 
@@ -179,6 +181,18 @@ export class TWAPService {
         pools: poolTWAPs,
         timestamp: Date.now(),
       });
+
+      // Record to DB
+      try {
+        await HistoryService.recordCmbTWAP({
+          proposalPda: proposal.proposalPda,
+          twaps: poolTWAPs.map((p) => new Decimal(p.twap)),
+        });
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[TWAP] Error recording to DB:`, errMsg);
+        logError('twap', { action: 'record_twap', proposalPda: proposal.proposalPda, error: errMsg });
+      }
     }
   }
 

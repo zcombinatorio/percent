@@ -25,6 +25,8 @@ import { Monitor, MonitoredProposal, SwapEvent } from '../monitor';
 import { SSEManager } from '../lib/sse';
 import { logError } from '../lib/logger';
 import { PoolType } from '@zcomb/programs-sdk';
+import { HistoryService } from '@app/services/history.service';
+import { Decimal } from 'decimal.js';
 
 /**
  * SSE Events:
@@ -263,10 +265,22 @@ export class PriceService {
 
   // ─── Event Handlers ──────────────────────────────────────────────
 
-  private onPriceChange(proposalPda: string, market: number, price: number, marketCapUsd: number) {
-    // ** TODO: Save price to DB
-    // await HistoryService.recordPrice({...});
+  private async onPriceChange(proposalPda: string, market: number, price: number, marketCapUsd: number) {
+    // Record to DB
+    try {
+      await HistoryService.recordCmbPrice({
+        proposalPda,
+        market,
+        price: new Decimal(price),
+        marketCapUsd: new Decimal(marketCapUsd),
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Price] Error recording price to DB:`, errMsg);
+      logError('price', { action: 'record_price', proposalPda, market, error: errMsg });
+    }
 
+    // Broadcast SSE
     this.sse.broadcast('PRICE_UPDATE', {
       proposalPda,
       market,
@@ -290,8 +304,23 @@ export class PriceService {
       timestamp: Date.now(),
     });
 
-    // 2. ** TODO: Save trade to DB
-    // await HistoryService.recordTrade({...});
+    // 2. Record trade to DB
+    try {
+      await HistoryService.recordCmbTrade({
+        proposalPda: swap.proposalPda,
+        market: swap.market,
+        trader: swap.trader,
+        isBaseToQuote: !swap.swapAToB, // A is Quote
+        amountIn: new Decimal(swap.amountIn.toString()),
+        amountOut: new Decimal(swap.amountOut.toString()),
+        feeAmount: new Decimal(swap.feeAmount.toString()),
+        txSignature: swap.txSignature,
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Price] Error recording trade to DB:`, errMsg);
+      logError('price', { action: 'record_trade', proposalPda: swap.proposalPda, error: errMsg });
+    }
 
     // 3. Fetch pool state and calculate new price
     const price = await this.fetchPoolPrice(swap.pool);
