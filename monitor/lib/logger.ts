@@ -20,7 +20,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const LOGS_DIR = path.join(__dirname, 'logs');
+const LOGS_DIR = path.join(__dirname, '..', 'logs');
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
