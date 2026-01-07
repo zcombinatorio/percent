@@ -34,15 +34,15 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
           logo: '/combinator-icon.svg',
           walletChainType: 'solana-only', // Show only Solana options
         },
-        // Login methods - email and social logins
-        loginMethods: ['email', 'google', 'twitter'],
+        // Login methods - email, social, and wallet logins
+        loginMethods: ['email', 'google', 'twitter', 'wallet'],
         // Embedded wallets configuration - Solana specific
         embeddedWallets: {
           createOnLogin: 'off', // Turn off automatic EVM wallet creation
           requireUserPasswordOnCreate: false,
           // Solana-specific configuration
           solana: {
-            createOnLogin: 'all-users', // Always create embedded Solana wallets
+            createOnLogin: 'users-without-wallets', // Only create if no external wallet linked
           },
         },
         // External wallets configuration - Enable Solana wallet connections

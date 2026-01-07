@@ -71,9 +71,10 @@ const parseLabel = (label: string): { displayText: string; url: string | null } 
 };
 
 // Marquee text component for truncated selected items
-function MarqueeText({ children, isSelected, className, style }: {
+function MarqueeText({ children, isSelected, isHovered, className, style }: {
   children: React.ReactNode;
   isSelected: boolean;
+  isHovered?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -81,9 +82,23 @@ function MarqueeText({ children, isSelected, className, style }: {
   const textRef = useRef<HTMLSpanElement>(null);
   const [shouldAnimate, setShouldAnimate] = useState(false);
   const [scrollDistance, setScrollDistance] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile vs desktop
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Animation triggers differently based on device:
+  // - Mobile: animate when selected
+  // - Desktop: animate when hovered
+  const shouldTrigger = isMobile ? isSelected : isHovered;
 
   useEffect(() => {
-    if (isSelected && containerRef.current && textRef.current) {
+    if (shouldTrigger && containerRef.current && textRef.current) {
       const containerWidth = containerRef.current.offsetWidth;
       const textWidth = textRef.current.scrollWidth;
       const overflow = textWidth - containerWidth;
@@ -97,7 +112,7 @@ function MarqueeText({ children, isSelected, className, style }: {
     } else {
       setShouldAnimate(false);
     }
-  }, [isSelected, children]);
+  }, [shouldTrigger, children]);
 
   return (
     <div
@@ -120,6 +135,8 @@ function MarqueeText({ children, isSelected, className, style }: {
 }
 
 export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPercent, selectedIndex, onSelect, solPrice }: ModeToggleProps) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   // Check if all data has loaded (need TWAP, live prices, and SOL price to compute expected TWAP in USD)
   // Show skeleton until all are ready to avoid reordering flicker
   // Use .every() for livePrices because WebSocket sends prices one market at a time
@@ -128,12 +145,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   const hasSolPrice = solPrice != null;
   const hasAllData = hasTwapData && hasLivePrices && hasSolPrice;
 
-  // Convert current TWAPs from SOL to USD (for display)
-  const marketCapsUsd = marketCaps.map(cap =>
-    cap != null && solPrice ? cap * solPrice : null
-  );
-
-  // Calculate expected final TWAP for each market (for sorting)
+  // Calculate expected final TWAP for each market
   // Formula: expectedFinal = currentTwap × elapsed% + spotPrice × remaining%
   const expectedFinalTwaps = marketCaps.map((twap, i) => {
     const spotPrice = livePrices[i];
@@ -149,7 +161,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   );
 
   // Calculate max significant digits across all values for consistent formatting (capped at 4)
-  const maxSigDigits = Math.min(getMaxSigDigits(marketCapsUsd), 4);
+  const maxSigDigits = Math.min(getMaxSigDigits(expectedFinalTwapsUsd), 4);
 
   // Sort indices by expected final TWAP (highest first) for ranking display
   // Only sort once we have all data to avoid reordering flicker
@@ -167,7 +179,7 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
     <div className="bg-[#121212] border border-[#191919] rounded-[9px] py-4 px-5 transition-all duration-300">
       <div className="flex flex-col items-center gap-1 md:gap-4">
         <span className="text-sm font-semibold font-ibm-plex-mono tracking-[0.2em] uppercase mb-2 text-center" style={{ color: '#DDDDD7' }}>
-          II. Select Coin (TWAP)
+          II. Select Coin (TWAP RANKED)
         </span>
         <div className="border border-[#191919] rounded-[6px] py-4 px-6 flex flex-col gap-3 w-full">
           {!hasAllData ? (
@@ -181,12 +193,12 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
           ) : sortedIndices.map((originalIndex, rank) => {
             const label = marketLabels[originalIndex];
             const isSelected = selectedIndex === originalIndex;
-            const marketCapUsd = marketCapsUsd[originalIndex];
+            const expectedTwapUsd = expectedFinalTwapsUsd[originalIndex];
             const { displayText, url } = parseLabel(label);
 
             const labelContent = (
               <>
-                {displayText} ({marketCapUsd != null ? formatWithSigDigits(marketCapUsd, maxSigDigits) : '...'})
+                {expectedTwapUsd != null ? formatWithSigDigits(expectedTwapUsd, maxSigDigits) : '...'}: {displayText}
               </>
             );
 
@@ -196,11 +208,15 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
               ? (isSelected ? '#BEE8FC' : '#77868C')  // Blue: bright when selected, darker when not
               : (isSelected ? '#FFFFFF' : '#5B5E62'); // White/gray for non-winning
 
+            const isHovered = hoveredIndex === originalIndex;
+
             return (
               <div
                 key={originalIndex}
                 className="flex items-center justify-between cursor-pointer select-none"
                 onClick={() => onSelect(originalIndex)}
+                onMouseEnter={() => setHoveredIndex(originalIndex)}
+                onMouseLeave={() => setHoveredIndex(null)}
               >
                 {/* Label with market cap - clickable if URL exists */}
                 {url ? (
@@ -210,23 +226,20 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 hover:underline ${
-                      !isSelected && 'truncate'
+                      !isSelected && !isHovered && 'truncate'
                     }`}
                     style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em', color: textColor }}
                   >
-                    {isSelected ? (
-                      <MarqueeText isSelected={isSelected} className="flex-1 min-w-0">
-                        {labelContent}
-                      </MarqueeText>
-                    ) : (
-                      labelContent
-                    )}
+                    <MarqueeText isSelected={isSelected} isHovered={isHovered} className="flex-1 min-w-0">
+                      {labelContent}
+                    </MarqueeText>
                   </a>
                 ) : (
                   <MarqueeText
                     isSelected={isSelected}
+                    isHovered={isHovered}
                     className={`text-lg uppercase transition-colors duration-200 flex-1 min-w-0 mr-3 ${
-                      !isSelected && 'truncate'
+                      !isSelected && !isHovered && 'truncate'
                     }`}
                     style={{ fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0em', color: textColor }}
                   >
