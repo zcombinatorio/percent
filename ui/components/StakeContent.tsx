@@ -1048,7 +1048,7 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                 >
                                   <td className="py-3 pl-3 whitespace-nowrap" style={{ color: '#DDDDD7' }}>
                                     <span className="md:hidden">{trade.userAddress.slice(0, 6)}</span>
-                                    <span className="hidden md:inline">{trade.userAddress.slice(0, 6)}...</span>
+                                    <span className="hidden md:inline">{trade.userAddress.slice(0, 6)}</span>
                                     <button
                                       onClick={() => navigator.clipboard.writeText(trade.userAddress)}
                                       className="text-[#6B6E71] hover:text-[#DDDDD7] transition-colors ml-1 inline cursor-pointer"
@@ -1109,7 +1109,7 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                     {trade.txSignature ? (
                                       <>
                                         <span className="md:hidden">{trade.txSignature.slice(0, 6)}</span>
-                                        <span className="hidden md:inline">{trade.txSignature.slice(0, 6)}...</span>
+                                        <span className="hidden md:inline">{trade.txSignature.slice(0, 6)}</span>
                                       </>
                                     ) : '—'}
                                     {trade.txSignature && (
