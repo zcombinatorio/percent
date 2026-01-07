@@ -995,8 +995,8 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                             <tr>
                               <th className="py-3 pl-3 text-left font-medium w-[120px]">Staker</th>
                               <th className="py-3 text-left font-medium w-[100px]">QM</th>
-                              <th className="py-3 text-left font-medium w-[240px]">Coin</th>
-                              <th className="py-3 text-left font-medium w-[100px] hidden md:table-cell">Trade</th>
+                              <th className="py-3 text-left font-medium w-[260px]">Coin</th>
+                              <th className="py-3 text-left font-medium w-[80px] hidden md:table-cell">Trade</th>
                               <th className="py-3 text-left font-medium w-[140px] hidden md:table-cell">Amount</th>
                               <th className="py-3 text-left font-medium w-[40px]">Tx</th>
                               <th className="py-3 pr-3 text-right font-medium">Age</th>
@@ -1096,10 +1096,10 @@ export function StakeContent({ useExploreHeader = true }: StakeContentProps) {
                                   <td className="py-3 w-[100px]" style={{ color: '#DDDDD7' }}>
                                     {trade.ticker}-{trade.proposalId}
                                   </td>
-                                  <td className="py-3 w-[240px] max-w-[240px] truncate" style={{ color: '#DDDDD7' }}>
+                                  <td className="py-3 w-[260px] max-w-[260px] truncate" style={{ color: '#DDDDD7' }}>
                                     {trade.marketLabel}
                                   </td>
-                                  <td className="py-3 w-[100px] hidden md:table-cell" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
+                                  <td className="py-3 w-[80px] hidden md:table-cell" style={{ color: isBuy ? '#6ECC94' : '#FF6F94' }}>
                                     {isBuy ? 'Buy' : 'Sell'}
                                   </td>
                                   <td className="py-3 w-[100px] hidden md:table-cell" style={{ color: '#DDDDD7' }}>
