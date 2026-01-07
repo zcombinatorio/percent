@@ -33,6 +33,7 @@ import { PoolType } from '@zcomb/programs-sdk';
  */
 
 export class PriceService {
+  private monitor: Monitor | null = null;
   private connection: Connection;
   private cpAmm: CpAmm;
 
@@ -61,6 +62,7 @@ export class PriceService {
 
   /** Subscribe to monitor events and start price tracking */
   start(monitor: Monitor) {
+    this.monitor = monitor;
     // Start SOL price polling
     this.startSolPricePolling();
 
@@ -93,6 +95,7 @@ export class PriceService {
     }
     this.spotPollingTimers.clear();
     this.proposalData.clear();
+    this.monitor = null;
     console.log('[Price] Stopped');
   } 
 
@@ -196,8 +199,24 @@ export class PriceService {
 
   /** Fetch price from Futarchy AMM pool (conditional markets) */
   private async fetchPoolPrice(poolAddress: string): Promise<number | null> {
-    // Conditional pools always use the Futarchy AMM (CP-AMM compatible)
-    return this.fetchDammPoolPrice(poolAddress);
+    if (!this.monitor) return null;
+
+    try {
+      const poolPda = new PublicKey(poolAddress);
+      const spotPrice = await this.monitor.client.amm.fetchSpotPrice(poolPda);
+
+      if (!spotPrice) return null;
+      return spotPrice.toNumber();
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Price] Error fetching Futarchy pool price for ${poolAddress}:`, errMsg);
+      logError('price', {
+        action: 'fetch_futarchy_price',
+        pool: poolAddress,
+        error: errMsg,
+      });
+      return null;
+    }
   }
 
   // ─── SOL Price Polling ─────────────────────────────────────────
