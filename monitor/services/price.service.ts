@@ -206,7 +206,8 @@ export class PriceService {
       const spotPrice = await this.monitor.client.amm.fetchSpotPrice(poolPda);
 
       if (!spotPrice) return null;
-      return spotPrice.toNumber();
+      // Spot price is scaled by 1e12 (same as TWAP)
+      return Number(spotPrice.toString()) / 1e12;
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error(`[Price] Error fetching Futarchy pool price for ${poolAddress}:`, errMsg);

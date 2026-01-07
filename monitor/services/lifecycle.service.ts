@@ -38,12 +38,14 @@ interface FlowResult {
  * Calls the DAO API to finalize, redeem liquidity, and deposit back.
  */
 export class LifecycleService {
+  private monitor: Monitor | null = null;
   private timers = new Map<string, NodeJS.Timeout>();
 
   /**
    * Subscribe to monitor events and schedule finalization for existing proposals
    */
   start(monitor: Monitor) {
+    this.monitor = monitor;
     // Schedule existing proposals
     for (const proposal of monitor.getMonitored()) {
       this.scheduleFinalization(proposal);
@@ -67,11 +69,12 @@ export class LifecycleService {
       clearTimeout(timer);
     }
     this.timers.clear();
+    this.monitor = null;
     console.log('[Lifecycle] Stopped');
   }
 
   private scheduleFinalization(proposal: MonitoredProposal) {
-    const delay = Math.max(0, proposal.endTime - Date.now());
+    const delay = Math.max(0, proposal.endTime - Date.now() + 20000); // 20 second buffer
 
     const timer = setTimeout(async () => {
       this.timers.delete(proposal.proposalPda);
@@ -152,6 +155,10 @@ export class LifecycleService {
         moderatorPda: proposal.moderatorPda,
         results,
       });
+
+      // Remove proposal from monitor on error (stops TWAP cranking, price tracking, etc.)
+      // On success, the on-chain ProposalFinalized event will trigger removal automatically
+      this.monitor?.removeMonitored(proposalPda);
     }
 
     console.log(`[Lifecycle] Flow ${hasErrors ? 'completed with errors' : 'complete'} for ${proposalPda}`);

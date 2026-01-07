@@ -23,7 +23,7 @@ import { SSEManager } from '../lib/sse';
 import { logError } from '../lib/logger';
 import { callApi } from '../lib/api';
 
-const CRANK_INTERVAL_MS = 60_000; // 60 seconds
+const CRANK_INTERVAL_MS = 65_000; // 5 second buffer
 
 interface CrankResult {
   pool: string;
