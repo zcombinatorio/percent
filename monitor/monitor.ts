@@ -63,6 +63,7 @@ export interface SwapEvent {
   amountIn: BN;
   amountOut: BN;
   feeAmount: BN;
+  txSignature: string;
 }
 
 export interface MonitorEvents {
@@ -154,7 +155,7 @@ export class Monitor extends EventEmitter {
       const events = this.ammParser.parseLogs(logs.logs);
       for (const event of events) {
         if (event.name === 'CondSwap') {
-          this.handleCondSwap(event.data as CondSwapEvent);
+          this.handleCondSwap(event.data as CondSwapEvent, logs.signature);
         }
       }
     } catch {
@@ -162,7 +163,7 @@ export class Monitor extends EventEmitter {
     }
   }
 
-  private handleCondSwap(data: CondSwapEvent) {
+  private handleCondSwap(data: CondSwapEvent, txSignature: string) {
     const poolStr = data.pool.toBase58();
     const proposalPda = this.poolToProposal.get(poolStr);
 
@@ -184,6 +185,7 @@ export class Monitor extends EventEmitter {
       amountIn: data.inputAmount,
       amountOut: data.outputAmount,
       feeAmount: data.feeAmount,
+      txSignature,
     };
 
     this.emit('swap', swap);

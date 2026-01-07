@@ -28,7 +28,7 @@ import { PoolType } from '@zcomb/programs-sdk';
 /**
  * SSE Events:
  * - PRICE_UPDATE: { proposalPda, market, price, marketCapUsd, timestamp }
- * - COND_SWAP: { proposalPda, pool, market, trader, isBaseToQuote, amountIn, amountOut, feeAmount, timestamp }
+ * - COND_SWAP: { proposalPda, pool, market, trader, swapAToB, amountIn, amountOut, txSignature, timestamp }
  */
 
 export class PriceService {
@@ -236,6 +236,7 @@ export class PriceService {
       swapAToB: swap.swapAToB,
       amountIn: swap.amountIn.toString(),
       amountOut: swap.amountOut.toString(),
+      txSignature: swap.txSignature,
       timestamp: Date.now(),
     });
 
