@@ -17,13 +17,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Backend status (what API returns)
+// Backend status (what old system API returns)
 export type BackendProposalStatus = 'Uninitialized' | 'Pending' | 'Finalized';
 
-// UI status (what components expect) - transformed from backend status
-export type UIProposalStatus = 'Pending' | 'Passed' | 'Failed';
+// Old system status (binary Pass/Fail markets)
+export type OldSystemStatus = 'Pending' | 'Passed' | 'Failed';
 
-// Keep ProposalStatus as alias for backward compatibility (uses UI format)
+// Futarchy status (N-ary markets, use winningMarketIndex + marketLabels for winning option)
+export type FutarchyStatus = 'Pending' | 'Resolved';
+
+// Combined UI status for backwards compatibility
+export type UIProposalStatus = 'Pending' | 'Passed' | 'Failed' | 'Resolved';
+
+// Keep ProposalStatus as alias for backward compatibility
 export type ProposalStatus = UIProposalStatus;
 
 export interface ProposalListItem {

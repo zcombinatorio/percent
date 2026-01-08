@@ -157,7 +157,9 @@ class GovernanceAPI {
         title: string;
         description: string;
         options: string[];
-        status: 'Pending' | 'Passed' | 'Failed';
+        status: 'Pending' | 'Resolved';
+        winningIndex: number | null;
+        vault: string;
         createdAt: number;
         endsAt: number | null;
         finalizedAt: number | null;
@@ -168,33 +170,38 @@ class GovernanceAPI {
         tokenIcon: string | null;
       }> };
 
-      // Transform to match old system format
-      return data.proposals.map(p => ({
-        id: p.id,
-        title: p.title,
-        description: p.description,
-        status: p.status,
-        createdAt: p.createdAt,
-        endsAt: p.endsAt,
-        finalizedAt: p.finalizedAt || 0,
-        winningMarketIndex: p.status === 'Passed' ? 0 : p.status === 'Failed' ? 1 : null,
-        winningMarketLabel: p.status === 'Passed' ? 'Pass' : p.status === 'Failed' ? 'Fail' : null,
-        passThresholdBps: 5000,
-        markets: 2,
-        marketLabels: p.options.length > 0 ? p.options : ['Pass', 'Fail'],
-        baseDecimals: 6,
-        quoteDecimals: 9,
-        vaultPDA: '',
-        proposalPda: p.proposalPda,
-        metadataCid: p.metadataCid,
-        // Fields for markets page
-        moderatorId: 0, // Not applicable for futarchy
-        tokenTicker: p.daoName,
-        tokenIcon: p.tokenIcon,
-        isFutarchy: true as const,
-        daoPda: p.daoPda,
-        daoName: p.daoName,
-      }));
+      // Transform to UI format
+      return data.proposals.map(p => {
+        const options = p.options.length > 0 ? p.options : ['Pass', 'Fail'];
+        const winningLabel = p.winningIndex !== null ? options[p.winningIndex] : null;
+
+        return {
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          status: p.status,
+          createdAt: p.createdAt,
+          endsAt: p.endsAt,
+          finalizedAt: p.finalizedAt || 0,
+          winningMarketIndex: p.winningIndex,
+          winningMarketLabel: winningLabel,
+          passThresholdBps: 5000,
+          markets: options.length,
+          marketLabels: options,
+          baseDecimals: 6,
+          quoteDecimals: 9,
+          vaultPDA: p.vault,
+          proposalPda: p.proposalPda,
+          metadataCid: p.metadataCid,
+          // Fields for markets page
+          moderatorId: 0, // Not applicable for futarchy
+          tokenTicker: p.daoName,
+          tokenIcon: p.tokenIcon,
+          isFutarchy: true as const,
+          daoPda: p.daoPda,
+          daoName: p.daoName,
+        };
+      });
     } catch (error) {
       console.error('[api.getFutarchyProposals] Error:', error);
       return [];
@@ -330,7 +337,9 @@ class GovernanceAPI {
         title: string;
         description: string;
         options: string[];
-        status: 'Setup' | 'Pending' | 'Passed' | 'Failed';
+        status: 'Setup' | 'Pending' | 'Resolved';
+        winningIndex: number | null;
+        vault: string;
         createdAt: number;
         endsAt: number | null;
         finalizedAt: number | null;
@@ -339,8 +348,13 @@ class GovernanceAPI {
 
       // Filter out Setup proposals (not yet launched) and transform to match old system format
       return data.proposals
-        .filter((p): p is typeof p & { status: 'Pending' | 'Passed' | 'Failed' } => p.status !== 'Setup')
-        .map(p => ({
+        .filter((p): p is typeof p & { status: 'Pending' | 'Resolved' } => p.status !== 'Setup')
+        .map(p => {
+        // For resolved proposals, get the winning label from options array
+        const options = p.options.length > 0 ? p.options : ['Pass', 'Fail'];
+        const winningLabel = p.winningIndex !== null ? options[p.winningIndex] : null;
+
+        return {
         id: p.id,
         title: p.title,
         description: p.description,
@@ -348,20 +362,20 @@ class GovernanceAPI {
         createdAt: p.createdAt,
         endsAt: p.endsAt,
         finalizedAt: p.finalizedAt || 0,
-        // Default values for fields not applicable to futarchy
-        winningMarketIndex: p.status === 'Passed' ? 0 : p.status === 'Failed' ? 1 : null,
-        winningMarketLabel: p.status === 'Passed' ? 'Pass' : p.status === 'Failed' ? 'Fail' : null,
+        winningMarketIndex: p.winningIndex,
+        winningMarketLabel: winningLabel,
         passThresholdBps: 5000, // 50% default
-        markets: 2, // Pass/Fail
-        marketLabels: p.options.length > 0 ? p.options : ['Pass', 'Fail'],
+        markets: options.length,
+        marketLabels: options,
         baseDecimals: 6, // Default
         quoteDecimals: 9, // SOL decimals
-        vaultPDA: '', // Not applicable to futarchy
+        vaultPDA: p.vault,
         // Futarchy-specific fields
         isFutarchy: true,
         proposalPda: p.proposalPda,
         metadataCid: p.metadataCid,
-      }));
+      };
+      });
     } catch (error) {
       console.error('[getZcombinatorProposals] Error:', error);
       return [];
@@ -378,7 +392,8 @@ class GovernanceAPI {
     title: string;
     description: string;
     options: string[];
-    status: 'Setup' | 'Pending' | 'Passed' | 'Failed';
+    status: 'Setup' | 'Pending' | 'Resolved';
+    winningIndex: number | null;
     numOptions: number;
     createdAt: number;
     endsAt: number;

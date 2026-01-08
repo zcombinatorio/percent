@@ -45,14 +45,15 @@ export default function HistoryPage() {
   // Get transaction signer
   const { signTransaction } = useTransactionSigner();
 
-  // Fetch claimable positions for history view (skip for futarchy DAOs - different claiming mechanism)
-  const { positions: claimablePositions, refetch: refetchClaimable } = useClaimablePositions(walletAddress, moderatorId || undefined, isFutarchy);
+  // Fetch claimable positions for history view
+  const { positions: claimablePositions, refetch: refetchClaimable } = useClaimablePositions(walletAddress, moderatorId || undefined, isFutarchy, daoPda || undefined);
 
   // Handle claim from history card
   const handleClaimFromHistory = useCallback(async (
     proposalId: number,
     winningMarketIndex: number,
-    vaultPDA: string
+    vaultPDA: string,
+    proposalIsFutarchy?: boolean
   ) => {
     if (!authenticated) {
       login();
@@ -79,6 +80,7 @@ export default function HistoryPage() {
         vaultPDA,
         userAddress: walletAddress,
         signTransaction,
+        isFutarchy: proposalIsFutarchy,
       });
 
       // Refresh all balances after successful claim
@@ -91,7 +93,7 @@ export default function HistoryPage() {
     } finally {
       setClaimingProposalId(null);
     }
-  }, [authenticated, ready, login, walletAddress, signTransaction, refetchClaimable, refetchWalletBalances]);
+  }, [authenticated, ready, login, walletAddress, signTransaction, refetchClaimable, refetchWalletBalances, isFutarchy]);
 
   // Memoize sorted proposals - use endsAt for futarchy, finalizedAt for old system
   const sortedProposals = useMemo(() =>
@@ -127,7 +129,7 @@ export default function HistoryPage() {
             {/* Mobile: Simple vertical stack */}
             <div className="md:hidden flex flex-col gap-4 pb-8">
               {sortedProposals
-                .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed')
+                .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed' || proposal.status === 'Resolved')
                 .map((proposal) => {
                 const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, moderatorId?.toString());
                 const isHovered = hoveredProposalId === proposal.id;
@@ -178,7 +180,8 @@ export default function HistoryPage() {
                         handleClaimFromHistory(
                           proposal.id,
                           proposal.winningMarketIndex,
-                          proposal.vaultPDA
+                          proposal.vaultPDA,
+                          isFutarchy
                         );
                       }
                     }}
@@ -262,7 +265,7 @@ export default function HistoryPage() {
                 style={{ marginLeft: '-16px' }}
               >
                 {sortedProposals
-                  .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed')
+                  .filter(proposal => proposal.status === 'Passed' || proposal.status === 'Failed' || proposal.status === 'Resolved')
                   .map((proposal) => {
                   const proposalContent = getProposalContent(proposal.id, proposal.title, proposal.description, moderatorId?.toString());
                   const isHovered = hoveredProposalId === proposal.id;
@@ -313,7 +316,8 @@ export default function HistoryPage() {
                           handleClaimFromHistory(
                             proposal.id,
                             proposal.winningMarketIndex,
-                            proposal.vaultPDA
+                            proposal.vaultPDA,
+                            isFutarchy
                           );
                         }
                       }}

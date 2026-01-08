@@ -132,8 +132,6 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
   // Handle chart price updates for N-ary markets (from WebSocket)
   const handleChartPriceUpdate = useCallback((update: ChartPriceUpdate) => {
-    console.log('[LivePriceDisplay] Chart price update:', update);
-
     // Mark that we've received real-time WebSocket data
     setHasWebSocketData(true);
 
@@ -162,27 +160,24 @@ export const LivePriceDisplay: React.FC<LivePriceDisplayProps> = ({ proposalId, 
 
     // Subscribe to chart prices for this proposal (includes pass, fail, and spot)
     priceService.subscribeToChartPrices(moderatorId, proposalId, handleChartPriceUpdate);
-    console.log('[LivePriceDisplay] Subscribed to chart prices for proposal', proposalId, 'moderator', moderatorId);
 
     // Cleanup on unmount
     return () => {
       priceService.unsubscribeFromChartPrices(moderatorId, proposalId, handleChartPriceUpdate);
-      console.log('[LivePriceDisplay] Unsubscribed from chart prices for proposal', proposalId, 'moderator', moderatorId);
     };
   }, [proposalId, moderatorId, isFutarchy, handleChartPriceUpdate]);
 
   // Call the callback when prices update (only after WebSocket data received)
   // This prevents flickering from stale chart data before real-time prices arrive
   useEffect(() => {
-    console.log('[LivePriceDisplay] Prices changed:', {
-      prices,
-      hasCallback: !!onPricesUpdate,
-      hasWebSocketData
-    });
-
     // Only propagate prices to parent after WebSocket has sent real-time data
     // This avoids showing stale chart prices that would cause reordering flicker
     if (onPricesUpdate && prices.length > 0 && hasWebSocketData) {
+      console.log('[LivePriceDisplay] Prices changed:', {
+        prices,
+        hasCallback: !!onPricesUpdate,
+        hasWebSocketData
+      });
       onPricesUpdate(prices);
       console.log('[LivePriceDisplay] onPricesUpdate called with WebSocket prices');
     }
