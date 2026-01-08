@@ -284,55 +284,20 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     reconnectAttemptsRef.current = 0;
   }, []);
 
-  // SSE handler for futarchy trades
+  // SSE handler for futarchy trades - refetch to get full data including price/marketCapUsd
   const handleFutarchyTrade = useCallback((trade: MonitorTradeUpdate) => {
     if (!proposalIdRef.current) return;
 
-    // Convert raw amounts to human-readable format
-    // swapAToB: A is base token, B is quote (SOL)
-    // swapAToB = true means base->quote (sell), swapAToB = false means quote->base (buy)
-    const isBaseToQuote = trade.swapAToB;
-    const rawAmountIn = parseFloat(trade.amountIn);
-    const rawAmountOut = parseFloat(trade.amountOut);
+    // Check if this trade already exists to avoid unnecessary refetches
+    const exists = trade.txSignature
+      ? trades.some(t => t.txSignature === trade.txSignature)
+      : false;
 
-    let formattedAmountIn: string;
-    let formattedAmountOut: string;
-
-    if (isBaseToQuote) {
-      // Selling base token for SOL
-      formattedAmountIn = (rawAmountIn / Math.pow(10, baseDecimals)).toString();
-      formattedAmountOut = (rawAmountOut / Math.pow(10, SOL_DECIMALS)).toString();
-    } else {
-      // Buying base token with SOL
-      formattedAmountIn = (rawAmountIn / Math.pow(10, SOL_DECIMALS)).toString();
-      formattedAmountOut = (rawAmountOut / Math.pow(10, baseDecimals)).toString();
+    if (!exists) {
+      // Refetch trades to get full data with price and marketCapUsd from backend
+      fetchTrades();
     }
-
-    const newTrade: Trade = {
-      id: Date.now(), // Generate unique ID
-      timestamp: new Date(trade.timestamp).toISOString(),
-      proposalId: proposalIdRef.current,
-      market: trade.market,
-      userAddress: trade.trader,
-      isBaseToQuote: isBaseToQuote,
-      amountIn: formattedAmountIn,
-      amountOut: formattedAmountOut,
-      price: '0',
-      txSignature: trade.txSignature || null,
-    };
-
-    setTrades(prevTrades => {
-      // Check if trade already exists (by signature)
-      const exists = trade.txSignature
-        ? prevTrades.some(t => t.txSignature === trade.txSignature)
-        : false;
-
-      if (exists) return prevTrades;
-
-      // Add new trade to the beginning and limit to 100 trades
-      return [newTrade, ...prevTrades].slice(0, 100);
-    });
-  }, [baseDecimals]);
+  }, [trades, fetchTrades]);
 
   useEffect(() => {
     if (!proposalId) {
