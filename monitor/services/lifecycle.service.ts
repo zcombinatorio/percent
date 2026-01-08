@@ -20,6 +20,7 @@
 import { Monitor, MonitoredProposal } from '../monitor';
 import { logError } from '../lib/logger';
 import { callApi } from '../lib/api';
+import { SSEManager } from '../lib/sse';
 
 interface StepResult {
   success: boolean;
@@ -41,6 +42,8 @@ export class LifecycleService {
   private monitor: Monitor | null = null;
   private timers = new Map<string, NodeJS.Timeout>();
 
+  constructor(private sse: SSEManager) {}
+
   /**
    * Subscribe to monitor events and schedule finalization for existing proposals
    */
@@ -54,11 +57,32 @@ export class LifecycleService {
     // Listen for new proposals
     monitor.on('proposal:added', (proposal) => {
       this.scheduleFinalization(proposal);
+      this.sse.broadcast('PROPOSAL_LAUNCHED', {
+        proposalPda: proposal.proposalPda,
+        proposalId: proposal.proposalId,
+        name: proposal.name,
+        numOptions: proposal.numOptions,
+        pools: proposal.pools,
+        endTime: proposal.endTime,
+        createdAt: proposal.createdAt,
+        moderatorPda: proposal.moderatorPda,
+        baseMint: proposal.baseMint,
+        quoteMint: proposal.quoteMint,
+        daoPda: proposal.daoPda,
+        spotPool: proposal.spotPool,
+        timestamp: Date.now(),
+      });
     });
 
     // Cancel timer if proposal removed early (e.g., finalized by someone else)
     monitor.on('proposal:removed', (proposal) => {
       this.cancelFinalization(proposal.proposalPda);
+      this.sse.broadcast('PROPOSAL_FINALIZED', {
+        proposalPda: proposal.proposalPda,
+        proposalId: proposal.proposalId,
+        name: proposal.name,
+        timestamp: Date.now(),
+      });
     });
 
     console.log('[Lifecycle] Started');

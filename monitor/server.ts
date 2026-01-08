@@ -170,7 +170,7 @@ const startServer = async () => {
     await monitor.start();
 
     // Start lifecycle service
-    lifecycle = new LifecycleService();
+    lifecycle = new LifecycleService(sse);
     lifecycle.start(monitor);
 
     // Start TWAP cranking service
