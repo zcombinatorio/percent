@@ -199,7 +199,7 @@ export default function HistoryPage() {
                               <CheckCircle2 className="w-3 h-3" />
                             </span>
                           )}
-                          <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} />
+                          <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} proposalPda={proposal.proposalPda} />
                         </div>
                         <div className="text-sm text-[#B0AFAB]">
                           {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {
@@ -335,7 +335,7 @@ export default function HistoryPage() {
                                 <CheckCircle2 className="w-3 h-3" />
                               </span>
                             )}
-                            <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} />
+                            <ProposalVolume proposalId={proposal.id} moderatorId={moderatorId ?? undefined} baseMint={baseMint} isFutarchy={isFutarchy} proposalPda={proposal.proposalPda} />
                           </div>
                           <div className="text-sm text-[#B0AFAB]">
                             {new Date(proposal.finalizedAt).toLocaleDateString('en-US', {

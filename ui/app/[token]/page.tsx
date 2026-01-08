@@ -179,7 +179,7 @@ export default function HomePage() {
     refetch: refetchTrades,
     getTimeAgo,
     getTokenUsed,
-  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol, isFutarchy);
+  } = useTradeHistory(proposal?.id || null, moderatorId ?? undefined, baseMint, tokenSymbol, isFutarchy, proposal?.proposalPda);
 
 
   const handleSelectProposal = useCallback((id: number) => {
@@ -486,6 +486,7 @@ export default function HomePage() {
                         userWalletAddress={walletAddress}
                         tokenSymbol={tokenSymbol}
                         isFutarchy={isFutarchy}
+                        proposalPda={proposal.proposalPda}
                       />
                     </div>
                   </div>
@@ -626,6 +627,7 @@ export default function HomePage() {
                     marketCount={effectiveMarketCount}
                     onPricesUpdate={handlePricesUpdate}
                     onTwapUpdate={handleTwapUpdate}
+                    proposalPda={proposal.proposalPda}
                   />
                 </div>
               </div>

@@ -20,10 +20,14 @@ interface MarketChartProps {
   height?: number | string;
   moderatorId?: number;
   tokenSymbol?: string;  // Token symbol for spot market overlay (e.g., "ZC", "SURF")
-  isFutarchy?: boolean;  // Skip chart for futarchy DAOs
+  isFutarchy?: boolean;  // Use monitor server for futarchy DAOs
+  proposalPda?: string;  // Required for futarchy mode
 }
 
-export default function MarketChart({ proposalId, market, marketLabel, height = 256, moderatorId, tokenSymbol, isFutarchy }: MarketChartProps) {
+export default function MarketChart({ proposalId, market, marketLabel, height = 256, moderatorId, tokenSymbol, isFutarchy, proposalPda }: MarketChartProps) {
+  // DEBUG: Log futarchy state
+  console.log('[MarketChart] isFutarchy:', isFutarchy, 'proposalPda:', proposalPda, 'proposalId:', proposalId, 'market:', market);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,9 +35,10 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
   const [chartRetryCount, setChartRetryCount] = useState(0);
 
   useEffect(() => {
-    // Skip for futarchy DAOs - chart data not yet supported
-    if (isFutarchy) {
+    // Skip futarchy without proposalPda - cannot fetch chart data
+    if (isFutarchy && !proposalPda) {
       setIsLoading(false);
+      setError('Missing proposalPda for futarchy chart');
       return;
     }
 
@@ -48,22 +53,36 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
 
     const initChart = async () => {
       try {
-        // Fetch proposal details to get token/pool addresses
-        const proposal = await api.getProposal(proposalId, moderatorId);
-        if (!proposal) {
-          throw new Error('Failed to fetch proposal details');
-        }
+        let tokenAddress: string | undefined;
+        let poolAddress: string | undefined;
+        let spotPoolAddress: string | undefined;
 
-        // Get token address from vault state via SDK (on-chain)
-        // Market is a numeric index (0-3 for quantum markets)
-        // Use VaultType.Base to get the base vault's conditional mints
-        const { VaultType } = await import('@/lib/programs/vault');
-        const vaultState = await fetchVaultState(new PublicKey(proposal.vaultPDA), VaultType.Base);
-        const tokenAddress = vaultState.conditionalMints[market];
-        const poolAddress = proposal.ammData?.[market]?.pool;
+        // Futarchy mode - use monitor API, no need for proposal details
+        if (isFutarchy && proposalPda) {
+          // Futarchy doesn't need token/pool addresses for chart data
+          // The datafeed will fetch data from monitor API using proposalPda
+          tokenAddress = '';
+          poolAddress = '';
+          spotPoolAddress = undefined;
+        } else {
+          // Old system - fetch proposal details to get token/pool addresses
+          const proposal = await api.getProposal(proposalId, moderatorId);
+          if (!proposal) {
+            throw new Error('Failed to fetch proposal details');
+          }
 
-        if (!tokenAddress || !poolAddress) {
-          throw new Error(`Missing market ${market} addresses`);
+          // Get token address from vault state via SDK (on-chain)
+          // Market is a numeric index (0-3 for quantum markets)
+          // Use VaultType.Base to get the base vault's conditional mints
+          const { VaultType } = await import('@/lib/programs/vault');
+          const vaultState = await fetchVaultState(new PublicKey(proposal.vaultPDA), VaultType.Base);
+          tokenAddress = vaultState.conditionalMints[market];
+          poolAddress = proposal.ammData?.[market]?.pool;
+          spotPoolAddress = proposal.spotPoolAddress;
+
+          if (!tokenAddress || !poolAddress) {
+            throw new Error(`Missing market ${market} addresses`);
+          }
         }
 
         // Wait for TradingView library to load with timeout
@@ -95,9 +114,11 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
           return;
         }
 
-        // Create datafeed with spot pool address for overlay support
-        const datafeed = new ProposalMarketDatafeed(proposalId, market, proposal.spotPoolAddress, moderatorId, marketLabel, tokenSymbol);
-        datafeed.setAddresses(tokenAddress, poolAddress);
+        // Create datafeed with futarchy support
+        const datafeed = new ProposalMarketDatafeed(proposalId, market, spotPoolAddress, moderatorId, marketLabel, tokenSymbol, isFutarchy, proposalPda);
+        if (tokenAddress && poolAddress) {
+          datafeed.setAddresses(tokenAddress, poolAddress);
+        }
 
         // Clear any existing widget
         containerRef.current.innerHTML = '';
@@ -221,8 +242,9 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
           setIsLoading(false);
 
           // Add spot price overlay FIRST (if available)
+          // For futarchy: no spotPoolAddress needed, datafeed fetches from monitor API
           // Note: Compare study automatically switches to percentage mode
-          if (proposal.spotPoolAddress) {
+          if (spotPoolAddress || isFutarchy) {
             try {
               // Use the chart's createStudy method to add a line overlay
               // The 'Compare' study allows adding additional price series
@@ -291,7 +313,7 @@ export default function MarketChart({ proposalId, market, marketLabel, height = 
         }
       }
     };
-  }, [proposalId, market, chartRetryCount, isFutarchy]);
+  }, [proposalId, market, chartRetryCount, isFutarchy, proposalPda]);
 
   return (
     <div style={{ position: 'relative', height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}>

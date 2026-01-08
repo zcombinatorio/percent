@@ -7,10 +7,11 @@ interface ProposalVolumeProps {
   moderatorId?: number | string;
   baseMint?: string | null;
   isFutarchy?: boolean;
+  proposalPda?: string;
 }
 
-export function ProposalVolume({ proposalId, moderatorId, baseMint, isFutarchy }: ProposalVolumeProps) {
-  const { totalVolume, loading } = useTradeHistory(proposalId, moderatorId, baseMint, undefined, isFutarchy);
+export function ProposalVolume({ proposalId, moderatorId, baseMint, isFutarchy, proposalPda }: ProposalVolumeProps) {
+  const { totalVolume, loading } = useTradeHistory(proposalId, moderatorId, baseMint, undefined, isFutarchy, proposalPda);
 
   // Format volume with K/M/B suffixes
   const formatVolume = (volume: number): string => {

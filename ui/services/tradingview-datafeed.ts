@@ -8,8 +8,10 @@ import {
   PeriodParams,
 } from '@/types/charting-library';
 import { getPriceStreamService, TradeUpdate, ChartPriceUpdate } from './price-stream.service';
+import { getMonitorStreamService, MonitorPriceUpdate, MonitorTradeUpdate } from './monitor-stream.service';
 import { BarAggregator } from '@/lib/bar-aggregator';
 import { buildApiUrl } from '@/lib/api-utils';
+import { getFutarchyChartData } from '@/lib/monitor-api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const TOTAL_SUPPLY = 1_000_000_000; // 1 billion tokens
@@ -40,17 +42,34 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   // NOTE: solPrice and totalSupply no longer needed - backend calculates market cap USD
   // All prices (pass, fail, spot) and trade prices are pre-calculated as market cap USD
 
+  // Futarchy mode (uses monitor server instead of old API)
+  private isFutarchy: boolean;
+  private proposalPda?: string;
+
   // Bound handlers stored as properties to ensure same reference for subscribe/unsubscribe
   private boundHandleTradeUpdate = this.handleTradeUpdate.bind(this);
   private boundHandlePriceUpdate = this.handlePriceUpdate.bind(this);
+  private boundHandleFutarchyPriceUpdate = this.handleFutarchyPriceUpdate.bind(this);
+  private boundHandleFutarchyTradeUpdate = this.handleFutarchyTradeUpdate.bind(this);
 
-  constructor(proposalId: number, market: number, spotPoolAddress?: string, moderatorId?: number, marketLabel?: string, tokenSymbol?: string) {
+  constructor(
+    proposalId: number,
+    market: number,
+    spotPoolAddress?: string,
+    moderatorId?: number,
+    marketLabel?: string,
+    tokenSymbol?: string,
+    isFutarchy: boolean = false,
+    proposalPda?: string
+  ) {
     this.proposalId = proposalId;
     this.market = market;
     this.marketLabel = marketLabel || `Coin ${market + 1}`;
     this.spotPoolAddress = spotPoolAddress || null;
     this.moderatorId = moderatorId;
     this.tokenSymbol = tokenSymbol || 'TOKEN';
+    this.isFutarchy = isFutarchy;
+    this.proposalPda = proposalPda;
   }
 
   /**
@@ -148,33 +167,46 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       };
 
       const interval = intervalMap[resolution] || '1m';
-      const fromDate = new Date(from * 1000).toISOString();
-      const toDate = new Date(to * 1000).toISOString();
+      const fromDate = new Date(from * 1000);
+      const toDate = new Date(to * 1000);
 
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
-        interval,
-        from: fromDate,
-        to: toDate
-      }, this.moderatorId);
+      let data: any;
 
-      // Add timeout to prevent hanging forever
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      // Route to monitor API for futarchy, old API otherwise
+      if (this.isFutarchy && this.proposalPda) {
+        const result = await getFutarchyChartData(
+          this.proposalPda,
+          interval as '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
+          fromDate,
+          toDate
+        );
+        data = result;
+      } else {
+        const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
+          interval,
+          from: fromDate.toISOString(),
+          to: toDate.toISOString()
+        }, this.moderatorId);
 
-      let response: Response;
-      try {
-        response = await fetch(url, { signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
+        // Add timeout to prevent hanging forever
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        let response: Response;
+        try {
+          response = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        data = await response.json();
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data.data || data.data.length === 0) {
+      if (!data || !data.data || data.data.length === 0) {
         onResult([], { noData: true });
         return;
       }
@@ -228,7 +260,21 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
 
     this.subscribers.set(listenerGuid, { callback: onTick, aggregator, isSpotMarket });
 
-    // Subscribe to both trade and price updates via WebSocket
+    // Futarchy mode uses MonitorStreamService (SSE)
+    if (this.isFutarchy && this.proposalPda) {
+      const monitorService = getMonitorStreamService();
+
+      if (!isSpotMarket) {
+        // Subscribe to trade updates for conditional markets
+        monitorService.subscribeToTrades(this.proposalPda, this.boundHandleFutarchyTradeUpdate);
+      }
+
+      // Subscribe to price updates
+      monitorService.subscribeToPrices(this.proposalPda, this.boundHandleFutarchyPriceUpdate);
+      return;
+    }
+
+    // Old system uses WebSocket via PriceStreamService
     const priceService = getPriceStreamService();
 
     // moderatorId is required for subscriptions
@@ -266,33 +312,45 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
       };
 
       const interval = intervalMap[resolution] || '1m';
-      const toDate = new Date().toISOString();
-      const fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // Last 24 hours
+      const toDate = new Date();
+      const fromDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
 
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
-        interval,
-        from: fromDate,
-        to: toDate
-      }, this.moderatorId);
+      let data: any;
 
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      // Use monitor API for futarchy, old API otherwise
+      if (this.isFutarchy && this.proposalPda) {
+        data = await getFutarchyChartData(
+          this.proposalPda,
+          interval as '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
+          fromDate,
+          toDate
+        );
+      } else {
+        const url = buildApiUrl(API_BASE_URL, `/api/history/${this.proposalId}/chart`, {
+          interval,
+          from: fromDate.toISOString(),
+          to: toDate.toISOString()
+        }, this.moderatorId);
 
-      let response: Response;
-      try {
-        response = await fetch(url, { signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        let response: Response;
+        try {
+          response = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          return;
+        }
+
+        data = await response.json();
       }
 
-      if (!response.ok) {
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!data.data || data.data.length === 0) {
+      if (!data || !data.data || data.data.length === 0) {
         return;
       }
 
@@ -388,16 +446,94 @@ export class ProposalMarketDatafeed implements IBasicDataFeed {
   }
 
   /**
+   * Handle incoming price updates from monitor SSE (futarchy)
+   */
+  private handleFutarchyPriceUpdate(priceUpdate: MonitorPriceUpdate): void {
+    // Update all subscribers that match this market
+    for (const [_listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
+      // Match spot market subscribers to spot prices (-1), others to their market
+      const marketMatches = isSpotMarket
+        ? priceUpdate.market === -1
+        : priceUpdate.market === this.market;
+
+      if (!marketMatches) {
+        continue;
+      }
+
+      try {
+        // Use marketCapUsd from monitor (already in USD)
+        const updatedBar = aggregator.updateBar(
+          priceUpdate.marketCapUsd,
+          0, // No volume for price updates
+          priceUpdate.timestamp
+        );
+
+        callback(updatedBar);
+      } catch (error) {
+        console.error('[TradingView Datafeed] Error updating bar from futarchy price:', error);
+      }
+    }
+  }
+
+  /**
+   * Handle incoming trade updates from monitor SSE (futarchy)
+   */
+  private handleFutarchyTradeUpdate(trade: MonitorTradeUpdate): void {
+    // Filter for our market only
+    if (trade.market !== this.market) {
+      return;
+    }
+
+    // Update all active subscribers (skip spot market subscribers)
+    for (const [_listenerGuid, { callback, aggregator, isSpotMarket }] of this.subscribers) {
+      if (isSpotMarket) {
+        continue;
+      }
+
+      try {
+        // For trades, we use amountOut as volume
+        // Note: Trade doesn't have marketCapUsd, so we keep current price from last update
+        const volume = parseFloat(trade.amountOut);
+        const currentBar = aggregator.getCurrentBar(trade.timestamp);
+        const currentPrice = currentBar?.close || 0;
+
+        if (currentPrice > 0) {
+          const updatedBar = aggregator.updateBar(
+            currentPrice, // Keep current price
+            volume,
+            trade.timestamp
+          );
+
+          callback(updatedBar);
+        }
+      } catch (error) {
+        console.error('[TradingView Datafeed] Error updating bar from futarchy trade:', error);
+      }
+    }
+  }
+
+  /**
    * Unsubscribe from real-time updates
    */
   unsubscribeBars(listenerGuid: string): void {
     this.subscribers.delete(listenerGuid);
 
     // If no more subscribers, unsubscribe from trades and prices
-    if (this.subscribers.size === 0 && this.moderatorId !== undefined) {
-      const priceService = getPriceStreamService();
-      priceService.unsubscribeFromTrades(this.moderatorId, this.proposalId, this.boundHandleTradeUpdate);
-      priceService.unsubscribeFromChartPrices(this.moderatorId, this.proposalId, this.boundHandlePriceUpdate);
+    if (this.subscribers.size === 0) {
+      // Futarchy mode
+      if (this.isFutarchy && this.proposalPda) {
+        const monitorService = getMonitorStreamService();
+        monitorService.unsubscribeFromTrades(this.proposalPda, this.boundHandleFutarchyTradeUpdate);
+        monitorService.unsubscribeFromPrices(this.proposalPda, this.boundHandleFutarchyPriceUpdate);
+        return;
+      }
+
+      // Old system
+      if (this.moderatorId !== undefined) {
+        const priceService = getPriceStreamService();
+        priceService.unsubscribeFromTrades(this.moderatorId, this.proposalId, this.boundHandleTradeUpdate);
+        priceService.unsubscribeFromChartPrices(this.moderatorId, this.proposalId, this.boundHandlePriceUpdate);
+      }
     }
   }
 }

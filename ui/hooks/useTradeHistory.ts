@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTokenPrices } from './useTokenPrices';
 import { buildApiUrl } from '@/lib/api-utils';
+import { getFutarchyTrades, FutarchyTradeRecord } from '@/lib/monitor-api';
+import { getMonitorStreamService, MonitorTradeUpdate } from '@/services/monitor-stream.service';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 const WS_URL = process.env.NEXT_PUBLIC_WS_PRICE_URL || 'ws://localhost:9091';
@@ -29,7 +31,10 @@ interface TradeHistoryResponse {
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string, isFutarchy?: boolean) {
+export function useTradeHistory(proposalId: number | null, moderatorId?: number | string, baseMint?: string | null, tokenSymbol?: string, isFutarchy?: boolean, proposalPda?: string) {
+  // DEBUG: Log futarchy state
+  console.log('[useTradeHistory] isFutarchy:', isFutarchy, 'proposalPda:', proposalPda, 'proposalId:', proposalId);
+
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,34 +45,62 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   const reconnectAttemptsRef = useRef(0);
   const proposalIdRef = useRef(proposalId);
   const moderatorIdRef = useRef(moderatorId);
+  const proposalPdaRef = useRef(proposalPda);
 
   const fetchTrades = useCallback(async () => {
-    // Skip for futarchy DAOs - trade history not yet supported
-    if (proposalId === null || isFutarchy) return;
+    if (proposalId === null) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/trades`, { limit: 100 }, moderatorId);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Failed to fetch trades');
-      }
+      // Use monitor API for futarchy, old API otherwise
+      if (isFutarchy && proposalPda) {
+        const result = await getFutarchyTrades(proposalPda, undefined, undefined, 100);
+        if (!result) {
+          throw new Error('Failed to fetch trades from monitor');
+        }
 
-      const data: TradeHistoryResponse = await response.json();
-      // Sort by timestamp descending (most recent first)
-      const sortedTrades = data.data.sort((a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      setTrades(sortedTrades);
+        // Transform futarchy trades to common Trade format
+        const transformedTrades: Trade[] = result.data.map((trade: FutarchyTradeRecord) => ({
+          id: trade.id,
+          timestamp: trade.timestamp,
+          proposalId: proposalId,
+          market: trade.market,
+          userAddress: trade.trader,
+          isBaseToQuote: trade.isBaseToQuote,
+          amountIn: trade.amountIn,
+          amountOut: trade.amountOut,
+          price: '0', // Not available in futarchy trades
+          txSignature: trade.txSignature || null,
+        }));
+
+        // Sort by timestamp descending (most recent first)
+        const sortedTrades = transformedTrades.sort((a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        setTrades(sortedTrades);
+      } else {
+        const url = buildApiUrl(API_BASE_URL, `/api/history/${proposalId}/trades`, { limit: 100 }, moderatorId);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Failed to fetch trades');
+        }
+
+        const data: TradeHistoryResponse = await response.json();
+        // Sort by timestamp descending (most recent first)
+        const sortedTrades = data.data.sort((a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        setTrades(sortedTrades);
+      }
     } catch (err) {
       console.error('Error fetching trades:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch trades');
     } finally {
       setLoading(false);
     }
-  }, [proposalId, moderatorId, isFutarchy]);
+  }, [proposalId, moderatorId, isFutarchy, proposalPda]);
 
   // Update refs
   useEffect(() => {
@@ -77,6 +110,10 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
   useEffect(() => {
     moderatorIdRef.current = moderatorId;
   }, [moderatorId]);
+
+  useEffect(() => {
+    proposalPdaRef.current = proposalPda;
+  }, [proposalPda]);
 
   // WebSocket connection for real-time trade updates
   const connectWebSocket = useCallback(() => {
@@ -223,14 +260,60 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     reconnectAttemptsRef.current = 0;
   }, []);
 
+  // SSE handler for futarchy trades
+  const handleFutarchyTrade = useCallback((trade: MonitorTradeUpdate) => {
+    if (!proposalIdRef.current) return;
+
+    const newTrade: Trade = {
+      id: Date.now(), // Generate unique ID
+      timestamp: new Date(trade.timestamp).toISOString(),
+      proposalId: proposalIdRef.current,
+      market: trade.market,
+      userAddress: trade.trader,
+      isBaseToQuote: !trade.swapAToB, // A is Quote, so swapAToB=true means quote->base (sell)
+      amountIn: trade.amountIn,
+      amountOut: trade.amountOut,
+      price: '0',
+      txSignature: trade.txSignature || null,
+    };
+
+    setTrades(prevTrades => {
+      // Check if trade already exists (by signature)
+      const exists = trade.txSignature
+        ? prevTrades.some(t => t.txSignature === trade.txSignature)
+        : false;
+
+      if (exists) return prevTrades;
+
+      // Add new trade to the beginning and limit to 100 trades
+      return [newTrade, ...prevTrades].slice(0, 100);
+    });
+  }, []);
+
   useEffect(() => {
-    // Skip for futarchy DAOs
-    if (!proposalId || isFutarchy) {
+    if (!proposalId) {
       setTrades([]);
       disconnectWebSocket();
       return;
     }
 
+    // Futarchy mode uses MonitorStreamService (SSE)
+    if (isFutarchy && proposalPda) {
+      // Fetch initial trades
+      fetchTrades();
+
+      // Subscribe to SSE for real-time trades
+      const monitorService = getMonitorStreamService();
+      monitorService.subscribeToTrades(proposalPda, handleFutarchyTrade);
+      setWsStatus('connected');
+
+      return () => {
+        monitorService.unsubscribeFromTrades(proposalPda, handleFutarchyTrade);
+        setWsStatus('disconnected');
+      };
+    }
+
+    // Old system uses WebSocket
     // Fetch initial trades
     fetchTrades();
 
@@ -240,7 +323,7 @@ export function useTradeHistory(proposalId: number | null, moderatorId?: number 
     return () => {
       disconnectWebSocket();
     };
-  }, [proposalId, moderatorId, isFutarchy, fetchTrades, connectWebSocket, disconnectWebSocket]);
+  }, [proposalId, moderatorId, isFutarchy, proposalPda, fetchTrades, connectWebSocket, disconnectWebSocket, handleFutarchyTrade]);
 
   // Memoized helper function to format time ago
   const getTimeAgo = useCallback((timestamp: string) => {

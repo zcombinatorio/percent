@@ -18,6 +18,7 @@ interface ChartBoxProps {
   userWalletAddress?: string | null;
   tokenSymbol?: string;  // Token symbol for spot market overlay (e.g., "ZC", "SURF")
   isFutarchy?: boolean;  // Skip old system API calls for futarchy DAOs
+  proposalPda?: string;  // Required for futarchy mode
 }
 
 export function ChartBox({
@@ -32,7 +33,8 @@ export function ChartBox({
   className,
   userWalletAddress,
   tokenSymbol,
-  isFutarchy
+  isFutarchy,
+  proposalPda
 }: ChartBoxProps) {
   // Get display label for the selected market (strip URLs and trim)
   const selectedLabel = marketLabels?.[selectedMarketIndex]?.replace(/(https?:\/\/[^\s]+)/gi, '').trim() || `Coin ${selectedMarketIndex + 1}`;
@@ -118,11 +120,11 @@ export function ChartBox({
         <div className="bg-[#121212] border border-[#191919] overflow-hidden rounded-[6px] flex-1 flex flex-col">
           {/* Mobile: 400px */}
           <div className="md:hidden">
-            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height={480} moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} />
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height={480} moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} proposalPda={proposalPda} />
           </div>
           {/* Desktop: fills available height */}
           <div className="hidden md:flex md:flex-1">
-            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height="100%" moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} />
+            <MarketChart proposalId={proposalId} market={selectedMarketIndex} marketLabel={selectedLabel} height="100%" moderatorId={moderatorId} tokenSymbol={tokenSymbol} isFutarchy={isFutarchy} proposalPda={proposalPda} />
           </div>
         </div>
       ) : (

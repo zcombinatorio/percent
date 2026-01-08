@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { buildApiUrl } from '@/lib/api-utils';
+import { getFutarchyVolume } from '@/lib/monitor-api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 

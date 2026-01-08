@@ -126,7 +126,10 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
   const hasTwapData = marketCaps.some(cap => cap != null);
   const hasLivePrices = livePrices.length > 0 && livePrices.every(price => price != null);
   const hasSolPrice = solPrice != null;
-  const hasAllData = hasTwapData && hasLivePrices && hasSolPrice;
+  // For futarchy mode, we may not have live prices - use TWAP data alone if available
+  const hasAllData = hasTwapData && hasSolPrice && (hasLivePrices || marketCaps.every(cap => cap != null));
+
+  console.log('[ModeToggle] hasAllData:', hasAllData, 'hasTwapData:', hasTwapData, 'hasLivePrices:', hasLivePrices, 'hasSolPrice:', hasSolPrice);
 
   // Convert current TWAPs from SOL to USD (for display)
   const marketCapsUsd = marketCaps.map(cap =>
@@ -135,9 +138,13 @@ export function ModeToggle({ marketLabels, marketCaps, livePrices, timeElapsedPe
 
   // Calculate expected final TWAP for each market (for sorting)
   // Formula: expectedFinal = currentTwap × elapsed% + spotPrice × remaining%
+  // If no live prices available (futarchy mode), use TWAP values directly
   const expectedFinalTwaps = marketCaps.map((twap, i) => {
     const spotPrice = livePrices[i];
-    if (twap == null || spotPrice == null) return null;
+    if (twap == null) return null;
+
+    // If no spot price, use TWAP as the expected final (no projection)
+    if (spotPrice == null) return twap;
 
     const remainingPercent = 1 - timeElapsedPercent;
     return twap * timeElapsedPercent + spotPrice * remainingPercent;
