@@ -42,22 +42,30 @@ export class LifecycleService {
   private monitor: Monitor | null = null;
   private timers = new Map<string, NodeJS.Timeout>();
 
-  constructor(private sse: SSEManager) {}
+  constructor(
+    private sse: SSEManager,
+    private listenOnly = false
+  ) {}
 
   /**
    * Subscribe to monitor events and schedule finalization for existing proposals
    */
   start(monitor: Monitor) {
     this.monitor = monitor;
-    // Schedule existing proposals
-    for (const proposal of monitor.getMonitored()) {
-      this.scheduleFinalization(proposal);
+
+    // Schedule existing proposals (skip in listen-only mode)
+    if (!this.listenOnly) {
+      for (const proposal of monitor.getMonitored()) {
+        this.scheduleFinalization(proposal);
+      }
     }
 
     // Listen for new proposals
     monitor.on('proposal:added', (proposal) => {
-      this.scheduleFinalization(proposal);
-      this.sse.broadcast('PROPOSAL_LAUNCHED', {
+      if (!this.listenOnly) {
+        this.scheduleFinalization(proposal);
+      }
+      this.sse.broadcast('PROPOSAL_TRACKED', {
         proposalPda: proposal.proposalPda,
         proposalId: proposal.proposalId,
         name: proposal.name,
@@ -77,7 +85,7 @@ export class LifecycleService {
     // Cancel timer if proposal removed early (e.g., finalized by someone else)
     monitor.on('proposal:removed', (proposal) => {
       this.cancelFinalization(proposal.proposalPda);
-      this.sse.broadcast('PROPOSAL_FINALIZED', {
+      this.sse.broadcast('PROPOSAL_REMOVED', {
         proposalPda: proposal.proposalPda,
         proposalId: proposal.proposalId,
         name: proposal.name,
@@ -85,7 +93,7 @@ export class LifecycleService {
       });
     });
 
-    console.log('[Lifecycle] Started');
+    console.log(`[Lifecycle] Started${this.listenOnly ? ' (listen-only)' : ''}`);
   }
 
   stop() {

@@ -50,6 +50,7 @@ const args = process.argv.slice(2).reduce((acc, arg, i, arr) => {
 const PORT = Number(args.port) || 4000;
 const NO_AUTH = !!args['no-auth'];
 const DEV = !!args.dev;
+const LISTEN_ONLY = !!args.listen;
 
 // ============================================================================
 // Express Setup
@@ -141,12 +142,14 @@ const printStartupBanner = () => {
   console.log('Options:');
   console.log(`  --port <n>     Server port (default: 4000)`);
   console.log(`  --dev          Dev mode`);
-  console.log(`  --no-auth      Disable API key auth\n`);
+  console.log(`  --no-auth      Disable API key auth`);
+  console.log(`  --listen       Listen-only mode (no writes, no cranking, no finalization)\n`);
 
   console.log('Config:');
   console.log(`  Port:          ${PORT}`);
   console.log(`  Auth:          ${NO_AUTH ? 'disabled' : 'enabled'}`);
-  console.log(`  Mode:          ${DEV ? 'development' : 'production'}\n`);
+  console.log(`  Mode:          ${DEV ? 'development' : 'production'}`);
+  console.log(`  Listen-only:   ${LISTEN_ONLY ? 'enabled' : 'disabled'}\n`);
 
   console.log('Endpoints:');
   console.log(`  GET  /status`);
@@ -178,15 +181,17 @@ const startServer = async () => {
     await monitor.start();
 
     // Start lifecycle service
-    lifecycle = new LifecycleService(sse);
+    lifecycle = new LifecycleService(sse, LISTEN_ONLY);
     lifecycle.start(monitor);
 
-    // Start TWAP cranking service
-    twap = new TWAPService(sse);
-    twap.start(monitor);
+    // Start TWAP cranking service (skip in listen-only mode)
+    if (!LISTEN_ONLY) {
+      twap = new TWAPService(sse);
+      twap.start(monitor);
+    }
 
     // Start price SSE service
-    price = new PriceService(sse, process.env.SOLANA_RPC_URL);
+    price = new PriceService(sse, process.env.SOLANA_RPC_URL, LISTEN_ONLY);
     price.start(monitor);
 
     app.listen(PORT, () => {

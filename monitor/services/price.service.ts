@@ -57,7 +57,11 @@ export class PriceService {
   private readonly SOL_PRICE_POLL_INTERVAL_MS = 30_000;
   private readonly SOL_USDC_DLMM_POOL = 'HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR';
 
-  constructor(private sse: SSEManager, rpcUrl: string) {
+  constructor(
+    private sse: SSEManager,
+    rpcUrl: string,
+    private listenOnly = false
+  ) {
     this.connection = new Connection(rpcUrl, 'confirmed');
     this.cpAmm = new CpAmm(this.connection);
   }
@@ -80,7 +84,7 @@ export class PriceService {
       void this.startTracking(p);
     }
 
-    console.log('[Price] Started');
+    console.log(`[Price] Started${this.listenOnly ? ' (listen-only)' : ''}`);
   }
 
   /** Stop price tracking and cleanup */
@@ -266,18 +270,20 @@ export class PriceService {
   // ─── Event Handlers ──────────────────────────────────────────────
 
   private async onPriceChange(proposalPda: string, market: number, price: number, marketCapUsd: number) {
-    // Record to DB
-    try {
-      await HistoryService.recordCmbPrice({
-        proposalPda,
-        market,
-        price: new Decimal(price),
-        marketCapUsd: new Decimal(marketCapUsd),
-      });
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Price] Error recording price to DB:`, errMsg);
-      logError('price', { action: 'record_price', proposalPda, market, error: errMsg });
+    // Record to DB (skip in listen-only mode)
+    if (!this.listenOnly) {
+      try {
+        await HistoryService.recordCmbPrice({
+          proposalPda,
+          market,
+          price: new Decimal(price),
+          marketCapUsd: new Decimal(marketCapUsd),
+        });
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[Price] Error recording price to DB:`, errMsg);
+        logError('price', { action: 'record_price', proposalPda, market, error: errMsg });
+      }
     }
 
     // Broadcast SSE
@@ -304,22 +310,24 @@ export class PriceService {
       timestamp: Date.now(),
     });
 
-    // 2. Record trade to DB
-    try {
-      await HistoryService.recordCmbTrade({
-        proposalPda: swap.proposalPda,
-        market: swap.market,
-        trader: swap.trader,
-        isBaseToQuote: !swap.swapAToB, // A is Quote
-        amountIn: new Decimal(swap.amountIn.toString()),
-        amountOut: new Decimal(swap.amountOut.toString()),
-        feeAmount: new Decimal(swap.feeAmount.toString()),
-        txSignature: swap.txSignature,
-      });
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Price] Error recording trade to DB:`, errMsg);
-      logError('price', { action: 'record_trade', proposalPda: swap.proposalPda, error: errMsg });
+    // 2. Record trade to DB (skip in listen-only mode)
+    if (!this.listenOnly) {
+      try {
+        await HistoryService.recordCmbTrade({
+          proposalPda: swap.proposalPda,
+          market: swap.market,
+          trader: swap.trader,
+          isBaseToQuote: !swap.swapAToB, // A is Quote
+          amountIn: new Decimal(swap.amountIn.toString()),
+          amountOut: new Decimal(swap.amountOut.toString()),
+          feeAmount: new Decimal(swap.feeAmount.toString()),
+          txSignature: swap.txSignature,
+        });
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[Price] Error recording trade to DB:`, errMsg);
+        logError('price', { action: 'record_trade', proposalPda: swap.proposalPda, error: errMsg });
+      }
     }
 
     // 3. Fetch pool state and calculate new price

@@ -23,8 +23,8 @@ const eventColors: Record<string, string> = {
   PRICE_UPDATE: colors.cyan,
   COND_SWAP: colors.yellow,
   TWAP_UPDATE: colors.magenta,
-  PROPOSAL_LAUNCHED: colors.blue,
-  PROPOSAL_FINALIZED: colors.blue,
+  PROPOSAL_TRACKED: colors.blue,
+  PROPOSAL_REMOVED: colors.blue,
 };
 
 console.log(`${colors.dim}Connecting to ${url}...${colors.reset}\n`);
