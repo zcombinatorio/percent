@@ -32,6 +32,7 @@ import { Monitor } from './monitor';
 import { LifecycleService } from './services/lifecycle.service';
 import { TWAPService } from './services/twap.service';
 import { PriceService } from './services/price.service';
+import historyRoutes from './routes/history';
 
 // ============================================================================
 // CLI Arguments
@@ -64,6 +65,9 @@ app.get('/events', (req, res) => {
   const client = sse.connect(req, res);
   client.send('CONNECTED', { clientId: client.clientId });
 });
+
+// History routes (public, no auth required)
+app.use('/api/history', historyRoutes);
 
 // Auth middleware for other endpoints
 if (!NO_AUTH) app.use(requireAdminKey);
@@ -148,7 +152,11 @@ const printStartupBanner = () => {
   console.log(`  GET  /status`);
   console.log(`  GET  /logs?file={${LOG_FILES.join('|')}}`);
   console.log(`  POST /clean?file={${LOG_FILES.join('|')}}`);
-  console.log(`  GET  /events (SSE)\n`);
+  console.log(`  GET  /events (SSE)`);
+  console.log(`  GET  /api/history/:pda/twap`);
+  console.log(`  GET  /api/history/:pda/trades`);
+  console.log(`  GET  /api/history/:pda/volume`);
+  console.log(`  GET  /api/history/:pda/chart\n`);
 
   console.log('========================================\n');
 };

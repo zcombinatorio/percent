@@ -26,6 +26,7 @@ import {
   ICmbPriceHistory,
   ICmbTWAPHistory,
   ICmbTradeHistory,
+  ICmbChartDataPoint,
 } from '../types/history.interface';
 import { Decimal } from 'decimal.js';
 
@@ -687,5 +688,225 @@ export class HistoryService {
       feeAmount: row.fee_amount ? new Decimal(row.fee_amount) : undefined,
       txSignature: row.tx_signature,
     }));
+  }
+
+  /**
+   * Retrieves total trade volume for a futarchy proposal, grouped by market
+   * @param proposalPda - Proposal PDA address
+   * @param from - Optional start date filter
+   * @param to - Optional end date filter
+   * @returns Object with volume per market and total volume
+   */
+  static async getCmbTradeVolume(
+    proposalPda: string,
+    from?: Date,
+    to?: Date
+  ): Promise<{
+    byMarket: { market: number; volume: Decimal; tradeCount: number }[];
+    totalVolume: Decimal;
+    totalTradeCount: number;
+  }> {
+    const pool = getPool();
+
+    // Calculate volume in SOL terms:
+    // - Buy (is_base_to_quote = false): user pays SOL, so amount_in is SOL
+    // - Sell (is_base_to_quote = true): user receives SOL, so amount_out is SOL
+    let query = `
+      SELECT
+        market,
+        SUM(CASE WHEN is_base_to_quote THEN amount_out ELSE amount_in END) as volume,
+        COUNT(*) as trade_count
+      FROM cmb_trade_history
+      WHERE proposal_pda = $1
+    `;
+    const params: (string | Date)[] = [proposalPda];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += ` GROUP BY market ORDER BY market`;
+
+    const result = await pool.query(query, params);
+
+    const byMarket = result.rows.map(row => ({
+      market: row.market,
+      volume: new Decimal(row.volume || 0),
+      tradeCount: parseInt(row.trade_count),
+    }));
+
+    const totalVolume = byMarket.reduce(
+      (sum, m) => sum.plus(m.volume),
+      new Decimal(0)
+    );
+
+    const totalTradeCount = byMarket.reduce(
+      (sum, m) => sum + m.tradeCount,
+      0
+    );
+
+    return { byMarket, totalVolume, totalTradeCount };
+  }
+
+  /**
+   * Retrieves aggregated chart data for a futarchy proposal
+   * OHLCV data for displaying candlestick charts
+   * @param proposalPda - Proposal PDA address
+   * @param interval - Time interval for aggregation buckets
+   * @param from - Optional start date filter
+   * @param to - Optional end date filter
+   * @returns Array of chart data points with OHLCV data
+   */
+  static async getCmbChartData(
+    proposalPda: string,
+    interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
+    from?: Date,
+    to?: Date
+  ): Promise<ICmbChartDataPoint[]> {
+    const pool = getPool();
+
+    const intervalSeconds = HistoryService.parseInterval(interval);
+
+    // Get aggregated price data with window functions
+    // Uses market_cap_usd if available, otherwise falls back to price
+    let query = `
+      WITH bucketed_prices AS (
+        SELECT
+          to_timestamp(floor(extract(epoch from timestamp) / ${intervalSeconds}) * ${intervalSeconds}) as bucket,
+          market,
+          COALESCE(market_cap_usd, price) as price,
+          timestamp,
+          ROW_NUMBER() OVER (
+            PARTITION BY market,
+              floor(extract(epoch from timestamp) / ${intervalSeconds})
+            ORDER BY timestamp ASC
+          ) as first_row,
+          ROW_NUMBER() OVER (
+            PARTITION BY market,
+              floor(extract(epoch from timestamp) / ${intervalSeconds})
+            ORDER BY timestamp DESC
+          ) as last_row
+        FROM cmb_price_history
+        WHERE proposal_pda = $1
+    `;
+
+    const params: (string | Date)[] = [proposalPda];
+
+    if (from) {
+      params.push(from);
+      query += ` AND timestamp >= $${params.length}`;
+    }
+
+    if (to) {
+      params.push(to);
+      query += ` AND timestamp <= $${params.length}`;
+    }
+
+    query += `
+      )
+      SELECT
+        bucket,
+        market,
+        MAX(CASE WHEN first_row = 1 THEN price END) as open,
+        MAX(price) as high,
+        MIN(price) as low,
+        MAX(CASE WHEN last_row = 1 THEN price END) as close
+      FROM bucketed_prices
+      GROUP BY bucket, market
+      ORDER BY bucket DESC
+    `;
+
+    const priceResult = await pool.query(query, params);
+
+    // Get trade volume data
+    let volumeQuery = `
+      SELECT
+        to_timestamp(floor(extract(epoch from timestamp) / ${intervalSeconds}) * ${intervalSeconds}) as bucket,
+        market,
+        SUM(amount_in) as volume
+      FROM cmb_trade_history
+      WHERE proposal_pda = $1
+    `;
+
+    if (from) {
+      volumeQuery += ` AND timestamp >= $2`;
+    }
+    if (to) {
+      const toParam = from ? 3 : 2;
+      volumeQuery += ` AND timestamp <= $${toParam}`;
+    }
+
+    volumeQuery += `
+      GROUP BY bucket, market
+      ORDER BY bucket DESC
+    `;
+
+    const volumeResult = await pool.query(volumeQuery, params);
+
+    // Create volume lookup map by timestamp and market
+    const volumeMap = new Map<string, number>();
+    for (const row of volumeResult.rows) {
+      const key = `${new Date(row.bucket).getTime()}_${row.market}`;
+      volumeMap.set(key, parseFloat(row.volume));
+    }
+
+    // Convert price data to chart points with OHLCV
+    const chartData: ICmbChartDataPoint[] = priceResult.rows.map(row => {
+      const timestamp = new Date(row.bucket).getTime();
+      const volumeKey = `${timestamp}_${row.market}`;
+      return {
+        timestamp,
+        proposalPda,
+        market: row.market,
+        open: parseFloat(row.open),
+        high: parseFloat(row.high),
+        low: parseFloat(row.low),
+        close: parseFloat(row.close),
+        volume: volumeMap.get(volumeKey) || 0,
+      };
+    });
+
+    // Sort by timestamp ascending for forward-fill processing
+    const sortedData = chartData.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Forward-fill: ensure each candle's open equals the previous candle's close
+    // Group by market to handle multiple markets separately
+    const marketGroups = new Map<number, ICmbChartDataPoint[]>();
+    for (const point of sortedData) {
+      if (!marketGroups.has(point.market)) {
+        marketGroups.set(point.market, []);
+      }
+      marketGroups.get(point.market)!.push(point);
+    }
+
+    // Apply forward-fill within each market
+    for (const [_market, points] of marketGroups) {
+      for (let i = 1; i < points.length; i++) {
+        const prevClose = points[i - 1].close;
+        const currentOpen = points[i].open;
+
+        // If there's a gap, forward-fill the open with previous close
+        if (prevClose !== currentOpen) {
+          points[i].open = prevClose;
+          // Also adjust low if the new open is lower than recorded low
+          if (prevClose < points[i].low) {
+            points[i].low = prevClose;
+          }
+          // Also adjust high if the new open is higher than recorded high
+          if (prevClose > points[i].high) {
+            points[i].high = prevClose;
+          }
+        }
+      }
+    }
+
+    // Return sorted descending (most recent first)
+    return sortedData.sort((a, b) => b.timestamp - a.timestamp);
   }
 }

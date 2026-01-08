@@ -122,3 +122,17 @@ export interface ICmbTradeHistory {
   feeAmount?: Decimal;
   txSignature?: string;
 }
+
+/**
+ * Cmb Chart data point for visualization (OHLCV)
+ */
+export interface ICmbChartDataPoint {
+  timestamp: number;              // Unix timestamp in milliseconds
+  proposalPda: string;
+  market: number;                 // -1 for spot, 0/1/... for conditional pools
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
