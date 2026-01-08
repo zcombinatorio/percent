@@ -23,7 +23,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import ExploreHeader from '@/components/ExploreHeader';
-import { useAllProposals } from '@/hooks/useAllProposals';
+import { useOldSystemProposals } from '@/hooks/useAllProposals';
 import { api, ZcombinatorDAO } from '@/lib/api';
 
 interface Project {
@@ -52,7 +52,8 @@ function getTokenSlug(moderatorId: number): string {
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const { proposals, loading: oldSystemLoading, error: oldSystemError } = useAllProposals();
+  // Only fetch old system proposals - futarchy DAOs use stats from /dao endpoint
+  const { proposals, loading: oldSystemLoading, error: oldSystemError } = useOldSystemProposals();
 
   // Fetch futarchy DAOs from zcombinator (new system)
   const [futarchyDaos, setFutarchyDaos] = useState<ZcombinatorDAO[]>([]);

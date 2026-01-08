@@ -50,6 +50,9 @@ export interface ZcombinatorDAO {
   withdrawal_percentage: number;
   treasury_vault: string;
   mint_vault: string;
+  // Token decimals from on-chain data
+  token_decimals: number;
+  quote_decimals: number;
   stats: {
     proposerCount: number;
     childDaoCount: number;
@@ -107,8 +110,9 @@ class GovernanceAPI {
 
   /**
    * Fetch proposals from old system (ZC, OOGWAY, SURF)
+   * Used by projects page for counting proposals per old system project
    */
-  private async getOldSystemProposals(): Promise<Array<ProposalListItem & {
+  async getOldSystemProposals(): Promise<Array<ProposalListItem & {
     moderatorId: number;
     tokenTicker: string;
     tokenIcon: string | null;
@@ -164,6 +168,9 @@ class GovernanceAPI {
         endsAt: number | null;
         finalizedAt: number | null;
         metadataCid: string | null;
+        marketBias: number;
+        baseDecimals: number;
+        quoteDecimals: number;
         daoPda: string;
         daoName: string;
         tokenMint: string;
@@ -185,11 +192,11 @@ class GovernanceAPI {
           finalizedAt: p.finalizedAt || 0,
           winningMarketIndex: p.winningIndex,
           winningMarketLabel: winningLabel,
-          passThresholdBps: 5000,
+          passThresholdBps: p.marketBias,
           markets: options.length,
           marketLabels: options,
-          baseDecimals: 6,
-          quoteDecimals: 9,
+          baseDecimals: p.baseDecimals,
+          quoteDecimals: p.quoteDecimals,
           vaultPDA: p.vault,
           proposalPda: p.proposalPda,
           metadataCid: p.metadataCid,
@@ -241,8 +248,8 @@ class GovernanceAPI {
             ticker: dao.dao_name,
             baseMint: dao.token_mint,
             quoteMint: dao.quote_mint || 'So11111111111111111111111111111111111111112',
-            baseDecimals: 6, // Default for most tokens
-            quoteDecimals: 9, // SOL decimals
+            baseDecimals: dao.token_decimals,
+            quoteDecimals: dao.quote_decimals,
             moderatorId: dao.id,
             icon: dao.icon,
             // Futarchy-specific fields
@@ -344,6 +351,9 @@ class GovernanceAPI {
         endsAt: number | null;
         finalizedAt: number | null;
         metadataCid: string | null;
+        marketBias: number;
+        baseDecimals: number;
+        quoteDecimals: number;
       }> };
 
       // Filter out Setup proposals (not yet launched) and transform to match old system format
@@ -364,11 +374,11 @@ class GovernanceAPI {
         finalizedAt: p.finalizedAt || 0,
         winningMarketIndex: p.winningIndex,
         winningMarketLabel: winningLabel,
-        passThresholdBps: 5000, // 50% default
+        passThresholdBps: p.marketBias,
         markets: options.length,
         marketLabels: options,
-        baseDecimals: 6, // Default
-        quoteDecimals: 9, // SOL decimals
+        baseDecimals: p.baseDecimals,
+        quoteDecimals: p.quoteDecimals,
         vaultPDA: p.vault,
         // Futarchy-specific fields
         isFutarchy: true,
@@ -425,6 +435,59 @@ class GovernanceAPI {
       return await response.json();
     } catch (error) {
       console.error('[getZcombinatorProposal] Error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the live (Pending) proposal for a DAO in a single request.
+   * Returns full proposal detail including vault and pools.
+   * Returns null if no live proposal exists.
+   *
+   * This is optimized for the live proposal page - combines what was
+   * previously two requests (getZcombinatorProposals + getZcombinatorProposal)
+   * into one.
+   */
+  async getZcombinatorLiveProposal(daoPda: string): Promise<{
+    id: number;
+    proposalPda: string;
+    title: string;
+    description: string;
+    options: string[];
+    status: 'Pending';
+    winningIndex: null;
+    numOptions: number;
+    createdAt: number;
+    endsAt: number;
+    warmupEndsAt: number;
+    moderator: string;
+    creator: string;
+    vault: string;
+    baseMint: string;
+    quoteMint: string;
+    baseDecimals: number;
+    quoteDecimals: number;
+    pools: string[];
+    metadataCid: string | null;
+    daoPda: string;
+    config: {
+      length: number;
+      warmupDuration: number;
+      marketBias: number;
+      fee: number;
+    };
+  } | null> {
+    try {
+      const response = await fetch(`${ZCOMBINATOR_API_URL}/dao/${daoPda}/proposal/live`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // No live proposal
+        }
+        throw new Error('Failed to fetch live proposal from zcombinator');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('[getZcombinatorLiveProposal] Error:', error);
       return null;
     }
   }

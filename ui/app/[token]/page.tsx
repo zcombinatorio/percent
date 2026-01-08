@@ -13,7 +13,7 @@ import { CountdownTimer } from '@/components/CountdownTimer';
 import { ChartBox } from '@/components/ChartBox';
 import { ModeToggle } from '@/components/ModeToggle';
 import { DepositCard } from '@/components/DepositCard';
-import { useProposalsWithFutarchy } from '@/hooks/useProposals';
+import { useProposalsWithFutarchy, useLiveProposal } from '@/hooks/useProposals';
 import { useTradeHistory } from '@/hooks/useTradeHistory';
 import { api } from '@/lib/api';
 import { useUserBalances } from '@/hooks/useUserBalances';
@@ -58,13 +58,53 @@ export default function HomePage() {
   // Only fetch proposals after TokenContext has loaded
   const shouldFetchProposals = !tokenContextLoading && (isFutarchy ? daoPda !== null : moderatorId !== null);
 
-  // Fetch proposals - for futarchy, reads on-chain; for old system, uses API
-  const { proposals, loading, refetch } = useProposalsWithFutarchy({
-    poolAddress: shouldFetchProposals ? (poolAddress || undefined) : undefined,
-    moderatorId: shouldFetchProposals ? moderatorId ?? undefined : undefined,
-    isFutarchy: shouldFetchProposals ? isFutarchy : false,
-    daoPda: shouldFetchProposals ? (daoPda || undefined) : undefined,
+  // For futarchy DAOs: use optimized single-request hook for live proposal
+  // This replaces the old pattern of fetching all proposals then detail separately
+  const {
+    proposal: futarchyLiveProposal,
+    loading: futarchyLoading,
+    refetch: refetchFutarchyLive,
+  } = useLiveProposal(isFutarchy && shouldFetchProposals ? daoPda || undefined : undefined);
+
+  // For old system DAOs: keep existing multi-proposal fetch
+  const { proposals: oldSystemProposals, loading: oldSystemLoading, refetch: refetchOldSystem } = useProposalsWithFutarchy({
+    poolAddress: !isFutarchy && shouldFetchProposals ? (poolAddress || undefined) : undefined,
+    moderatorId: !isFutarchy && shouldFetchProposals ? moderatorId ?? undefined : undefined,
+    isFutarchy: false,
+    daoPda: undefined,
   });
+
+  // Unified loading state and refetch
+  const loading = isFutarchy ? futarchyLoading : oldSystemLoading;
+  const refetch = isFutarchy ? refetchFutarchyLive : refetchOldSystem;
+
+  // For futarchy, wrap live proposal in array for compatibility; for old system, use proposals array
+  const proposals = useMemo(() => {
+    if (isFutarchy) {
+      return futarchyLiveProposal ? [{
+        id: futarchyLiveProposal.id,
+        title: futarchyLiveProposal.title,
+        description: futarchyLiveProposal.description,
+        status: futarchyLiveProposal.status,
+        createdAt: futarchyLiveProposal.createdAt,
+        endsAt: futarchyLiveProposal.endsAt,
+        finalizedAt: 0,
+        winningMarketIndex: futarchyLiveProposal.winningIndex,
+        winningMarketLabel: null,
+        passThresholdBps: futarchyLiveProposal.config.marketBias, // Use actual value from on-chain config
+        markets: futarchyLiveProposal.options.length,
+        marketLabels: futarchyLiveProposal.options,
+        baseDecimals: futarchyLiveProposal.baseDecimals, // Use value from API
+        quoteDecimals: futarchyLiveProposal.quoteDecimals, // Use value from API
+        vaultPDA: futarchyLiveProposal.vault,
+        proposalPda: futarchyLiveProposal.proposalPda,
+        metadataCid: futarchyLiveProposal.metadataCid,
+        // Include pools for trading
+        pools: futarchyLiveProposal.pools,
+      }] : [];
+    }
+    return oldSystemProposals;
+  }, [isFutarchy, futarchyLiveProposal, oldSystemProposals]);
   const [livePrices, setLivePrices] = useState<(number | null)[]>([]);
   const [twapData, setTwapData] = useState<(number | null)[]>([]);
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -129,35 +169,17 @@ export default function HomePage() {
     return proposal ? applyMarketLabelOverrides(filtered, moderatorId, proposal.id) : filtered;
   }, [proposal, moderatorId]);
 
-  // For futarchy proposals, fetch detailed proposal info to get vault and pools
-  const [futarchyProposalDetail, setFutarchyProposalDetail] = useState<{
-    vault: string;
-    pools: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    if (!isFutarchy || !proposal?.proposalPda) {
-      setFutarchyProposalDetail(null);
-      return;
+  // For futarchy proposals, derive detail from the live proposal (already fetched)
+  // For old system, we don't need this - vault comes from proposal.vaultPDA
+  const futarchyProposalDetail = useMemo(() => {
+    if (!isFutarchy || !futarchyLiveProposal) {
+      return null;
     }
-
-    // Fetch proposal detail to get vault and pools
-    const fetchDetail = async () => {
-      try {
-        const detail = await api.getZcombinatorProposal(proposal.proposalPda!);
-        if (detail) {
-          setFutarchyProposalDetail({
-            vault: detail.vault,
-            pools: detail.pools,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching futarchy proposal detail:', error);
-      }
+    return {
+      vault: futarchyLiveProposal.vault,
+      pools: futarchyLiveProposal.pools,
     };
-
-    fetchDetail();
-  }, [isFutarchy, proposal?.proposalPda]);
+  }, [isFutarchy, futarchyLiveProposal]);
 
   // Determine the effective vault PDA (futarchy uses detail, old system uses proposal.vaultPDA)
   const effectiveVaultPDA = isFutarchy && futarchyProposalDetail?.vault
